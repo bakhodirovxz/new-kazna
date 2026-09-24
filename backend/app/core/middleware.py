@@ -94,11 +94,14 @@ class SecurityHeadersMiddleware:
         await self.app(scope, receive, send_wrapper)
 
 
-class _TooLargeError(Exception):
-    pass
-
-
 class BodySizeLimitMiddleware:
+    """`Content-Length`ni yolg'on ko'rsatish yoki umuman bermaslik (chunked) mumkin, shuning
+    uchun oqim davomida ham hisoblanadi. Limitdan oshgach `receive` `http.disconnect`
+    qaytaradi va `send` javob boshlanmagan bo'lsa uni bostiradi — shunda pastdagi ilova
+    (masalan FastAPI'ning tana tahlili) chiqargan har qanday xato javobi o'rniga aynan
+    413 `payload_too_large` yuboriladi.
+    """
+
     def __init__(self, app: ASGIApp, *, max_bytes: int) -> None:
         self.app = app
         self.max_bytes = max_bytes
@@ -111,20 +114,37 @@ class BodySizeLimitMiddleware:
         if length is not None and length.isdigit() and int(length) > self.max_bytes:
             await self._reject(scope, receive, send)
             return
+
         received = 0
+        too_large = False
+        started = False
 
         async def limited_receive() -> Message:
-            nonlocal received
+            nonlocal received, too_large
+            if too_large:
+                return {"type": "http.disconnect"}
             message = await receive()
             if message["type"] == "http.request":
                 received += len(message.get("body", b""))
                 if received > self.max_bytes:
-                    raise _TooLargeError
+                    too_large = True
+                    return {"type": "http.disconnect"}
             return message
 
+        async def guarded_send(message: Message) -> None:
+            nonlocal started
+            if too_large:
+                return
+            if message["type"] == "http.response.start":
+                started = True
+            await send(message)
+
         try:
-            await self.app(scope, limited_receive, send)
-        except _TooLargeError:
+            await self.app(scope, limited_receive, guarded_send)
+        except Exception:
+            if not too_large:
+                raise
+        if too_large and not started:
             await self._reject(scope, receive, send)
 
     @staticmethod

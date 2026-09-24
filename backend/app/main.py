@@ -45,9 +45,10 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
     register_error_handlers(app)
-    # Oxirgi qo'shilgan — eng tashqi: RequestContext birinchi ishlaydi.
-    app.add_middleware(SecurityHeadersMiddleware, hsts=settings.base_url.startswith("https://"))
+    # Oxirgi qo'shilgan — eng tashqi: RequestContext birinchi ishlaydi, so'ng SecurityHeaders
+    # (BodySizeLimit'ning 413 javobini ham qamrab oladi), so'ng BodySizeLimit.
     app.add_middleware(BodySizeLimitMiddleware, max_bytes=MAX_BODY_BYTES)
+    app.add_middleware(SecurityHeadersMiddleware, hsts=settings.base_url.startswith("https://"))
     app.add_middleware(RequestContextMiddleware)
     app.include_router(health_router, prefix=API_PREFIX)
     return app

@@ -1,6 +1,8 @@
 """Xatolar daraxti va yagona javob formati: {"error": {code, message, request_id, params?}}.
 
 Ichki tafsilotlar (stack trace, SQL, kiritilgan qiymatlar) hech qachon javobga chiqmaydi.
+`AppError`ning `**params`i mijozga aynan shu ko'rinishda qaytariladi — ularga hech qachon
+sezgir qiymatlar (parol, token va h.k.) uzatilmasin.
 """
 
 from __future__ import annotations

@@ -1,3 +1,5 @@
+from collections.abc import Iterator
+
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -94,6 +96,34 @@ def test_body_limit_by_content_length(client: TestClient) -> None:
                     headers={"Content-Type": "application/json"})
     assert r.status_code == 413
     assert r.json()["error"]["code"] == "payload_too_large"
+
+
+def test_body_limit_response_has_security_headers(client: TestClient) -> None:
+    r = client.post("/api/v1/_t/echo", content=b"x" * 1_100_000,
+                    headers={"Content-Type": "application/json"})
+    assert r.status_code == 413
+    assert "default-src 'self'" in r.headers["Content-Security-Policy"]
+    assert r.headers["X-Frame-Options"] == "DENY"
+    assert r.headers["X-Content-Type-Options"] == "nosniff"
+    assert r.headers["Cache-Control"] == "no-store"
+    assert len(r.headers["X-Request-ID"]) == 32
+
+
+def test_body_limit_without_content_length(client: TestClient) -> None:
+    def chunks() -> Iterator[bytes]:
+        chunk = b"x" * 100_000
+        for _ in range(12):
+            yield chunk
+
+    r = client.post(
+        "/api/v1/_t/echo",
+        content=chunks(),
+        headers={"Content-Type": "application/json"},
+    )
+    assert r.status_code == 413
+    assert r.json()["error"]["code"] == "payload_too_large"
+    assert "default-src 'self'" in r.headers["Content-Security-Policy"]
+    assert r.headers["X-Content-Type-Options"] == "nosniff"
 
 
 def test_lifespan_refuses_bad_config(monkeypatch: pytest.MonkeyPatch) -> None:

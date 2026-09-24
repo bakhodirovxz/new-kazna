@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 import secrets
 import uuid
 from dataclasses import dataclass
@@ -39,6 +40,12 @@ def token_hmac(token: str) -> bytes:
     return keyed_hash(keystore.pepper(), "session", token)
 
 
+def csrf_for(token: str) -> str:
+    """Signed double-submit: CSRF qiymati sessiya tokenidan chiqariladi (M1)."""
+    digest = keyed_hash(keystore.pepper(), "csrf", token)
+    return base64.urlsafe_b64encode(digest).decode("ascii").rstrip("=")
+
+
 def ip_aad(session_id: uuid.UUID) -> str:
     return f"core.sessions.ip_enc:{session_id}"
 
@@ -70,7 +77,7 @@ def create(db: Session, user_id: int, ip: str | None, ua: str | None, now: datet
         )
     )
     db.flush()
-    return NewSession(session_id, token, secrets.token_urlsafe(32), absolute)
+    return NewSession(session_id, token, csrf_for(token), absolute)
 
 
 def resolve(db: Session, token: str, now: datetime) -> tuple[UserSession, User] | None:

@@ -23,7 +23,7 @@ from app.core.errors import AuthError, ForbiddenError, PasswordChangeRequired, S
 SESSION_COOKIE = "__Host-ugk_session"
 CSRF_COOKIE = "__Host-ugk_csrf"
 CSRF_HEADER = "X-CSRF-Token"
-UNSAFE_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
+SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
 PASSWORD_CHANGE_ALLOWED = frozenset(
     {"/api/v1/auth/me", "/api/v1/auth/password/change", "/api/v1/auth/logout"}
 )
@@ -94,6 +94,20 @@ def build_context(db: Session, user: User, session_id: uuid.UUID, now: datetime)
     )
 
 
+def _csrf_ok(session_token: str, cookie: str | None, header: str | None) -> bool:
+    """Signed double-submit (M1): cookie == header == HMAC(pepper, "csrf", session_token).
+
+    Doim `bytes` sifatida solishtiriladi — `hmac.compare_digest` ASCII bo'lmagan `str`
+    juftliklarida `TypeError` beradi (I1), shu bois qiymatlar oldindan `utf-8`'ga o'giriladi.
+    """
+    if cookie is None or header is None:
+        return False
+    cookie_b = cookie.encode("utf-8")
+    header_b = header.encode("utf-8")
+    expected_b = sessions.csrf_for(session_token).encode("utf-8")
+    return hmac.compare_digest(cookie_b, header_b) and hmac.compare_digest(header_b, expected_b)
+
+
 def get_ctx(
     request: Request,
     db: Annotated[Session, Depends(get_db)],
@@ -108,8 +122,8 @@ def get_ctx(
     if resolved is None:
         raise AuthError("session_expired")
     sess, user = resolved
-    if request.method in UNSAFE_METHODS and not (
-        csrf_cookie and csrf_header and hmac.compare_digest(csrf_cookie, csrf_header)
+    if request.method not in SAFE_METHODS and not _csrf_ok(
+        session_cookie, csrf_cookie, csrf_header
     ):
         raise ForbiddenError("csrf_failed")
     ratelimit.check("api_user", str(user.id), ratelimit.API_PER_USER)
@@ -127,6 +141,8 @@ Ctx = Annotated[AuthContext, Depends(get_ctx)]
 
 def require_perm(*perms: str) -> Callable[..., AuthContext]:
     """Endpoint ruxsati. Deny-by-default: tests/test_route_guards.py har route'ni tekshiradi."""
+    if not perms:
+        raise ValueError("require_perm() kamida bitta ruxsat talab qiladi")
 
     def dependency(ctx: Ctx) -> AuthContext:
         ctx.require(*perms)

@@ -10,8 +10,8 @@ from sqlalchemy.orm import Session
 
 from app.auth import context as context_module
 from app.auth import sessions
-from app.auth.context import SESSION_COOKIE, Ctx, require_perm
-from app.auth.models import User, UserSession
+from app.auth.context import CSRF_COOKIE, CSRF_HEADER, SESSION_COOKIE, Ctx, require_perm
+from app.auth.models import Position, User, UserSession
 from app.auth.permissions import Perm
 from app.core.db import get_db, new_session
 from app.main import create_app
@@ -35,6 +35,18 @@ def _app() -> FastAPI:
 
     @app.post("/api/v1/_probe")
     def probe_post(ctx: Ctx) -> dict[str, bool]:
+        return {"ok": True}
+
+    @app.put("/api/v1/_probe")
+    def probe_put(ctx: Ctx) -> dict[str, bool]:
+        return {"ok": True}
+
+    @app.patch("/api/v1/_probe")
+    def probe_patch(ctx: Ctx) -> dict[str, bool]:
+        return {"ok": True}
+
+    @app.delete("/api/v1/_probe")
+    def probe_delete(ctx: Ctx) -> dict[str, bool]:
         return {"ok": True}
 
     @app.get("/api/v1/_admin", dependencies=[Depends(require_perm(Perm.ADMIN_USERS))])
@@ -182,3 +194,129 @@ def test_session_ip_is_encrypted(make_user: Callable[..., SeedUser]) -> None:
         row = s.get(UserSession, sid)
         assert row is not None and row.ip_enc is not None
         assert b"10.0.0.1" not in row.ip_enc
+
+
+def test_csrf_non_ascii_header_is_403_not_500(
+    client: TestClient, make_user: Callable[..., SeedUser]
+) -> None:
+    """I1: `hmac.compare_digest` on non-ASCII str would raise TypeError -> 500.
+
+    httpx's `Headers.__setitem__` only accepts ASCII `str` values, so the non-ASCII
+    header is sent as raw bytes (matching what the ASGI server hands FastAPI for a
+    real, non-ASCII wire header) rather than mutating `client.headers`.
+    """
+    user = make_user()
+    token, csrf, _ = issue_session(user.id)
+    use_session(client, token, csrf)
+    r = client.post(
+        "/api/v1/_probe", headers={CSRF_HEADER.encode(): "é".encode()}
+    )
+    assert r.status_code == 403
+    assert r.json()["error"]["code"] == "csrf_failed"
+
+
+def test_csrf_missing_header_is_403(client: TestClient, make_user: Callable[..., SeedUser]) -> None:
+    user = make_user()
+    token, csrf, _ = issue_session(user.id)
+    client.cookies.set(SESSION_COOKIE, token)
+    client.cookies.set(CSRF_COOKIE, csrf)
+    r = client.post("/api/v1/_probe")
+    assert r.status_code == 403
+    assert r.json()["error"]["code"] == "csrf_failed"
+
+
+def test_csrf_missing_cookie_with_header_is_403(
+    client: TestClient, make_user: Callable[..., SeedUser]
+) -> None:
+    user = make_user()
+    token, csrf, _ = issue_session(user.id)
+    client.cookies.set(SESSION_COOKIE, token)
+    client.headers[CSRF_HEADER] = csrf
+    r = client.post("/api/v1/_probe")
+    assert r.status_code == 403
+    assert r.json()["error"]["code"] == "csrf_failed"
+
+
+def test_csrf_unrelated_matching_pair_is_403(
+    client: TestClient, make_user: Callable[..., SeedUser]
+) -> None:
+    """M1: cookie == header alone is not enough; must match HMAC(pepper, csrf, token)."""
+    user = make_user()
+    token, _, _ = issue_session(user.id)
+    client.cookies.set(SESSION_COOKIE, token)
+    client.cookies.set(CSRF_COOKIE, "unrelated-but-matching-value")
+    client.headers[CSRF_HEADER] = "unrelated-but-matching-value"
+    r = client.post("/api/v1/_probe")
+    assert r.status_code == 403
+    assert r.json()["error"]["code"] == "csrf_failed"
+
+
+@pytest.mark.parametrize("method", ["put", "patch", "delete"])
+def test_csrf_required_for_put_patch_delete(
+    client: TestClient, make_user: Callable[..., SeedUser], method: str
+) -> None:
+    """M2: CSRF is required for every method outside {GET, HEAD, OPTIONS}."""
+    user = make_user()
+    token, csrf, _ = issue_session(user.id)
+    use_session(client, token, csrf)
+    assert getattr(client, method)("/api/v1/_probe").status_code == 200
+    client.headers[CSRF_HEADER] = "wrong"
+    r = getattr(client, method)("/api/v1/_probe")
+    assert r.status_code == 403
+    assert r.json()["error"]["code"] == "csrf_failed"
+
+
+def test_slide_never_exceeds_absolute_expiry(
+    client: TestClient, make_user: Callable[..., SeedUser]
+) -> None:
+    user = make_user()
+    token, csrf, sid = issue_session(user.id)
+    absolute = datetime.now(UTC) + timedelta(minutes=2)
+    old = datetime.now(UTC) - timedelta(minutes=5)
+    _set(sid, last_seen_at=old, absolute_expires_at=absolute, idle_expires_at=absolute)
+    use_session(client, token, csrf)
+    assert client.get("/api/v1/_probe").status_code == 200
+    with new_session() as s:
+        row = s.get(UserSession, sid)
+        assert row is not None
+        assert row.idle_expires_at == absolute
+
+
+def test_inactive_position_has_no_scope(
+    client: TestClient, make_user: Callable[..., SeedUser]
+) -> None:
+    user = make_user("economist_filiala", branch_ids=(3,))
+    use_session(client, *issue_session(user.id)[:2])
+    with new_session() as s:
+        row = s.get(User, user.id)
+        assert row is not None
+        s.execute(update(Position).where(Position.id == row.position_id).values(is_active=False))
+        s.commit()
+    r = client.get("/api/v1/_probe")
+    assert r.json()["branches"] == "{}"
+    assert r.json()["all"] == "off"
+    assert client.get("/api/v1/_admin").status_code == 403
+
+
+def test_require_perm_exposes_required_perms() -> None:
+    dep = require_perm(Perm.ADMIN_USERS, Perm.AUDIT_READ)
+    expected = frozenset({Perm.ADMIN_USERS.value, Perm.AUDIT_READ.value})
+    assert dep.required_perms == expected  # type: ignore[attr-defined]
+
+
+def test_require_perm_without_args_raises_at_definition_time() -> None:
+    with pytest.raises(ValueError):
+        require_perm()
+
+
+def test_stored_token_hmac_matches_and_never_the_raw_token(
+    make_user: Callable[..., SeedUser],
+) -> None:
+    user = make_user()
+    token, _, sid = issue_session(user.id)
+    with new_session() as s:
+        row = s.get(UserSession, sid)
+        assert row is not None
+        assert row.token_hmac == sessions.token_hmac(token)
+        assert row.token_hmac != token.encode("utf-8")
+        assert token.encode("utf-8") not in row.token_hmac

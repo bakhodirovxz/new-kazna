@@ -68,6 +68,8 @@ class AuditAction(StrEnum):
     POSITION_CREATED = "admin.position.created"
     POSITION_UPDATED = "admin.position.updated"
     KEY_ROTATED = "admin.key.rotated"
+    KEY_RETIRED = "admin.key.retired"
+    KEY_REWRAPPED = "admin.key.rewrapped"
     AUDIT_EXPORTED = "audit.exported"
     AUDIT_VERIFIED = "audit.verified"
     RLS_VIOLATION = "security.rls_violation_attempt"

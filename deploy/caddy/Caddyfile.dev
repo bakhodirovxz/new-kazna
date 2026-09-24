@@ -1,0 +1,43 @@
+{
+	admin off
+}
+
+localhost {
+	tls internal
+	encode zstd gzip
+
+	request_body {
+		max_size 1MB
+	}
+
+	header {
+		Strict-Transport-Security "max-age=63072000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "no-referrer"
+		Permissions-Policy "accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=()"
+		Cross-Origin-Opener-Policy "same-origin"
+		Cross-Origin-Resource-Policy "same-origin"
+		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; connect-src 'self'; font-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
+		-Server
+	}
+
+	# Probe'lar faqat ichki tarmoq uchun. `handle`lar birinchi mos kelgan direktivada
+	# to'xtaydi (Caddy'da tartib muhim) — shu sabab bu blok `handle /api/*`dan OLDIN va
+	# o'zi ham `handle @probes { ... }` ichida bo'lishi kerak (yalang'och `respond @probes 404`
+	# keyingi `handle /api/*`ga to'g'ri "yutqazib" bermaydi, chunki `respond` mustaqil
+	# direktiva sifatida ham ishlaydi va navbatdagi `handle /api/*` baribir keyin chaqiriladi
+	# hamda healthz/readyz'ni tashqariga ochib qo'yadi).
+	@probes path /api/v1/healthz /api/v1/readyz
+	handle @probes {
+		respond 404
+	}
+
+	handle /api/* {
+		reverse_proxy api:8000
+	}
+
+	handle {
+		respond "UGEKAZNA API ishlayapti. Frontend 3-rejada qo'shiladi." 200
+	}
+}

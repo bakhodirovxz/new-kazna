@@ -100,7 +100,7 @@ orqali orqaga qaytish.
   oxirgi 5 parolni qayta ishlatish taqiqlangan; 90 kunlik muddat; birinchi kirishda majburiy almashtirish.
 - 2FA: TOTP (RFC 6238, SHA-1, 30 s, 6 raqam, ±1 oyna), **hamma rol uchun majburiy**, birinchi kirishda ulanadi.
   TOTP siri AES-256-GCM bilan shifrlangan. Bitta kodni qayta ishlatish taqiqlangan (oxirgi ishlatilgan
-  qadam saqlanadi). 10 ta zaxira kod — Argon2id xeshi, bir martalik.
+  qadam saqlanadi). 10 ta zaxira kod — HMAC-SHA256(session_pepper), bir martalik.
 - Brute-force: login bo'yicha 5 xato → 15 daqiqa blok; IP bo'yicha rate limit (10/daq); bir xil javob
   matni va doimiy vaqt (mavjud bo'lmagan foydalanuvchi uchun soxta verify).
 - Login oqimi: `POST /auth/login` → `{mfa_required, mfa_token}` (5 daqiqalik, bir martalik, faqat 2FA
@@ -329,7 +329,7 @@ Buzilish → `etl_run.status = 'failed_quality'`, publish yo'q, notifier.
   brotli/gzip.
 
 ### 6.3 DB unumdorligi
-- SQLAlchemy 2.0 async + psycopg3 pool (api: pool 10/worker, etl: 5).
+- SQLAlchemy 2.0 (sinxron, threadpool) + psycopg3 pool (api: pool 10/worker, etl: 5).
 - `statement_timeout`: api 5 s, etl 30 daqiqa. `idle_in_transaction_session_timeout` 60 s.
 - `pg_stat_statements`, `log_min_duration_statement = 500ms`, `auto_explain` (dev/test).
 - `deploy/postgres/postgresql.conf` — 8 GB va 16 GB profillar.

@@ -1,0 +1,124 @@
+# Dev stack. Faqat caddy tashqi port ochadi (https://localhost:8443).
+# Sirlar: python scripts/gen_secrets.py  →  deploy/secrets/
+name: ugekazna
+
+x-hardening: &hardening
+  restart: unless-stopped
+  read_only: true
+  cap_drop: [ALL]
+  security_opt: ["no-new-privileges:true"]
+  logging:
+    driver: json-file
+    options: {max-size: "10m", max-file: "3"}
+
+secrets:
+  db_superuser_password: {file: ./secrets/db_superuser_password}
+  db_migrator_password: {file: ./secrets/db_migrator_password}
+  db_app_password: {file: ./secrets/db_app_password}
+  db_etl_password: {file: ./secrets/db_etl_password}
+  redis_password: {file: ./secrets/redis_password}
+  master_kek: {file: ./secrets/master_kek}
+  blind_index_key: {file: ./secrets/blind_index_key}
+  session_pepper: {file: ./secrets/session_pepper}
+
+services:
+  db:
+    <<: *hardening
+    image: postgres:16-alpine
+    user: "70:70"
+    group_add: ["10001"]
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_DB: ugekazna
+      POSTGRES_PASSWORD_FILE: /run/secrets/db_superuser_password
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C.UTF-8"
+    secrets: [db_superuser_password, db_migrator_password, db_app_password, db_etl_password]
+    volumes:
+      - db_data:/var/lib/postgresql/data
+      - ./postgres/initdb:/docker-entrypoint-initdb.d:ro
+    tmpfs:
+      - /tmp
+      - /var/run/postgresql:uid=70,gid=70,mode=0775
+    networks: [backend]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U postgres -d ugekazna"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  redis:
+    <<: *hardening
+    image: redis:7-alpine
+    user: "999:1000"
+    group_add: ["10001"]
+    secrets: [redis_password]
+    tmpfs: ["/tmp:mode=1777"]
+    command:
+      - sh
+      - -c
+      - >-
+        umask 077 &&
+        printf 'requirepass %s\n' "$$(cat /run/secrets/redis_password)" > /tmp/redis.conf &&
+        exec redis-server /tmp/redis.conf --save '' --appendonly no
+        --maxmemory 256mb --maxmemory-policy allkeys-lru
+    networks: [backend]
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli --no-auth-warning -a \"$$(cat /run/secrets/redis_password)\" ping | grep -q PONG"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  migrate:
+    <<: *hardening
+    restart: "no"
+    build: {context: ../backend, args: {INSTALL_DEV: "true"}}
+    image: ugekazna-backend:dev
+    user: "10001:10001"
+    environment: {ENV: dev}
+    secrets: [db_migrator_password, db_app_password, master_kek, blind_index_key, session_pepper]
+    command: ["alembic", "upgrade", "head"]
+    tmpfs: [/tmp]
+    networks: [backend]
+    depends_on:
+      db: {condition: service_healthy}
+
+  api:
+    <<: *hardening
+    image: ugekazna-backend:dev
+    user: "10001:10001"
+    environment:
+      ENV: dev
+      BASE_URL: https://localhost:8443
+      WATCHFILES_FORCE_POLLING: "true"
+    secrets: [db_app_password, redis_password, master_kek, blind_index_key, session_pepper]
+    volumes:
+      - ../backend/app:/app/app:ro
+    tmpfs: [/tmp]
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload",
+              "--proxy-headers", "--forwarded-allow-ips", "*", "--no-server-header", "--no-access-log"]
+    networks: [backend, edge]
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+      redis: {condition: service_healthy}
+
+  caddy:
+    <<: *hardening
+    image: caddy:2-alpine
+    cap_add: [NET_BIND_SERVICE]
+    ports: ["8443:443"]
+    volumes:
+      - ./caddy/Caddyfile.dev:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks: [edge]
+    depends_on: [api]
+
+networks:
+  backend:
+    internal: true
+  edge: {}
+
+volumes:
+  db_data:
+  caddy_data:
+  caddy_config:

@@ -40,9 +40,11 @@ PUBLIC = {
     ("POST", "/api/v1/auth/2fa/enroll/start"),
     ("POST", "/api/v1/auth/2fa/enroll/confirm"),
     ("POST", "/api/v1/auth/logout"),
+    # Task 13: `_mount_openapi` bu route'ni faqat `settings.env == "prod"` bo'lsa
+    # `admin:settings` bilan himoyalaydi; dev/test'da (shu jumladan shu testlar ishlaydigan
+    # muhitda) ochiq — shuning uchun bu yerda PUBLIC.
+    ("GET", "/api/v1/openapi.json"),
 }
-# I5 (fix r1): ("GET", "/api/v1/openapi.json") olib tashlandi — `openapi_url=None` bo'lgani
-# uchun bu route hozircha umuman mavjud emas (Task 13'da qo'shiladi va PUBLIC'ga qaytariladi).
 PREFIX_PERMS = {"/api/v1/admin": "admin:", "/api/v1/audit": "audit:read"}
 # R2-1: `_resolve` yakuniy yozuvi `APIRoute` bo'lmasa, shu yerda ANIQ ro'yxatga kiritilmagan
 # bo'lsa, test yiqiladi. Hozircha bo'sh — hech qanday xom (APIRoute bo'lmagan) route yo'q.
@@ -51,10 +53,13 @@ NON_STANDARD_ROUTE_ALLOWLIST: set[str] = set()
 # yo'qolgan marshrut shu ro'yxatni ONGLI ravishda yangilashni talab qiladi.
 EXPECTED_ROUTES = frozenset({
     ("DELETE", "/api/v1/auth/sessions/{session_id}"),
+    ("GET", "/api/v1/admin/keys"),
+    ("POST", "/api/v1/admin/keys/{purpose}/rotate"),
     ("GET", "/api/v1/admin/permissions"),
     ("GET", "/api/v1/audit"),
     ("GET", "/api/v1/audit/export.csv"),
     ("POST", "/api/v1/audit/verify"),
+    ("GET", "/api/v1/openapi.json"),
     ("GET", "/api/v1/admin/positions"),
     ("GET", "/api/v1/admin/roles"),
     ("GET", "/api/v1/admin/users"),

@@ -15,3 +15,4 @@ def bootstrap_runtime() -> None:
         conn.execute(text("SELECT pg_advisory_xact_lock(hashtext('ugk_bootstrap'))"))
         keystore.ensure_keys(conn, kek)
     keystore.invalidate_keyring()
+    keystore.get_keyring()  # noto'g'ri master_kek ishga tushishdayoq aniqlansin

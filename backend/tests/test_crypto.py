@@ -3,6 +3,7 @@ import os
 import pytest
 
 from app.core.crypto import (
+    HEADER_BYTES,
     CryptoError,
     Keyring,
     Purpose,
@@ -42,10 +43,11 @@ def test_wrong_aad_is_rejected(ring: Keyring) -> None:
 
 
 def test_wrong_purpose_is_rejected(ring: Keyring) -> None:
-    blob = ring.encrypt(Purpose.PII, b"secret", "a")
+    blob = ring.encrypt(Purpose.PII, b"secret", "core.t.c:1")
     other = Keyring(keys={(Purpose.BANK, 2): ring.keys[(Purpose.PII, 2)]}, active={})
-    with pytest.raises(CryptoError):
-        other.decrypt(Purpose.BANK, blob, "a")
+    with pytest.raises(CryptoError) as exc:
+        other.decrypt(Purpose.BANK, blob, "core.t.c:1")
+    assert exc.value.reason == "integrity"
 
 
 def test_tampered_byte_is_rejected(ring: Keyring) -> None:
@@ -93,3 +95,76 @@ def test_blind_index_normalizes_and_separates_purposes() -> None:
 def test_keyed_hash_depends_on_label() -> None:
     key = os.urandom(32)
     assert keyed_hash(key, "session", "t") != keyed_hash(key, "mfa", "t")
+
+
+def test_swapping_to_another_existing_version_gives_integrity(ring: Keyring) -> None:
+    # active versiya 2 bilan shifrlangan; versiya baytlarini 1 ga o'zgartiramiz —
+    # bu versiya uchun kalit mavjud, lekin AAD header va DEK mos kelmaydi.
+    blob = bytearray(ring.encrypt(Purpose.PII, b"secret", "core.t.c:1"))
+    blob[1:3] = (1).to_bytes(2, "big")
+    with pytest.raises(CryptoError) as exc:
+        ring.decrypt(Purpose.PII, bytes(blob), "core.t.c:1")
+    assert exc.value.reason == "integrity"
+
+
+def test_tampered_nonce_is_rejected(ring: Keyring) -> None:
+    blob = bytearray(ring.encrypt(Purpose.PII, b"secret", "core.t.c:1"))
+    blob[3] ^= 0x01  # nonce ichidagi bayt
+    with pytest.raises(CryptoError) as exc:
+        ring.decrypt(Purpose.PII, bytes(blob), "core.t.c:1")
+    assert exc.value.reason == "integrity"
+
+
+def test_tampered_ciphertext_body_is_rejected(ring: Keyring) -> None:
+    blob = bytearray(ring.encrypt(Purpose.PII, b"a longer secret payload here", "core.t.c:1"))
+    blob[HEADER_BYTES] ^= 0x01  # ciphertext'ning birinchi bayti (tag emas)
+    with pytest.raises(CryptoError) as exc:
+        ring.decrypt(Purpose.PII, bytes(blob), "core.t.c:1")
+    assert exc.value.reason == "integrity"
+
+
+def test_short_blob_is_bad_format(ring: Keyring) -> None:
+    with pytest.raises(CryptoError) as exc:
+        ring.decrypt(Purpose.PII, b"\x01" + bytes(10), "core.t.c:1")
+    assert exc.value.reason == "bad_format"
+
+
+def test_blob_version_rejects_short_or_bad_format() -> None:
+    with pytest.raises(CryptoError) as exc:
+        blob_version(b"\x01\x00")
+    assert exc.value.reason == "bad_format"
+    with pytest.raises(CryptoError) as exc2:
+        blob_version(b"\x02\x00\x01")
+    assert exc2.value.reason == "bad_format"
+
+
+def test_blank_aad_is_rejected(ring: Keyring) -> None:
+    with pytest.raises(CryptoError) as exc:
+        ring.encrypt(Purpose.PII, b"x", "")
+    assert exc.value.reason == "bad_aad"
+    blob = ring.encrypt(Purpose.PII, b"x", "core.t.c:1")
+    with pytest.raises(CryptoError) as exc2:
+        ring.decrypt(Purpose.PII, blob, "   ")
+    assert exc2.value.reason == "bad_aad"
+
+
+def test_unwrap_key_rejects_wrong_length_dek() -> None:
+    kek = os.urandom(32)
+    wrapped_short = wrap_key(kek, os.urandom(16))
+    with pytest.raises(CryptoError) as exc:
+        unwrap_key(kek, wrapped_short)
+    assert exc.value.reason == "unwrap_failed"
+
+
+def test_repr_does_not_leak_key_bytes(ring: Keyring) -> None:
+    dump = repr(ring)
+    assert "keys=" not in dump
+    for key in ring.keys.values():
+        assert key.hex() not in dump
+
+
+def test_crypto_error_detail_is_separate_from_reason() -> None:
+    exc = CryptoError("no_active_key", detail="faol kalit yo'q: bank,mfa")
+    assert exc.reason == "no_active_key"
+    assert "faol kalit yo'q" in str(exc)
+    assert str(CryptoError("integrity")) == "integrity"

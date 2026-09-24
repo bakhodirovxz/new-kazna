@@ -20,7 +20,7 @@ def upgrade() -> None:
           id bigserial PRIMARY KEY,
           purpose text NOT NULL
             CHECK (purpose IN ('pii', 'bank', 'mfa', 'integration_creds', 'audit_meta')),
-          version integer NOT NULL CHECK (version > 0),
+          version integer NOT NULL CHECK (version > 0 AND version <= 65535),
           wrapped_key bytea NOT NULL,
           status text NOT NULL CHECK (status IN ('active', 'decrypt_only', 'retired')),
           created_at timestamptz NOT NULL DEFAULT now(),
@@ -33,7 +33,11 @@ def upgrade() -> None:
         "CREATE UNIQUE INDEX crypto_keys_one_active ON core.crypto_keys (purpose) "
         "WHERE status = 'active'"
     )
-    op.execute("GRANT SELECT, INSERT, UPDATE ON core.crypto_keys TO ugk_app")
+    # ugk_app 'wrapped_key' ni qayta yoza olmasin (crypto-shredding'dan himoya, spec 3.5):
+    # rotate faqat status/retired_at'ni o'zgartiradi va INSERT qiladi; rewrap_all esa
+    # ugk_migrator (jadval egasi) sifatida operator amali sifatida bajariladi.
+    op.execute("GRANT SELECT, INSERT ON core.crypto_keys TO ugk_app")
+    op.execute("GRANT UPDATE (status, retired_at) ON core.crypto_keys TO ugk_app")
     op.execute("GRANT SELECT ON core.crypto_keys TO ugk_etl")
     op.execute("GRANT USAGE ON SEQUENCE core.crypto_keys_id_seq TO ugk_app")
 

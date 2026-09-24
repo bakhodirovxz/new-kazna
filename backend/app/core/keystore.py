@@ -14,12 +14,35 @@ from app.core.crypto import CryptoError, Keyring, Purpose, new_dek, unwrap_key, 
 from app.core.db import get_engine
 
 CACHE_TTL_SECONDS = 60.0
+_ADVISORY_LOCK_KEY = "ugk_key_rotate"
 _lock = threading.Lock()
 _cache: tuple[Keyring, float] | None = None
 
 
+def _take_key_lock(conn: Connection) -> None:
+    """Kalit mutatsiyalarini (ensure/rotate/rewrap) o'zaro serializatsiya qiladi."""
+    conn.execute(text("SELECT pg_advisory_xact_lock(hashtext(:k))"), {"k": _ADVISORY_LOCK_KEY})
+
+
+def _verify_kek(conn: Connection, kek: bytes, purpose: Purpose | None = None) -> None:
+    """Mavjud bitta yozuvni ochib, berilgan KEK to'g'riligini tasdiqlaydi.
+
+    Mos yozuv topilmasa (masalan, bazada hali hech narsa yo'q) — jim tasdiqlanadi.
+    """
+    query = "SELECT wrapped_key FROM core.crypto_keys WHERE status <> 'retired'"
+    params: dict[str, str] = {}
+    if purpose is not None:
+        query += " AND purpose = :p"
+        params["p"] = purpose.value
+    row = conn.execute(text(query + " LIMIT 1"), params).scalar()
+    if row is not None:
+        unwrap_key(kek, bytes(row))
+
+
 def ensure_keys(conn: Connection, kek: bytes) -> None:
     """Har maqsad uchun kalit bo'lmasa, 1-versiyani yaratadi (idempotent)."""
+    _take_key_lock(conn)
+    _verify_kek(conn, kek)
     for purpose in Purpose:
         conn.execute(
             text(
@@ -47,7 +70,7 @@ def load_keyring(conn: Connection, kek: bytes) -> Keyring:
             active[purpose] = version
     missing = [p.value for p in Purpose if p.value not in active]
     if missing:
-        raise CryptoError(f"no_active_key:{','.join(missing)}")
+        raise CryptoError("no_active_key", detail=f"faol kalit yo'q: {','.join(missing)}")
     return Keyring(keys=keys, active=active)
 
 
@@ -72,7 +95,8 @@ def invalidate_keyring() -> None:
 
 def rotate(conn: Connection, kek: bytes, purpose: Purpose) -> int:
     """Yangi faol versiya; eskisi faqat ochish uchun qoladi."""
-    conn.execute(text("SELECT pg_advisory_xact_lock(hashtext('ugk_key_rotate'))"))
+    _take_key_lock(conn)
+    _verify_kek(conn, kek, purpose)
     current = conn.execute(
         text("SELECT coalesce(max(version), 0) FROM core.crypto_keys WHERE purpose = :p"),
         {"p": purpose.value},
@@ -96,7 +120,12 @@ def rotate(conn: Connection, kek: bytes, purpose: Purpose) -> int:
 
 
 def rewrap_all(conn: Connection, old_kek: bytes, new_kek: bytes) -> int:
-    """KEK rotatsiyasi: barcha tirik DEK'larni yangi KEK bilan qayta o'raydi."""
+    """KEK rotatsiyasi: barcha tirik DEK'larni yangi KEK bilan qayta o'raydi.
+
+    Operator amali — `ugk_migrator` (jadval egasi) sifatida bajariladi: `ugk_app`'ning
+    `wrapped_key` ustunini yozish huquqi yo'q (crypto-shredding'dan himoya, spec 3.5).
+    """
+    _take_key_lock(conn)
     rows = conn.execute(
         text("SELECT id, wrapped_key FROM core.crypto_keys WHERE status <> 'retired' FOR UPDATE")
     ).all()

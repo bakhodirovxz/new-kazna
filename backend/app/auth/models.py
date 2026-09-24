@@ -118,3 +118,4 @@ class MfaChallenge(Base):
     expires_at: Mapped[datetime]
     attempts: Mapped[int] = mapped_column(default=0)
     used_at: Mapped[datetime | None]
+    pending_secret_enc: Mapped[bytes | None] = mapped_column(LargeBinary)

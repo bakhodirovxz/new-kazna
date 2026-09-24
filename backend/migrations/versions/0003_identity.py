@@ -119,7 +119,8 @@ STATEMENTS = [
       created_at timestamptz NOT NULL,
       expires_at timestamptz NOT NULL,
       attempts integer NOT NULL DEFAULT 0,
-      used_at timestamptz
+      used_at timestamptz,
+      pending_secret_enc bytea
     )
     """,
     "CREATE INDEX mfa_challenges_expires_idx ON core.mfa_challenges (expires_at)",

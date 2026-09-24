@@ -30,6 +30,7 @@ class Limit:
 LOGIN_PER_IP = Limit(events=10, window=60)
 MFA_PER_IP = Limit(events=20, window=60)
 API_PER_USER = Limit(events=300, window=60)
+PASSWORD_CHANGE_PER_USER = Limit(events=5, window=900)
 
 _client_override: redis.Redis | None = None
 _lock = threading.Lock()

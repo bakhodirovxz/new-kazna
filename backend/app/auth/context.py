@@ -94,11 +94,14 @@ def build_context(db: Session, user: User, session_id: uuid.UUID, now: datetime)
     )
 
 
-def _csrf_ok(session_token: str, cookie: str | None, header: str | None) -> bool:
+def csrf_ok(session_token: str, cookie: str | None, header: str | None) -> bool:
     """Signed double-submit (M1): cookie == header == HMAC(pepper, "csrf", session_token).
 
     Doim `bytes` sifatida solishtiriladi — `hmac.compare_digest` ASCII bo'lmagan `str`
     juftliklarida `TypeError` beradi (I1), shu bois qiymatlar oldindan `utf-8`'ga o'giriladi.
+
+    Ommaviy: `router.logout` sessiyasi ixtiyoriy bo'lgani uchun `Ctx` dependency'siz ham
+    CSRF'ni tekshirishi kerak (M11 — fix round 1).
     """
     if cookie is None or header is None:
         return False
@@ -122,7 +125,7 @@ def get_ctx(
     if resolved is None:
         raise AuthError("session_expired")
     sess, user = resolved
-    if request.method not in SAFE_METHODS and not _csrf_ok(
+    if request.method not in SAFE_METHODS and not csrf_ok(
         session_cookie, csrf_cookie, csrf_header
     ):
         raise ForbiddenError("csrf_failed")

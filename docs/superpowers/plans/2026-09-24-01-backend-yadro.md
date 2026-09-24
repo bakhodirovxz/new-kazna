@@ -23,7 +23,7 @@ Bu — poydevor spec'ining 4 rejasidan birinchisi. Keyingilari: 2 — Витри
 - TOTP: RFC 6238, SHA-1, 30 s, 6 raqam, ±1 qadam, bitta qadamni qayta ishlatish taqiqlangan; 10 ta zaxira kod.
 - Sessiya: 256-bit token, cookie `__Host-ugk_session` (`HttpOnly; Secure; SameSite=Strict; Path=/`), DB'da faqat `HMAC-SHA256(session_pepper, token)`; idle 30 daqiqa, absolyut 12 soat. CSRF: `__Host-ugk_csrf` cookie + `X-CSRF-Token` header.
 - Login: 5 xato → 15 daqiqa blok; IP bo'yicha 10/daq; 2FA challenge 5 daqiqa, 5 urinish.
-- Shifrmatn formati: `0x01 | key_version (2B big-endian) | nonce (12B) | ciphertext | tag (16B)`; AAD = `"ugk|{purpose}|{schema}.{table}.{column}:{pk}"`.
+- Shifrmatn formati: `0x01 | key_version (2B big-endian) | nonce (12B) | ciphertext | tag (16B)`; AAD = header (3 bayt: format+versiya) + `"ugk|{purpose}|{schema}.{table}.{column}:{pk}"` (bo'sh AAD taqiqlangan).
 - API prefiksi `/api/v1`; xato formati `{"error": {"code", "message", "request_id", "params"?}}`; xabarlar ruscha.
 - So'rov tanasi ≤ 1 MB; sahifa hajmi ≤ 500.
 - Vaqt har doim UTC (`datetime.now(UTC)`), DB ulanishi `TimeZone=UTC`.

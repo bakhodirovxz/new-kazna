@@ -3,6 +3,7 @@
 from collections.abc import Iterator
 
 import pytest
+import redis as redis_lib
 from alembic import command
 from alembic.config import Config
 from sqlalchemy import text
@@ -10,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.bootstrap import bootstrap_runtime
 from app.core import keystore
+from app.core.config import get_settings
 from app.core.db import get_engine, new_session
 
 
@@ -61,3 +63,10 @@ def db() -> Iterator[Session]:
     finally:
         session.rollback()
         session.close()
+
+
+@pytest.fixture(autouse=True)
+def _clear_rate_limits() -> None:
+    client = redis_lib.Redis.from_url(get_settings().redis_url)
+    for key in client.scan_iter("rl:*"):
+        client.delete(key)

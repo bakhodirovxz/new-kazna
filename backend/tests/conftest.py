@@ -1,6 +1,6 @@
 """Umumiy fixture'lar. Testlar HAQIQIY PostgreSQL 16 va Redis'ga qarshi ishlaydi."""
 
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 
 import pytest
 import redis as redis_lib
@@ -13,6 +13,7 @@ from app.bootstrap import bootstrap_runtime
 from app.core import keystore
 from app.core.config import get_settings
 from app.core.db import get_engine, new_session
+from tests.helpers import SeedUser, create_user
 
 
 def _reset_core() -> None:
@@ -70,3 +71,8 @@ def _clear_rate_limits() -> None:
     client = redis_lib.Redis.from_url(get_settings().redis_url)
     for key in client.scan_iter("rl:*"):
         client.delete(key)
+
+
+@pytest.fixture
+def make_user() -> Callable[..., SeedUser]:
+    return create_user

@@ -119,4 +119,4 @@ class Settings(BaseSettings):
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
     secrets_dir = SECRETS_DIR if SECRETS_DIR.is_dir() else None
-    return Settings(_secrets_dir=secrets_dir)  # type: ignore[call-arg]
+    return Settings(_secrets_dir=secrets_dir)

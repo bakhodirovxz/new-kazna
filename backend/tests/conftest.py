@@ -8,6 +8,8 @@ from alembic.config import Config
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from app.bootstrap import bootstrap_runtime
+from app.core import keystore
 from app.core.db import get_engine, new_session
 
 
@@ -39,6 +41,8 @@ def _reset_core() -> None:
 def _database() -> None:
     command.upgrade(Config("alembic.ini"), "head")
     _reset_core()
+    keystore.invalidate_keyring()
+    bootstrap_runtime()
 
 
 @pytest.fixture

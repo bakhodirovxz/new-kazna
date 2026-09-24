@@ -52,6 +52,9 @@ NON_STANDARD_ROUTE_ALLOWLIST: set[str] = set()
 EXPECTED_ROUTES = frozenset({
     ("DELETE", "/api/v1/auth/sessions/{session_id}"),
     ("GET", "/api/v1/admin/permissions"),
+    ("GET", "/api/v1/audit"),
+    ("GET", "/api/v1/audit/export.csv"),
+    ("POST", "/api/v1/audit/verify"),
     ("GET", "/api/v1/admin/positions"),
     ("GET", "/api/v1/admin/roles"),
     ("GET", "/api/v1/admin/users"),

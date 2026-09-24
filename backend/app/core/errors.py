@@ -134,10 +134,7 @@ def register_error_handlers(app: FastAPI) -> None:
 
     @app.exception_handler(ScopeViolationError)
     async def _scope_violation(request: Request, exc: ScopeViolationError) -> JSONResponse:
-        from app.audit.service import (  # type: ignore[import-not-found]  # Task 6da paydo bo'ladi
-            AuditAction,
-            log_event,
-        )
+        from app.audit.service import AuditAction, log_event
         from app.core.request_meta import client_meta
 
         ctx = getattr(request.state, "auth", None)

@@ -15,6 +15,7 @@ def bootstrap_runtime() -> None:
     with get_engine("app").begin() as conn:
         conn.execute(text("SELECT pg_advisory_xact_lock(hashtext('ugk_bootstrap'))"))
         keystore.ensure_keys(conn, kek)
+        conn.execute(text("SELECT core.ensure_audit_partitions(3)"))
     keystore.invalidate_keyring()
     keystore.get_keyring()  # noto'g'ri master_kek ishga tushishdayoq aniqlansin
     with new_session() as db:

@@ -9,6 +9,7 @@ from fastapi import FastAPI
 from fastapi.concurrency import run_in_threadpool
 
 from app import __version__
+from app.admin.router import router as admin_router
 from app.auth.router import router as auth_router
 from app.bootstrap import bootstrap_runtime
 from app.core.config import ConfigError, get_settings
@@ -53,6 +54,7 @@ def create_app() -> FastAPI:
     app.add_middleware(RequestContextMiddleware)
     app.include_router(health_router, prefix=API_PREFIX)
     app.include_router(auth_router, prefix=API_PREFIX)
+    app.include_router(admin_router, prefix=API_PREFIX)
     return app
 
 

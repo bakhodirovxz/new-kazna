@@ -51,8 +51,10 @@ def _new_username() -> str:
 
 
 def _make_role(perms: Iterable[str], *, scope_all: bool = True) -> str:
-    """Faqat berilgan ruxsatlarga ega maxsus rol yaratadi — I3 (imtiyoz eskalatsiyasi)
-    testlari uchun cheklangan aktyorlar tayyorlashda ishlatiladi."""
+    """Faqat berilgan ruxsatlarga ega maxsus rol yaratadi — I3/R2-3 (imtiyoz/doira
+    eskalatsiyasi) testlari uchun cheklangan aktyorlar tayyorlashda ishlatiladi. `scope_all`
+    `False` bo'lsa, `make_user(role_code, branch_ids=(...))` bilan birga ishlatilib, actor
+    filial doirasi bilan cheklangan (`AuthContext.branch_ids is not None`) bo'ladi."""
     code = f"custom_{uuid.uuid4().hex[:8]}"
     with new_session() as s:
         role = Role(code=code, name="Custom", scope_all=scope_all, is_system=False)
@@ -62,6 +64,16 @@ def _make_role(perms: Iterable[str], *, scope_all: bool = True) -> str:
             s.add(RolePermission(role_id=role.id, permission_code=perm))
         s.commit()
     return code
+
+
+def _role_perms_for_code(role_code: str) -> frozenset[str]:
+    with new_session() as s:
+        role_id = s.execute(select(Role.id).where(Role.code == role_code)).scalar_one()
+        return frozenset(
+            s.execute(
+                select(RolePermission.permission_code).where(RolePermission.role_id == role_id)
+            ).scalars()
+        )
 
 
 def _full_admin_ctx(user_id: int, username: str) -> AuthContext:
@@ -122,19 +134,34 @@ def test_invalid_username_rejected(client: TestClient) -> None:
     assert r.status_code == 422
 
 
+# Minor (fix r2): kod-nuqtalar `chr()` orqali quriladi — manba fayl ichida bevosita
+# escape yozib qo'yish ko'rinmas belgilarning o'zini fayl ichida qoldirib ketishi mumkin
+# edi (aynan shu narsa fix r1'da sodir bo'lgan va fix r2'da tuzatilgan, qarang schemas.py).
+_REJECTED_CODEPOINTS = (
+    0x00,  # NUL
+    0x7F,  # DEL
+    0x9F,  # C1 boshqaruv (U+0080-U+009F)
+    0x202E,  # RLO (bidi almashtirish)
+    0x2066,  # LRI (bidi izolat)
+    0x200E,  # LRM
+    0x200F,  # RLM
+    0x061C,  # ALM
+    0x2028,  # satr ajratgich
+    0x2029,  # abzats ajratgich
+)
+
+
 @pytest.mark.usefixtures("admin")
 def test_control_chars_in_full_name_rejected(client: TestClient) -> None:
-    """Minor (fix r1): NUL va bidi-almashtirish belgilari `full_name`da 422 bilan rad etiladi."""
-    payload = {
-        "username": _new_username(), "full_name": "A\x00B",
-        "position_id": _position_id("rukovodstvo"),
-    }
-    assert client.post("/api/v1/admin/users", json=payload).status_code == 422
-    payload = {
-        "username": _new_username(), "full_name": "A‮B",
-        "position_id": _position_id("rukovodstvo"),
-    }
-    assert client.post("/api/v1/admin/users", json=payload).status_code == 422
+    """Minor (fix r1, kengaytirilgan r2): boshqaruv, C1 va bidi/yo'naltirish belgilari
+    `full_name`da 422 bilan rad etiladi."""
+    for codepoint in _REJECTED_CODEPOINTS:
+        payload = {
+            "username": _new_username(), "full_name": f"A{chr(codepoint)}B",
+            "position_id": _position_id("rukovodstvo"),
+        }
+        r = client.post("/api/v1/admin/users", json=payload)
+        assert r.status_code == 422, f"U+{codepoint:04X} rad etilmadi: {r.text}"
 
 
 def test_block_revokes_sessions(
@@ -164,9 +191,11 @@ def test_last_admin_is_protected(db: Session, make_user: Callable[..., SeedUser]
     db.execute(
         update(User).where(User.id.not_in([actor_user.id, target.id])).values(is_active=False)
     )
-    actor = AuthContext(user_id=actor_user.id, username=actor_user.username, full_name="A",
-                        role_code="admin", permissions=frozenset({"admin:users"}), branch_ids=None,
-                        session_id=uuid.uuid4())
+    # R2-2 fix: actor to'liq admin ruxsatlariga ega bo'lishi kerak — aks holda R2-2'ning
+    # "target CURRENT permissions ⊆ actor.permissions" tekshiruvi (target ham "admin" roli,
+    # ya'ni BARCHA ruxsatlarga ega) `last_admin`ga yetmasdan turib `privilege_escalation`
+    # bilan yiqilardi.
+    actor = _full_admin_ctx(actor_user.id, actor_user.username)
     meta = ClientMeta(ip=None, ua=None, request_id=None)
     db.execute(update(User).where(User.id == actor_user.id).values(is_active=False))
     with pytest.raises(ConflictError) as exc:
@@ -357,9 +386,178 @@ def test_update_user_position_privilege_escalation_forbidden(
 ) -> None:
     actor = make_user(_make_role({"admin:users"}))
     login(client, actor)
-    victim = make_user("spec_kazna")
+    # R2-2 fix: victim'ning HOZIRGI roli bo'sh ruxsatli bo'lishi kerak — aks holda R2-2'ning
+    # "target CURRENT permissions ⊆ actor.permissions" tekshiruvi shu I3 (YANGI lavozim)
+    # holatidan OLDIN ishga tushib, testni R2-2'ga aylantirib qo'yardi.
+    victim = make_user(_make_role(set()))
     r = client.patch(
         f"/api/v1/admin/users/{victim.id}", json={"position_id": _position_id("rukovodstvo")}
+    )
+    assert r.status_code == 403
+    assert r.json()["error"]["code"] == "privilege_escalation"
+
+
+def test_target_user_protection_against_out_of_reach_admin(
+    client: TestClient, make_user: Callable[..., SeedUser]
+) -> None:
+    """R2-2: faqat `admin:users`ga ega actor to'liq administrator (target)ni reset-password,
+    reset-2fa yoki blok qila olmaydi — lekin O'ZIDA BOR ruxsatlar doirasidagi (bu yerda —
+    bo'sh ruxsatli) target uchun bemalol ishlaydi.
+
+    NB: topshiriqda misol sifatida "rukovodstvo" target keltirilgan, lekin haqiqatda
+    "rukovodstvo" roli BARCHA bo'lim (`section:*:view`) va eksport ruxsatlariga ega
+    (`ROLE_SEEDS` — `_ALL_SECTIONS | _EXPORT`), bu esa `{"admin:users"}`ning qat'iy
+    natijaviy to'plami EMAS — demak, "target CURRENT permissions ⊆ actor.permissions"
+    formulasi (I3'dagi bilan bir xil, allaqachon ko'rib chiqilgan semantika) bo'yicha
+    "rukovodstvo" ham "reach doirasidan tashqarida" bo'lib chiqadi. Shu sabab bu yerda aniq
+    bo'sh ruxsatli maxsus rol ishlatiladi — formulaning o'zi (topshiriqning so'zma-so'z
+    matnidagi misol emas) qat'iy bajarilishi uchun. Bu nomuvofiqlik hisobotda alohida
+    qayd etilgan."""
+    actor = make_user(_make_role({"admin:users"}))
+    login(client, actor)
+    full_admin_target = make_user("admin")
+
+    for r in (
+        client.post(f"/api/v1/admin/users/{full_admin_target.id}/reset-password"),
+        client.post(f"/api/v1/admin/users/{full_admin_target.id}/reset-2fa"),
+        client.post(f"/api/v1/admin/users/{full_admin_target.id}/block"),
+    ):
+        assert r.status_code == 403
+        assert r.json()["error"]["code"] == "privilege_escalation"
+
+    victim = make_user(_make_role(set()))
+    assert client.post(f"/api/v1/admin/users/{victim.id}/reset-password").status_code == 200
+    assert client.post(f"/api/v1/admin/users/{victim.id}/reset-2fa").status_code == 204
+    assert client.post(f"/api/v1/admin/users/{victim.id}/block").status_code == 200
+
+
+def test_update_user_full_name_forbidden_for_out_of_reach_target(
+    client: TestClient, make_user: Callable[..., SeedUser]
+) -> None:
+    """R2-2: `update_user`da faqat `full_name` o'zgartirilsa ham, target'ning HOZIRGI roli
+    actor'da yo'q ruxsatlarga ega bo'lsa, rad etiladi."""
+    actor = make_user(_make_role({"admin:users"}))
+    login(client, actor)
+    full_admin_target = make_user("admin")
+    r = client.patch(
+        f"/api/v1/admin/users/{full_admin_target.id}", json={"full_name": "New Name"}
+    )
+    assert r.status_code == 403
+    assert r.json()["error"]["code"] == "privilege_escalation"
+
+
+def test_create_role_scope_all_forbidden_for_branch_limited_actor(
+    client: TestClient, make_user: Callable[..., SeedUser]
+) -> None:
+    """R2-3(a): filial doirasi bilan cheklangan actor `scope_all=True` rol yarata olmaydi."""
+    actor = make_user(_make_role({"admin:roles"}, scope_all=False), branch_ids=(1,))
+    login(client, actor)
+    r = client.post("/api/v1/admin/roles", json={
+        "code": f"scope_{uuid.uuid4().hex[:6]}", "name": "X", "scope_all": True,
+        "permissions": []})
+    assert r.status_code == 403
+    assert r.json()["error"]["code"] == "privilege_escalation"
+
+
+def test_update_role_scope_all_forbidden_for_branch_limited_actor(
+    client: TestClient, make_user: Callable[..., SeedUser]
+) -> None:
+    """R2-3(a): filial doirasi bilan cheklangan actor mavjud rolni `scope_all=True`ga
+    o'zgartira olmaydi."""
+    actor = make_user(_make_role({"admin:roles"}, scope_all=False), branch_ids=(1,))
+    login(client, actor)
+    created = client.post("/api/v1/admin/roles", json={
+        "code": f"tgt_{uuid.uuid4().hex[:6]}", "name": "Target", "scope_all": False,
+        "permissions": []})
+    assert created.status_code == 201
+    role_id = created.json()["id"]
+    r = client.patch(f"/api/v1/admin/roles/{role_id}", json={"scope_all": True})
+    assert r.status_code == 403
+    assert r.json()["error"]["code"] == "privilege_escalation"
+
+
+def test_create_position_branch_escalation_forbidden(
+    client: TestClient, make_user: Callable[..., SeedUser]
+) -> None:
+    """R2-3(b): filial doirasi bilan cheklangan actor o'z doirasidan tashqi filiallarni
+    yangi lavozimga biriktira olmaydi."""
+    actor = make_user(_make_role({"admin:roles"}, scope_all=False), branch_ids=(1,))
+    login(client, actor)
+    r = client.post("/api/v1/admin/positions", json={
+        "code": f"pos_{uuid.uuid4().hex[:6]}", "name": "X",
+        "role_id": _role_id("economist_filiala"), "branch_ids": [1, 2]})
+    assert r.status_code == 403
+    assert r.json()["error"]["code"] == "privilege_escalation"
+
+
+def test_update_position_branch_escalation_forbidden(
+    client: TestClient, admin: SeedUser, make_user: Callable[..., SeedUser]
+) -> None:
+    """R2-3(b): xuddi shu narsa mavjud lavozimni yangilashda ham amal qiladi."""
+    created = client.post("/api/v1/admin/positions", json={
+        "code": f"pos_{uuid.uuid4().hex[:6]}", "name": "X",
+        "role_id": _role_id("economist_filiala"), "branch_ids": [1]})
+    assert created.status_code == 201
+    position_id = created.json()["id"]
+
+    limited = make_user(_make_role({"admin:roles"}, scope_all=False), branch_ids=(1,))
+    limited_client = TestClient(client.app, base_url="https://testserver")
+    login(limited_client, limited)
+    r = limited_client.patch(
+        f"/api/v1/admin/positions/{position_id}", json={"branch_ids": [1, 3]}
+    )
+    assert r.status_code == 403
+    assert r.json()["error"]["code"] == "privilege_escalation"
+
+
+def test_create_user_into_scope_all_position_forbidden_for_branch_limited_actor(
+    client: TestClient, make_user: Callable[..., SeedUser]
+) -> None:
+    """R2-3(c): filial doirasi bilan cheklangan actor foydalanuvchini `scope_all` roldagi
+    lavozimga joylashtira olmaydi — actor "profil_sluzhba"ning BARCHA ruxsatlariga ega
+    bo'lsa ham (I3 emas, aynan doira tekshiruvi ishlashi uchun izolyatsiya qilingan)."""
+    actor_perms = _role_perms_for_code("profil_sluzhba") | {"admin:users"}
+    actor = make_user(_make_role(actor_perms, scope_all=False), branch_ids=(1,))
+    login(client, actor)
+    r = client.post("/api/v1/admin/users", json={
+        "username": _new_username(), "full_name": "A",
+        "position_id": _position_id("profil_sluzhba")})
+    assert r.status_code == 403
+    assert r.json()["error"]["code"] == "privilege_escalation"
+
+
+def test_create_user_into_out_of_branch_position_forbidden(
+    client: TestClient, admin: SeedUser, make_user: Callable[..., SeedUser]
+) -> None:
+    """R2-3(c): filial doirasi bilan cheklangan actor foydalanuvchini o'z doirasidan tashqi
+    filiallarga ega (lekin scope_all bo'lmagan) lavozimga ham joylashtira olmaydi."""
+    created = client.post("/api/v1/admin/positions", json={
+        "code": f"pos_{uuid.uuid4().hex[:6]}", "name": "X",
+        "role_id": _role_id("economist_filiala"), "branch_ids": [99]})
+    assert created.status_code == 201
+    position_id = created.json()["id"]
+
+    actor_perms = _role_perms_for_code("economist_filiala") | {"admin:users"}
+    actor = make_user(_make_role(actor_perms, scope_all=False), branch_ids=(1,))
+    login(client, actor)
+    r = client.post("/api/v1/admin/users", json={
+        "username": _new_username(), "full_name": "A", "position_id": position_id})
+    assert r.status_code == 403
+    assert r.json()["error"]["code"] == "privilege_escalation"
+
+
+def test_update_user_position_scope_all_forbidden_for_branch_limited_actor(
+    client: TestClient, make_user: Callable[..., SeedUser]
+) -> None:
+    """R2-3(c): `update_user`ning lavozim o'zgartirish yo'lida ham xuddi shunday tekshiriladi."""
+    actor_perms = _role_perms_for_code("profil_sluzhba") | {"admin:users"}
+    actor = make_user(_make_role(actor_perms, scope_all=False), branch_ids=(1,))
+    login(client, actor)
+    # R2-2: victim'ning HOZIRGI roli bo'sh bo'lsin — faqat R2-3(c) (YANGI lavozim) tekshirilsin.
+    victim = make_user(_make_role(set()))
+    r = client.patch(
+        f"/api/v1/admin/users/{victim.id}",
+        json={"position_id": _position_id("profil_sluzhba")},
     )
     assert r.status_code == 403
     assert r.json()["error"]["code"] == "privilege_escalation"

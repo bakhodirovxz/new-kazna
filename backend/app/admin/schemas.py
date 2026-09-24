@@ -14,15 +14,30 @@ USERNAME_RE = re.compile(r"^[a-z0-9._-]{3,64}$")
 CODE_PATTERN = r"^[a-z][a-z0-9_]{1,63}$"
 BranchId = Annotated[int, Field(gt=0, lt=100000)]
 PermCode = Annotated[str, Field(max_length=64)]
-# I5/minor (fix r1): boshqaruv belgilari (NUL va h.k.) va bidi-almashtirish belgilari
-# (U+202A-U+202E, U+2066-U+2069) taqiqlanadi — ular ko'rinishni buzib ("Иван" ↔ "навИ"
-# aylantirish) ijtimoiy muhandislik uchun ishlatilishi mumkin.
-_CONTROL_CHARS_RE = re.compile(r"[\x00-\x1f\x7f‪-‮⁦-⁩]")
+# I5/minor (fix r1, kengaytirilgan fix r2): taqiqlangan boshqaruv/yashirin-yo'naltirish
+# belgilari — ular ko'rinishni buzib ("Иван" ↔ "навИ" aylantirish) ijtimoiy muhandislik uchun
+# ishlatilishi mumkin. Diapazonlar BUTUN SONLAR sifatida (chr()/ord() orqali) beriladi —
+# satr yoki regex literalida to'g'ridan-to'g'ri unicode kod-nuqta escape yozuvi ishlatish
+# manba faylida ko'rinmas belgilarning o'zini qoldirib ketishi mumkin edi (fix r2: aynan shu
+# narsa sodir bo'lgan edi — matn uzatish jarayonida escape yozuvi chin belgiga aylanib, fayl
+# ichida "yashirin" qolib ketgan edi; endi bu diapazon faqat integer literallardan tuziladi,
+# hech qanday noaniqlik yo'q).
+_CONTROL_RANGES: tuple[tuple[int, int], ...] = (
+    (0x00, 0x1F),  # ASCII boshqaruv belgilari (NUL va h.k.)
+    (0x7F, 0x7F),  # DEL
+    (0x80, 0x9F),  # C1 boshqaruv belgilari
+    (0x202A, 0x202E),  # bidi almashtirish/joylashtirish (LRE/RLE/PDF/LRO/RLO)
+    (0x2066, 0x2069),  # bidi izolatlar (LRI/RLI/FSI/PDI)
+    (0x2028, 0x2029),  # satr/abzats ajratgichlari
+)
+_CONTROL_SINGLES: frozenset[int] = frozenset({0x200E, 0x200F, 0x061C})  # LRM, RLM, ALM
 
 
 def _no_control_chars(value: str) -> str:
-    if _CONTROL_CHARS_RE.search(value):
-        raise ValueError("control characters not allowed")
+    for ch in value:
+        code = ord(ch)
+        if code in _CONTROL_SINGLES or any(lo <= code <= hi for lo, hi in _CONTROL_RANGES):
+            raise ValueError("control characters not allowed")
     return value
 
 

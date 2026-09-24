@@ -105,6 +105,52 @@ def _assert_no_escalation(actor: AuthContext, granted: Iterable[str]) -> None:
         raise ForbiddenError("privilege_escalation")
 
 
+def _assert_target_not_out_of_reach(db: Session, actor: AuthContext, target: User) -> None:
+    """R2-2: actor TARGET foydalanuvchining HOZIRGI lavozimi orqali o'zida yo'q ruxsatlarga
+    ega bo'lsa, uni o'zgartira olmaydi — aks holda faqat `admin:users`ga ega actor to'liq
+    administratorni blokdan chiqarishi/parolini tiklashi mumkin bo'lib qolardi. `reset_password`,
+    `reset_mfa`, `set_active` (blok/blokdan chiqarish) va `update_user` (full_name kiritilgan
+    bo'lsa ham) uchun chaqiriladi."""
+    role_id = db.execute(
+        select(Position.role_id).where(Position.id == target.position_id)
+    ).scalar_one()
+    _assert_no_escalation(actor, _role_permission_codes(db, role_id))
+
+
+def _assert_no_branch_escalation(actor: AuthContext, branch_ids: Iterable[int]) -> None:
+    """R2-3(b): filial doirasi bilan cheklangan actor (`branch_ids is not None`) o'z
+    doirasidan tashqi filiallarni lavozimga biriktira olmaydi."""
+    if actor.branch_ids is not None and not set(branch_ids) <= actor.branch_ids:
+        raise ForbiddenError("privilege_escalation")
+
+
+def _assert_no_scope_all_escalation(actor: AuthContext, scope_all: bool) -> None:
+    """R2-3(a): filial doirasi bilan cheklangan actor `scope_all=True` rolni yarata yoki
+    shunday holatda qoldira/qila olmaydi (o'zi boshqara olmaydigan, barcha filiallarga
+    tegishli rol)."""
+    if actor.branch_ids is not None and scope_all:
+        raise ForbiddenError("privilege_escalation")
+
+
+def _assert_no_scope_escalation(db: Session, actor: AuthContext, position: Position) -> None:
+    """R2-3(c): filial doirasi bilan cheklangan actor foydalanuvchini `scope_all` roldagi
+    yoki o'z doirasidan tashqi filiallarga ega lavozimga ko'chira olmaydi."""
+    if actor.branch_ids is None:
+        return
+    role_scope_all = db.execute(
+        select(Role.scope_all).where(Role.id == position.role_id)
+    ).scalar_one()
+    if role_scope_all:
+        raise ForbiddenError("privilege_escalation")
+    branches = frozenset(
+        db.execute(
+            select(PositionBranch.branch_id).where(PositionBranch.position_id == position.id)
+        ).scalars()
+    )
+    if not branches <= actor.branch_ids:
+        raise ForbiddenError("privilege_escalation")
+
+
 def _user_query() -> Select[tuple[User, Position, str]]:
     return (
         select(User, Position, Role.code)
@@ -181,6 +227,9 @@ def create_user(
     # I3: yangi foydalanuvchining lavozimi orqali beriladigan rol ruxsatlari actor'da
     # yo'q ruxsatlarni o'z ichiga olmasin (imtiyoz eskalatsiyasi).
     _assert_no_escalation(actor, _role_permission_codes(db, position.role_id))
+    # R2-3(c): filial doirasi bilan cheklangan actor scope_all yoki o'z doirasidan tashqi
+    # lavozimga foydalanuvchi joylashtira olmaydi.
+    _assert_no_scope_escalation(db, actor, position)
     if db.execute(select(User.id).where(User.username == data.username)).first() is not None:
         raise ConflictError("username_taken")
     temporary = passwords.generate_temporary_password()
@@ -214,6 +263,9 @@ def update_user(
     db: Session, actor: AuthContext, user_id: int, data: UserUpdate, meta: ClientMeta
 ) -> UserOut:
     user = _load_user(db, user_id)
+    # R2-2: actor o'zida yo'q ruxsatlarga ega TARGET'ni hech qanday maydon (hatto full_name)
+    # bo'yicha ham o'zgartira olmaydi.
+    _assert_target_not_out_of_reach(db, actor, user)
     changes: dict[str, object] = {}
     if data.full_name is not None and data.full_name != user.full_name:
         user.full_name = data.full_name
@@ -223,6 +275,8 @@ def update_user(
         position = _require_position(db, data.position_id)
         # I3: lavozim (demak, rol) o'zgartirilganda ham eskalatsiya taqiqlanadi.
         _assert_no_escalation(actor, _role_permission_codes(db, position.role_id))
+        # R2-3(c): yangi lavozim ham scope_all yoki actor doirasidan tashqi bo'lmasin.
+        _assert_no_scope_escalation(db, actor, position)
         changes["position_id"] = [user.position_id, data.position_id]
         user.position_id = data.position_id
         now = _now()
@@ -240,6 +294,7 @@ def set_active(
 ) -> UserOut:
     _not_self(actor, user_id)
     user = _load_user(db, user_id)
+    _assert_target_not_out_of_reach(db, actor, user)  # R2-2
     user.is_active = active
     if active:
         user.failed_logins = 0
@@ -257,6 +312,7 @@ def set_active(
 def reset_password(db: Session, actor: AuthContext, user_id: int, meta: ClientMeta) -> str:
     _not_self(actor, user_id)
     user = _load_user(db, user_id)
+    _assert_target_not_out_of_reach(db, actor, user)  # R2-2
     now = _now()
     temporary = passwords.generate_temporary_password()
     user.password_hash = passwords.hash_password(temporary)
@@ -274,6 +330,7 @@ def reset_password(db: Session, actor: AuthContext, user_id: int, meta: ClientMe
 def reset_mfa(db: Session, actor: AuthContext, user_id: int, meta: ClientMeta) -> None:
     _not_self(actor, user_id)
     user = _load_user(db, user_id)
+    _assert_target_not_out_of_reach(db, actor, user)  # R2-2
     now = _now()
     user.totp_enabled = False
     user.totp_secret_enc = None
@@ -317,6 +374,8 @@ def _set_permissions(db: Session, role_id: int, codes: list[str]) -> None:
 
 
 def create_role(db: Session, actor: AuthContext, data: RoleIn, meta: ClientMeta) -> RoleOut:
+    # R2-3(a): filial doirasi bilan cheklangan actor scope_all=True rol yarata olmaydi.
+    _assert_no_scope_all_escalation(actor, data.scope_all)
     perms = _validate_permissions(db, data.permissions)
     # I3: actor faqat o'zida bor ruxsatlarni yangi rolga bera oladi.
     _assert_no_escalation(actor, perms)
@@ -345,6 +404,10 @@ def update_role(
     # tasodifan huquqlardan mahrum qilishi yoki (rol bo'lsa) kengaytirishi mumkin edi.
     if role.code == actor.role_code:
         raise ConflictError("cannot_modify_self")
+    # R2-3(a): natijaviy (yangi yoki o'zgarishsiz qolgan) scope_all qiymati True bo'lsa,
+    # filial doirasi bilan cheklangan actor bu rolni boshqara olmaydi.
+    effective_scope_all = data.scope_all if data.scope_all is not None else role.scope_all
+    _assert_no_scope_all_escalation(actor, effective_scope_all)
     details: dict[str, object] = {}
     if data.name is not None:
         role.name = data.name
@@ -404,6 +467,9 @@ def _require_role(db: Session, role_id: int) -> None:
 def create_position(
     db: Session, actor: AuthContext, data: PositionIn, meta: ClientMeta
 ) -> PositionOut:
+    # R2-3(b): filial doirasi bilan cheklangan actor o'z doirasidan tashqi filiallarni
+    # lavozimga biriktira olmaydi.
+    _assert_no_branch_escalation(actor, data.branch_ids)
     _require_role(db, data.role_id)
     if db.execute(select(Position.id).where(Position.code == data.code)).first() is not None:
         raise ConflictError("code_taken")
@@ -447,6 +513,9 @@ def update_position(
         position.role_id = data.role_id
         scope_changed = True
     if data.branch_ids is not None:
+        # R2-3(b): filial doirasi bilan cheklangan actor o'z doirasidan tashqi filiallarni
+        # biriktira olmaydi.
+        _assert_no_branch_escalation(actor, data.branch_ids)
         _set_branches(db, position.id, data.branch_ids)
         details["branch_ids"] = sorted(set(data.branch_ids))
         scope_changed = True

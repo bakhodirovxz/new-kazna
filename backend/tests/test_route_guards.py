@@ -7,18 +7,27 @@ kelganda) o'z ichidagi marshrutlarni HAR SAFAR to'liq (prefiks + birlashtirilgan
 dependency'lar bilan) hisoblab beradi. Shuning uchun bu yerda `create_app().routes`ni
 NAIV `isinstance(route, APIRoute)` bilan emas, balki shu `_IncludedRouter` mexanizmini
 rekursiv "yoyib" (`_resolve`) chin marshrut jadvalini olamiz — aks holda quyidagi barcha
-testlar aslida BO'SH ro'yxat ustida yurib, sinovsiz "passed" bo'lib qolar edi (I5ning aynan
-o'zi izlagan bo'shliq turi)."""
+testlar aslida BO'SH ro'yxat ustida yurib, sinovsiz "passed" bo'lib qolar edi.
+
+NB (fix r2 / R2-1): `_resolve` yoyilgan yakuniy yozuvlarni ENDI QAT'IY tekshiradi — avval
+`APIRoute` bo'lmagan (yoki bo'sh `methods`/`None` `dependant`ga ega) yozuvlar shunchaki
+"o'tkazib yuborilardi" (`ctx.methods` bo'sh bo'lgani uchun ichki `for method in ctx.methods`
+sira ishlamas, demak shu route HECH QACHON hech qanday testda tekshirilmasdi — yana bir
+"sinovsiz o'tish" turi). Endi bunday yozuv aniq allowlist'da bo'lmasa, `AssertionError` bilan
+yiqiladi (pastda `test_resolve_raises_on_raw_route_inside_included_router` bilan sinaladi)."""
 
 from __future__ import annotations
 
 from collections.abc import Iterator
 
 import fastapi.routing as fastapi_routing
+import pytest
+from fastapi import APIRouter, FastAPI
 from fastapi.dependencies.models import Dependant
 from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
 from starlette.routing import BaseRoute
+from starlette.routing import Route as StarletteRoute
 
 from app.auth.context import get_ctx
 from app.main import create_app
@@ -35,21 +44,64 @@ PUBLIC = {
 # I5 (fix r1): ("GET", "/api/v1/openapi.json") olib tashlandi — `openapi_url=None` bo'lgani
 # uchun bu route hozircha umuman mavjud emas (Task 13'da qo'shiladi va PUBLIC'ga qaytariladi).
 PREFIX_PERMS = {"/api/v1/admin": "admin:", "/api/v1/audit": "audit:read"}
-# I5: `app.routes`dagi har bir TOP-LEVEL yozuv yoki `APIRoute` (to'g'ridan-to'g'ri qo'shilgan
-# bo'lsa), yoki `_IncludedRouter` (`include_router()` orqali) bo'lishi kerak — boshqa turdagi
-# route (masalan, qo'lda qo'shilgan `Mount`/`WebSocketRoute`) shu ro'yxatga aniq kiritilishi
-# shart, aks holda test yiqiladi. Hozircha bo'sh.
+# R2-1: `_resolve` yakuniy yozuvi `APIRoute` bo'lmasa, shu yerda ANIQ ro'yxatga kiritilmagan
+# bo'lsa, test yiqiladi. Hozircha bo'sh — hech qanday xom (APIRoute bo'lmagan) route yo'q.
 NON_STANDARD_ROUTE_ALLOWLIST: set[str] = set()
+# R2-1: joriy ilova uchun aniq kutilgan (HTTP metod, to'liq yo'l) to'plami — yangi yoki
+# yo'qolgan marshrut shu ro'yxatni ONGLI ravishda yangilashni talab qiladi.
+EXPECTED_ROUTES = frozenset({
+    ("DELETE", "/api/v1/auth/sessions/{session_id}"),
+    ("GET", "/api/v1/admin/permissions"),
+    ("GET", "/api/v1/admin/positions"),
+    ("GET", "/api/v1/admin/roles"),
+    ("GET", "/api/v1/admin/users"),
+    ("GET", "/api/v1/auth/me"),
+    ("GET", "/api/v1/auth/sessions"),
+    ("GET", "/api/v1/healthz"),
+    ("GET", "/api/v1/readyz"),
+    ("PATCH", "/api/v1/admin/positions/{position_id}"),
+    ("PATCH", "/api/v1/admin/roles/{role_id}"),
+    ("PATCH", "/api/v1/admin/users/{user_id}"),
+    ("POST", "/api/v1/admin/positions"),
+    ("POST", "/api/v1/admin/roles"),
+    ("POST", "/api/v1/admin/users"),
+    ("POST", "/api/v1/admin/users/{user_id}/block"),
+    ("POST", "/api/v1/admin/users/{user_id}/reset-2fa"),
+    ("POST", "/api/v1/admin/users/{user_id}/reset-password"),
+    ("POST", "/api/v1/admin/users/{user_id}/unblock"),
+    ("POST", "/api/v1/auth/2fa/enroll/confirm"),
+    ("POST", "/api/v1/auth/2fa/enroll/start"),
+    ("POST", "/api/v1/auth/2fa/verify"),
+    ("POST", "/api/v1/auth/login"),
+    ("POST", "/api/v1/auth/logout"),
+    ("POST", "/api/v1/auth/password/change"),
+})
 
 
 def _resolve(route: BaseRoute) -> Iterator[object]:
     """`_IncludedRouter`larni rekursiv yoyib, chin (to'liq prefiksli, dependency'lari
-    birlashtirilgan) `_EffectiveRouteContext` obyektlarini beradi."""
+    birlashtirilgan) marshrut kontekstlarini beradi.
+
+    R2-1: har bir YAKUNIY (`_IncludedRouter` bo'lmagan) yozuv qat'iy tekshiriladi — u
+    `APIRoute`ning o'zi (yoki uning kelib chiqishi `APIRoute`) bo'lishi, bo'sh bo'lmagan
+    `methods`ga va `None` bo'lmagan `dependant`ga ega bo'lishi SHART, aks holda
+    `NON_STANDARD_ROUTE_ALLOWLIST`da aniq ko'rsatilmagan bo'lsa `AssertionError`."""
     if isinstance(route, fastapi_routing._IncludedRouter):
         for candidate in route.effective_candidates():
             yield from _resolve(candidate)
-    else:
-        yield route
+        return
+    original = getattr(route, "original_route", route)
+    path = getattr(route, "path", getattr(original, "path", repr(original)))
+    if not isinstance(original, APIRoute):
+        assert path in NON_STANDARD_ROUTE_ALLOWLIST, (
+            f"kutilmagan turdagi route (APIRoute emas): {original!r}"
+        )
+        return
+    methods = getattr(route, "methods", None) or set()
+    assert methods, f"{path}: bo'sh methods to'plami (route noto'g'ri aniqlandimi?)"
+    dependant = getattr(route, "dependant", None)
+    assert dependant is not None, f"{path}: dependant yo'q"
+    yield route
 
 
 def _calls(dep: Dependant) -> Iterator[object]:
@@ -58,10 +110,11 @@ def _calls(dep: Dependant) -> Iterator[object]:
         yield from _calls(sub)
 
 
-def _routes() -> Iterator[tuple[str, str, Dependant]]:
+def _routes(app: FastAPI | None = None) -> Iterator[tuple[str, str, Dependant]]:
     """(HTTP metod, to'liq yo'l, shu marshrutning to'liq — prefiks-darajasidagi
-    dependency'lar bilan birlashtirilgan — `Dependant`i)."""
-    for top in create_app().routes:
+    dependency'lar bilan birlashtirilgan — `Dependant`i). `app` — `_resolve`ning qat'iy
+    tekshiruvlarini "sinovchi" ilova ustida sinash uchun (standart: chin `create_app()`)."""
+    for top in (app or create_app()).routes:
         for ctx in _resolve(top):
             for method in ctx.methods:
                 yield method, ctx.path, ctx.dependant
@@ -73,12 +126,28 @@ def _matches_prefix(path: str, prefix: str) -> bool:
     return path == prefix or path.startswith(prefix + "/")
 
 
-def test_every_route_is_standard() -> None:
-    for route in create_app().routes:
-        if isinstance(route, APIRoute | fastapi_routing._IncludedRouter):
-            continue
-        path = getattr(route, "path", repr(route))
-        assert path in NON_STANDARD_ROUTE_ALLOWLIST, f"kutilmagan turdagi route: {route!r}"
+def _probe_endpoint() -> None:  # pragma: no cover -- hech qachon chaqirilmaydi
+    return None
+
+
+def test_resolve_raises_on_raw_route_inside_included_router() -> None:
+    """R2-1: `_resolve`/`_routes`ning qat'iy tekshiruvi "sinovchi" ilova bilan — includelangan
+    router ichiga qo'lda qo'shilgan xom Starlette `Route` (na `APIRoute`, na `dependant`ga
+    ega) bilan — chindan ham yiqilishini tasdiqlaydi."""
+    probe_router = APIRouter()
+    probe_router.routes.append(StarletteRoute("/raw", _probe_endpoint, methods=["GET"]))
+    probe_app = FastAPI()
+    probe_app.include_router(probe_router)
+
+    with pytest.raises(AssertionError):
+        list(_routes(probe_app))
+
+
+def test_route_table_matches_expected_set() -> None:
+    """R2-1: yangi/yo'qolgan marshrut shu aniq to'plamni ONGLI ravishda yangilashni talab
+    qiladi — deny-by-default qamrovi "sekin-asta shovqinsiz" torayib ketmasligi uchun."""
+    actual = {(method, path) for method, path, _ in _routes()}
+    assert actual == EXPECTED_ROUTES
 
 
 def test_public_routes_correspond_to_existing_routes() -> None:

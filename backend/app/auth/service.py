@@ -73,7 +73,7 @@ def _unknown_user_audit_details(normalized: str) -> dict[str, Any]:
         "reason": "unknown_user",
     }
     hint = normalized[:2]
-    if _USERNAME_HINT_RE.match(hint):
+    if _USERNAME_HINT_RE.fullmatch(hint):
         details["username_hint"] = f"{hint}…"
     return details
 
@@ -118,11 +118,12 @@ def login(
     kind: Literal["verify", "enroll"] = "verify" if user.totp_enabled else "enroll"
     token = secrets.token_urlsafe(32)
     # I3: yangi challenge ochilganda foydalanuvchining boshqa ochiq challenge'lari
-    # o'chiriladi (bir vaqtda faqat bitta challenge tirik bo'lsin).
+    # o'chiriladi (bir vaqtda faqat bitta challenge tirik bo'lsin). Kutilayotgan enroll
+    # siri ham tozalanadi (fix r2 — o'lik challenge'da shifrlangan sir qolib ketmasin).
     db.execute(
         update(MfaChallenge)
         .where(MfaChallenge.user_id == user.id, MfaChallenge.used_at.is_(None))
-        .values(used_at=now)
+        .values(used_at=now, pending_secret_enc=None)
     )
     db.add(
         MfaChallenge(
@@ -141,28 +142,43 @@ def login(
 def _load_challenge(
     db: Session, token: str, kind: str, now: datetime
 ) -> tuple[MfaChallenge, User]:
-    challenge = db.execute(
-        select(MfaChallenge)
-        .where(MfaChallenge.token_hmac == _challenge_hmac(token))
-        .with_for_update()
+    """R2-1: FOYDALANUVCHI qatori HAR DOIM challenge qatoridan OLDIN qulflanadi — `login()`
+    va `change_password()` ham shu tartibda ishlaydi (avval user, keyin challenge'larni
+    bekor qiluvchi UPDATE). Teskari tartib (avval challenge, keyin user, eski koddagidek)
+    lock-order inversion va Postgres DeadlockDetected'ga olib kelardi (parallel `login()`
+    va `verify_mfa()` bir xil foydalanuvchiga qarshi ishlaganda).
+
+    Shu sabab qulfsiz egasini bilib olib, avval FOYDALANUVCHINI qulflaymiz, so'ng
+    challenge'ni qulflab HAMMA narsani QAYTA tekshiramiz — qulfsiz o'qishdan keyin holat
+    o'zgargan (masalan boshqa tranzaksiya uni bekor qilgan) bo'lishi mumkin.
+    """
+    token_hmac = _challenge_hmac(token)
+    owner_id = db.execute(
+        select(MfaChallenge.user_id).where(MfaChallenge.token_hmac == token_hmac)
     ).scalar_one_or_none()
-    if (
-        challenge is None
-        or challenge.kind != kind
-        or challenge.used_at is not None
-        or challenge.expires_at <= now
-        or challenge.attempts >= MFA_MAX_ATTEMPTS
-    ):
+    if owner_id is None:
         raise AuthError("mfa_expired")
-    # I2: foydalanuvchi qatori ham qulflanadi — parallel `verify`/`enroll` urinishlari
+    # I2: foydalanuvchi qatori qulflanadi — parallel `verify`/`enroll` urinishlari
     # (masalan, bir xil TOTP kodi bilan) `totp_last_step`/`failed_logins` ustida
     # ketma-ketlashadi, aks holda ikkalasi ham "muvaffaqiyatli" bo'lib qolishi mumkin edi.
-    user = db.get(User, challenge.user_id, with_for_update=True)
+    user = db.get(User, owner_id, with_for_update=True)
     if user is None or not user.is_active:
         raise AuthError("mfa_expired")
     # I3: bloklangan foydalanuvchining ochiq challenge'i ham, hatto to'g'ri kod bilan ham
     # ishlamasligi kerak.
     if user.locked_until is not None and user.locked_until > now:
+        raise AuthError("mfa_expired")
+    challenge = db.execute(
+        select(MfaChallenge).where(MfaChallenge.token_hmac == token_hmac).with_for_update()
+    ).scalar_one_or_none()
+    if (
+        challenge is None
+        or challenge.user_id != owner_id
+        or challenge.kind != kind
+        or challenge.used_at is not None
+        or challenge.expires_at <= now
+        or challenge.attempts >= MFA_MAX_ATTEMPTS
+    ):
         raise AuthError("mfa_expired")
     return challenge, user
 
@@ -293,6 +309,7 @@ def enroll_confirm(
     user.locked_until = None
     codes = issue_backup_codes(db, user.id)
     challenge.used_at = now
+    challenge.pending_secret_enc = None  # fix r2: vaqtinchalik shifrlangan sir endi kerak emas
     user.last_login_at = now
     new = sessions.create(db, user.id, meta.ip, meta.ua, now)
     log_event(meta, AuditAction.MFA_ENROLLED, user_id=user.id)
@@ -350,14 +367,21 @@ def change_password(
     user.password_changed_at = now
     user.must_change_password = False
     # M8: parol o'zgarganda ochiq 2FA challenge'lari ham, JORIY sessiya ham bekor
-    # qilinadi — yangi sessiya chiqariladi (router yangi cookie'larni o'rnatadi).
+    # qilinadi — yangi sessiya chiqariladi (router yangi cookie'larni o'rnatadi). Kutilayotgan
+    # enroll siri ham tozalanadi (fix r2).
     db.execute(
         update(MfaChallenge)
         .where(MfaChallenge.user_id == user.id, MfaChallenge.used_at.is_(None))
-        .values(used_at=now)
+        .values(used_at=now, pending_secret_enc=None)
     )
+    # fix r2 (kam xarajatli): yangi sessiya eskisining absolyut muddatidan
+    # UZOQROQ bo'lmasin — parol almashtirish "abadiy" sessiyaga aylanmasin.
+    old_session = db.get(UserSession, ctx.session_id)
+    old_absolute = old_session.absolute_expires_at if old_session is not None else None
     sessions.revoke_all(db, user.id, "password_changed", now)
-    new_session = sessions.create(db, user.id, meta.ip, meta.ua, now)
+    new_session = sessions.create(
+        db, user.id, meta.ip, meta.ua, now, absolute_expires_at=old_absolute
+    )
     log_event(meta, AuditAction.PASSWORD_CHANGED, user_id=user.id)
     return new_session
 

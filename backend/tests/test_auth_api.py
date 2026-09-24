@@ -529,10 +529,12 @@ def test_password_change_rotates_session(
     client: TestClient, make_user: Callable[..., SeedUser]
 ) -> None:
     """M8: parol muvaffaqiyatli almashtirilganda joriy sessiya ham aylantiriladi — eski
-    cookie endi ishlamaydi, yangisi ishlaydi."""
+    cookie endi ishlamaydi, yangisi ishlaydi; parolgacha ochilgan MFA challenge ham
+    endi ishlamaydi (fix r2, kam xarajatli qoida #3)."""
     user = make_user()
     login(client, user)
     old_session = client.cookies[SESSION_COOKIE]
+    stale_challenge = _make_challenge(user.id, "verify", now=datetime.now(UTC))
     r = client.post(
         "/api/v1/auth/password/change",
         json={"current_password": DEFAULT_PASSWORD, "new_password": NEW_PASSWORD},
@@ -544,6 +546,11 @@ def test_password_change_rotates_session(
     stale = TestClient(client.app, base_url="https://testserver")
     stale.cookies.set(SESSION_COOKIE, old_session)
     assert stale.get("/api/v1/auth/me").status_code == 401
+
+    r2 = client.post(
+        "/api/v1/auth/2fa/verify", json={"mfa_token": stale_challenge, "code": user.next_code()}
+    )
+    assert r2.json()["error"]["code"] == "mfa_expired"
 
 
 def test_logout_with_expired_session_clears_cookies(
@@ -593,3 +600,32 @@ def test_sessions_excludes_idle_expired(
     listed2 = client.get("/api/v1/auth/sessions").json()
     assert len(listed2) == 1
     assert listed2[0]["current"] is True
+
+
+# ── Fix round 2 ──────────────────────────────────────────────────────────────
+
+
+def test_unknown_username_audit_details_are_safe(client: TestClient) -> None:
+    """R2-2 (M5 residual): "login" maydoniga yozilgan istalgan xom matn (hatto parolga
+    o'xshab ketsa ham) audit `details`da hech qanday ko'rinishda saqlanmaydi — faqat
+    barqaror fingerprint, uzunlik va (xavfsiz bo'lsa) 2 belgili maslahat."""
+    raw = "Secret-Pass-2026!"
+    r = _login_step(client, raw)
+    assert r.json()["error"]["code"] == "invalid_credentials"
+    with get_engine("app").connect() as conn:
+        row = conn.execute(
+            text(
+                "SELECT details, details::text AS raw_text FROM core.audit_log "
+                "WHERE user_id IS NULL AND action = 'auth.login.fail' "
+                "ORDER BY id DESC LIMIT 1"
+            )
+        ).mappings().one()
+    details = row["details"]
+    assert details["reason"] == "unknown_user"
+    assert isinstance(details["username_len"], int) and details["username_len"] == len(raw)
+    assert isinstance(details["username_fp"], str) and len(details["username_fp"]) == 16
+    hint = details.get("username_hint")
+    assert hint is None or len(hint) <= 3  # <=2 belgi + "…"
+    assert raw not in row["raw_text"]
+    assert raw.lower() not in row["raw_text"].lower()
+    assert "username" not in details  # xom kalit nomi ham yo'q

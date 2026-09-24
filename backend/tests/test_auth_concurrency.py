@@ -129,3 +129,72 @@ def test_parallel_mfa_verify_same_code_exactly_one_succeeds(
     assert len(outcomes) == 2
     assert outcomes.count("200") == 1
     assert outcomes.count("invalid_mfa_code") == 1
+
+
+def test_login_and_verify_concurrently_no_deadlock(
+    make_user: Callable[..., SeedUser],
+) -> None:
+    """R2-1: `login()` qulflaydi user -> (UPDATE orqali) challenge; eski `_load_challenge`
+    esa challenge -> user tartibida qulflar edi — teskari tartib Postgres'da
+    DeadlockDetected'ga olib kelardi. Endi ikkalasi ham AVVAL user'ni qulflaydi.
+
+    Bir xil foydalanuvchiga qarshi `verify_mfa()` va `login()` bir vaqtda ishga tushiriladi
+    (Barrier); kutilmagan istisno (masalan deadlock) bo'lmasligi, va ikkalasi ham aniq
+    natija bilan tugashi tekshiriladi (verify — muvaffaqiyat yoki toza 401; login — har doim
+    yangi challenge)."""
+    user = make_user()
+    code = user.next_code()
+    with new_session() as s:
+        result = service.login(s, user.username, user.password, _META, datetime.now(UTC))
+        s.commit()
+    token = result.mfa_token
+
+    barrier = threading.Barrier(2)
+    lock = threading.Lock()
+    unexpected: list[BaseException] = []
+    verify_outcome: list[str] = []
+    login_ok: list[bool] = []
+
+    def do_verify() -> None:
+        barrier.wait()
+        db = new_session()
+        try:
+            service.verify_mfa(db, token, code, _META, datetime.now(UTC))
+            db.commit()
+            with lock:
+                verify_outcome.append("ok")
+        except AuthError as exc:
+            db.rollback()
+            with lock:
+                verify_outcome.append(exc.code)
+        except Exception as exc:  # aynan "deadlock yo'q"ligini tekshiramiz
+            db.rollback()
+            with lock:
+                unexpected.append(exc)
+        finally:
+            db.close()
+
+    def do_login() -> None:
+        barrier.wait()
+        db = new_session()
+        try:
+            service.login(db, user.username, user.password, _META, datetime.now(UTC))
+            db.commit()
+            with lock:
+                login_ok.append(True)
+        except Exception as exc:
+            db.rollback()
+            with lock:
+                unexpected.append(exc)
+        finally:
+            db.close()
+
+    threads = [threading.Thread(target=do_verify), threading.Thread(target=do_login)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join(timeout=10)
+
+    assert not unexpected, f"kutilmagan xato(lar) (deadlock bo'lishi mumkin): {unexpected!r}"
+    assert verify_outcome == ["ok"] or verify_outcome[0] in ("invalid_mfa_code", "mfa_expired")
+    assert login_ok == [True]

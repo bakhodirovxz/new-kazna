@@ -58,11 +58,27 @@ def ua_summary(ua: str | None) -> str:
     return f"{browser} · {system}" if system else browser
 
 
-def create(db: Session, user_id: int, ip: str | None, ua: str | None, now: datetime) -> NewSession:
+def create(
+    db: Session,
+    user_id: int,
+    ip: str | None,
+    ua: str | None,
+    now: datetime,
+    *,
+    absolute_expires_at: datetime | None = None,
+) -> NewSession:
+    """`absolute_expires_at` — sessiya aylantirilganda (fix r2, M8) eskisining absolyut
+    muddatini meros qilib olish uchun; berilsa, standart muddat bilan solishtirib
+    ENG ERTASI olinadi (parol almashtirish sessiyani "abadiylashtirmasin")."""
     settings = get_settings()
     token = secrets.token_urlsafe(32)
     session_id = uuid.uuid4()
-    absolute = now + timedelta(hours=settings.session_absolute_hours)
+    default_absolute = now + timedelta(hours=settings.session_absolute_hours)
+    absolute = (
+        min(default_absolute, absolute_expires_at)
+        if absolute_expires_at is not None
+        else default_absolute
+    )
     db.add(
         UserSession(
             id=session_id,

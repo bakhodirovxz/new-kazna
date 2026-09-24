@@ -13,6 +13,17 @@ from app.auth.service import normalize_username
 USERNAME_RE = re.compile(r"^[a-z0-9._-]{3,64}$")
 CODE_PATTERN = r"^[a-z][a-z0-9_]{1,63}$"
 BranchId = Annotated[int, Field(gt=0, lt=100000)]
+PermCode = Annotated[str, Field(max_length=64)]
+# I5/minor (fix r1): boshqaruv belgilari (NUL va h.k.) va bidi-almashtirish belgilari
+# (U+202A-U+202E, U+2066-U+2069) taqiqlanadi — ular ko'rinishni buzib ("Иван" ↔ "навИ"
+# aylantirish) ijtimoiy muhandislik uchun ishlatilishi mumkin.
+_CONTROL_CHARS_RE = re.compile(r"[\x00-\x1f\x7f‪-‮⁦-⁩]")
+
+
+def _no_control_chars(value: str) -> str:
+    if _CONTROL_CHARS_RE.search(value):
+        raise ValueError("control characters not allowed")
+    return value
 
 
 class Page[T](BaseModel):
@@ -35,14 +46,24 @@ class UserCreate(_In):
     @classmethod
     def _username(cls, value: str) -> str:
         normalized = normalize_username(value)
-        if not USERNAME_RE.match(normalized):
+        if not USERNAME_RE.fullmatch(normalized):
             raise ValueError("username format")
         return normalized
+
+    @field_validator("full_name")
+    @classmethod
+    def _full_name(cls, value: str) -> str:
+        return _no_control_chars(value)
 
 
 class UserUpdate(_In):
     full_name: str | None = Field(default=None, min_length=1, max_length=200)
     position_id: int | None = Field(default=None, gt=0)
+
+    @field_validator("full_name")
+    @classmethod
+    def _full_name(cls, value: str | None) -> str | None:
+        return value if value is None else _no_control_chars(value)
 
 
 class PositionRef(BaseModel):
@@ -77,13 +98,23 @@ class RoleIn(_In):
     code: str = Field(pattern=CODE_PATTERN)
     name: str = Field(min_length=1, max_length=200)
     scope_all: bool
-    permissions: list[str] = Field(default_factory=list, max_length=100)
+    permissions: list[PermCode] = Field(default_factory=list, max_length=100)
+
+    @field_validator("name")
+    @classmethod
+    def _name(cls, value: str) -> str:
+        return _no_control_chars(value)
 
 
 class RoleUpdate(_In):
     name: str | None = Field(default=None, min_length=1, max_length=200)
     scope_all: bool | None = None
-    permissions: list[str] | None = Field(default=None, max_length=100)
+    permissions: list[PermCode] | None = Field(default=None, max_length=100)
+
+    @field_validator("name")
+    @classmethod
+    def _name(cls, value: str | None) -> str | None:
+        return value if value is None else _no_control_chars(value)
 
 
 class RoleOut(BaseModel):
@@ -101,12 +132,22 @@ class PositionIn(_In):
     role_id: int = Field(gt=0)
     branch_ids: list[BranchId] = Field(default_factory=list, max_length=100)
 
+    @field_validator("name")
+    @classmethod
+    def _name(cls, value: str) -> str:
+        return _no_control_chars(value)
+
 
 class PositionUpdate(_In):
     name: str | None = Field(default=None, min_length=1, max_length=200)
     role_id: int | None = Field(default=None, gt=0)
     branch_ids: list[BranchId] | None = Field(default=None, max_length=100)
     is_active: bool | None = None
+
+    @field_validator("name")
+    @classmethod
+    def _name(cls, value: str | None) -> str | None:
+        return value if value is None else _no_control_chars(value)
 
 
 class PositionOut(BaseModel):

@@ -147,8 +147,24 @@ def require_perm(*perms: str) -> Callable[..., AuthContext]:
     if not perms:
         raise ValueError("require_perm() kamida bitta ruxsat talab qiladi")
 
-    def dependency(ctx: Ctx) -> AuthContext:
-        ctx.require(*perms)
+    def dependency(request: Request, ctx: Ctx) -> AuthContext:
+        try:
+            ctx.require(*perms)
+        except ForbiddenError:
+            # Ledger (fix r1): faqat ruxsat YETISHMASLIGI auditga yoziladi — conflict'lar
+            # (last_admin, cannot_modify_self va h.k.) bu yerdan o'tmaydi, ular allaqachon
+            # autentifikatsiyadan o'tgan, faqat amal rad etilgan holatlar (deferred ledger).
+            from app.audit.service import AuditAction, log_event
+            from app.core.request_meta import client_meta
+
+            log_event(
+                client_meta(request),
+                AuditAction.ACCESS_DENIED,
+                user_id=ctx.user_id,
+                result="denied",
+                details={"path": request.url.path, "required": sorted(perms)},
+            )
+            raise
         return ctx
 
     dependency.required_perms = frozenset(perms)  # type: ignore[attr-defined]

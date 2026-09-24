@@ -71,6 +71,7 @@ class AuditAction(StrEnum):
     AUDIT_EXPORTED = "audit.exported"
     AUDIT_VERIFIED = "audit.verified"
     RLS_VIOLATION = "security.rls_violation_attempt"
+    ACCESS_DENIED = "security.access_denied"
 
 
 @dataclass(frozen=True, slots=True)

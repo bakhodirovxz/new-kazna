@@ -1,5 +1,5 @@
 import uuid
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterable, Iterator
 
 import pytest
 from fastapi.testclient import TestClient
@@ -7,8 +7,10 @@ from sqlalchemy import select, text, update
 from sqlalchemy.orm import Session
 
 from app.admin import service as admin_service
+from app.admin.schemas import PositionUpdate, UserUpdate
 from app.auth.context import AuthContext
-from app.auth.models import Position, Role, User
+from app.auth.models import Position, Role, RolePermission, User
+from app.auth.permissions import PERMISSIONS
 from app.core.db import get_engine, new_session
 from app.core.errors import ConflictError
 from app.core.request_meta import ClientMeta
@@ -34,8 +36,44 @@ def _position_id(code: str) -> int:
         return s.execute(select(Position.id).where(Position.code == code)).scalar_one()
 
 
+def _role_id(code: str) -> int:
+    with new_session() as s:
+        return s.execute(select(Role.id).where(Role.code == code)).scalar_one()
+
+
+def _user_position_id(user_id: int) -> int:
+    with new_session() as s:
+        return s.execute(select(User.position_id).where(User.id == user_id)).scalar_one()
+
+
 def _new_username() -> str:
     return f"new.{uuid.uuid4().hex[:8]}"
+
+
+def _make_role(perms: Iterable[str], *, scope_all: bool = True) -> str:
+    """Faqat berilgan ruxsatlarga ega maxsus rol yaratadi — I3 (imtiyoz eskalatsiyasi)
+    testlari uchun cheklangan aktyorlar tayyorlashda ishlatiladi."""
+    code = f"custom_{uuid.uuid4().hex[:8]}"
+    with new_session() as s:
+        role = Role(code=code, name="Custom", scope_all=scope_all, is_system=False)
+        s.add(role)
+        s.flush()
+        for perm in perms:
+            s.add(RolePermission(role_id=role.id, permission_code=perm))
+        s.commit()
+    return code
+
+
+def _full_admin_ctx(user_id: int, username: str) -> AuthContext:
+    return AuthContext(
+        user_id=user_id,
+        username=username,
+        full_name="A",
+        role_code="admin",
+        permissions=frozenset(PERMISSIONS),
+        branch_ids=None,
+        session_id=uuid.uuid4(),
+    )
 
 
 def test_non_admin_forbidden(client: TestClient, make_user: Callable[..., SeedUser]) -> None:
@@ -84,6 +122,21 @@ def test_invalid_username_rejected(client: TestClient) -> None:
     assert r.status_code == 422
 
 
+@pytest.mark.usefixtures("admin")
+def test_control_chars_in_full_name_rejected(client: TestClient) -> None:
+    """Minor (fix r1): NUL va bidi-almashtirish belgilari `full_name`da 422 bilan rad etiladi."""
+    payload = {
+        "username": _new_username(), "full_name": "A\x00B",
+        "position_id": _position_id("rukovodstvo"),
+    }
+    assert client.post("/api/v1/admin/users", json=payload).status_code == 422
+    payload = {
+        "username": _new_username(), "full_name": "A‮B",
+        "position_id": _position_id("rukovodstvo"),
+    }
+    assert client.post("/api/v1/admin/users", json=payload).status_code == 422
+
+
 def test_block_revokes_sessions(
     client: TestClient, admin: SeedUser, make_user: Callable[..., SeedUser]
 ) -> None:
@@ -121,6 +174,52 @@ def test_last_admin_is_protected(db: Session, make_user: Callable[..., SeedUser]
     assert exc.value.code == "last_admin"
 
 
+def test_last_admin_requires_full_admin_guarantee(
+    db: Session, make_user: Callable[..., SeedUser]
+) -> None:
+    """I2: faqat `admin:users`ga ega (lekin `admin:roles`siz) rol "admin" hisoblanmaydi —
+    invariant ADMIN_GUARANTEED'ning BARCHASINI talab qiladi."""
+    role_code = _make_role({"admin:users"})
+    partial = make_user(role_code)
+    db.execute(update(User).where(User.id != partial.id).values(is_active=False))
+    with pytest.raises(ConflictError) as exc:
+        admin_service.assert_admin_remains(db)
+    assert exc.value.code == "last_admin"
+
+
+def test_last_admin_via_position_change(db: Session, make_user: Callable[..., SeedUser]) -> None:
+    actor_user, target = make_user("admin"), make_user("admin")
+    db.execute(
+        update(User).where(User.id.not_in([actor_user.id, target.id])).values(is_active=False)
+    )
+    db.execute(update(User).where(User.id == actor_user.id).values(is_active=False))
+    actor = _full_admin_ctx(actor_user.id, actor_user.username)
+    meta = ClientMeta(ip=None, ua=None, request_id=None)
+    with pytest.raises(ConflictError) as exc:
+        admin_service.update_user(
+            db, actor, target.id, UserUpdate(position_id=_position_id("rukovodstvo")), meta
+        )
+    assert exc.value.code == "last_admin"
+
+
+def test_last_admin_via_position_deactivation(
+    db: Session, make_user: Callable[..., SeedUser]
+) -> None:
+    actor_user, target = make_user("admin"), make_user("admin")
+    db.execute(
+        update(User).where(User.id.not_in([actor_user.id, target.id])).values(is_active=False)
+    )
+    db.execute(update(User).where(User.id == actor_user.id).values(is_active=False))
+    actor = _full_admin_ctx(actor_user.id, actor_user.username)
+    meta = ClientMeta(ip=None, ua=None, request_id=None)
+    target_position_id = _user_position_id(target.id)
+    with pytest.raises(ConflictError) as exc:
+        admin_service.update_position(
+            db, actor, target_position_id, PositionUpdate(is_active=False), meta
+        )
+    assert exc.value.code == "last_admin"
+
+
 def test_reset_password_and_2fa(
     client: TestClient, admin: SeedUser, make_user: Callable[..., SeedUser]
 ) -> None:
@@ -140,7 +239,7 @@ def test_reset_password_and_2fa(
 def test_reset_2fa_invalidates_open_challenge(
     client: TestClient, admin: SeedUser, make_user: Callable[..., SeedUser]
 ) -> None:
-    """NEW: reset-2fa o'chirilishi kerak bo'lgan ochiq MFA challenge'ni ham bekor qiladi —
+    """reset-2fa o'chirilishi kerak bo'lgan ochiq MFA challenge'ni ham bekor qiladi —
     parol qadamidan hosil bo'lgan `mfa_token` reset-2fa'dan keyin ishlamasligi kerak."""
     victim = make_user("rukovodstvo")
     fresh = TestClient(client.app, base_url="https://testserver")
@@ -171,7 +270,7 @@ def test_change_position_revokes_sessions(
 
 
 @pytest.mark.usefixtures("admin")
-def test_roles_crud_and_admin_protection(client: TestClient) -> None:
+def test_roles_crud(client: TestClient) -> None:
     code = f"r_{uuid.uuid4().hex[:6]}"
     r = client.post("/api/v1/admin/roles", json={
         "code": code, "name": "Служба закупок", "scope_all": True,
@@ -185,12 +284,168 @@ def test_roles_crud_and_admin_protection(client: TestClient) -> None:
         f"/api/v1/admin/roles/{role_id}", json={"permissions": ["section:obzor:view"]}
     )
     assert upd.json()["permissions"] == ["section:obzor:view"]
+
+
+@pytest.mark.usefixtures("admin")
+def test_update_role_cannot_edit_own_role(client: TestClient) -> None:
+    """I3: actor (bu yerda "admin" rolidagi foydalanuvchi) o'z rolini tahrirlay olmaydi."""
+    roles = client.get("/api/v1/admin/roles").json()
+    admin_role = next(x for x in roles if x["code"] == "admin")
+    r = client.patch(f"/api/v1/admin/roles/{admin_role['id']}", json={"name": "X"})
+    assert r.status_code == 409
+    assert r.json()["error"]["code"] == "cannot_modify_self"
+
+
+def test_admin_role_permissions_are_protected(
+    client: TestClient, make_user: Callable[..., SeedUser]
+) -> None:
+    """I3/admin_role_protected: "admin" rolining o'zida bo'lmagan actor (faqat `admin:roles`
+    va `section:obzor:view`ga ega) "admin" rolidan ADMIN_GUARANTEED ruxsatlarini olib
+    tashlashga urinadi — `cannot_modify_self` bu yerda ishlamaydi (actor.role_code != "admin"),
+    shuning uchun `admin_role_protected` chin sinaladi."""
+    actor = make_user(_make_role({"admin:roles", "section:obzor:view"}))
+    login(client, actor)
     roles = client.get("/api/v1/admin/roles").json()
     admin_role = next(x for x in roles if x["code"] == "admin")
     r = client.patch(
         f"/api/v1/admin/roles/{admin_role['id']}", json={"permissions": ["section:obzor:view"]}
     )
     assert r.status_code == 409 and r.json()["error"]["code"] == "admin_role_protected"
+
+
+def test_create_role_privilege_escalation_forbidden(
+    client: TestClient, make_user: Callable[..., SeedUser]
+) -> None:
+    actor = make_user(_make_role({"admin:roles"}))
+    login(client, actor)
+    r = client.post("/api/v1/admin/roles", json={
+        "code": f"esc_{uuid.uuid4().hex[:6]}", "name": "Esc", "scope_all": True,
+        "permissions": ["admin:users"]})
+    assert r.status_code == 403
+    assert r.json()["error"]["code"] == "privilege_escalation"
+
+
+def test_update_role_privilege_escalation_forbidden(
+    client: TestClient, make_user: Callable[..., SeedUser]
+) -> None:
+    actor = make_user(_make_role({"admin:roles", "section:obzor:view"}))
+    login(client, actor)
+    created = client.post("/api/v1/admin/roles", json={
+        "code": f"tgt_{uuid.uuid4().hex[:6]}", "name": "Target", "scope_all": True,
+        "permissions": ["section:obzor:view"]})
+    assert created.status_code == 201
+    role_id = created.json()["id"]
+    r = client.patch(f"/api/v1/admin/roles/{role_id}", json={"permissions": ["admin:users"]})
+    assert r.status_code == 403
+    assert r.json()["error"]["code"] == "privilege_escalation"
+
+
+def test_create_user_privilege_escalation_forbidden(
+    client: TestClient, make_user: Callable[..., SeedUser]
+) -> None:
+    actor = make_user(_make_role({"admin:users"}))
+    login(client, actor)
+    r = client.post("/api/v1/admin/users", json={
+        "username": _new_username(), "full_name": "A",
+        "position_id": _position_id("rukovodstvo")})
+    assert r.status_code == 403
+    assert r.json()["error"]["code"] == "privilege_escalation"
+
+
+def test_update_user_position_privilege_escalation_forbidden(
+    client: TestClient, make_user: Callable[..., SeedUser]
+) -> None:
+    actor = make_user(_make_role({"admin:users"}))
+    login(client, actor)
+    victim = make_user("spec_kazna")
+    r = client.patch(
+        f"/api/v1/admin/users/{victim.id}", json={"position_id": _position_id("rukovodstvo")}
+    )
+    assert r.status_code == 403
+    assert r.json()["error"]["code"] == "privilege_escalation"
+
+
+def test_update_position_role_privilege_escalation_forbidden(
+    client: TestClient, admin: SeedUser, make_user: Callable[..., SeedUser]
+) -> None:
+    code = f"pos_{uuid.uuid4().hex[:6]}"
+    created = client.post("/api/v1/admin/positions", json={
+        "code": code, "name": "Test position", "role_id": _role_id("economist_filiala"),
+        "branch_ids": []})
+    assert created.status_code == 201
+    position_id = created.json()["id"]
+
+    limited = make_user(_make_role({"admin:roles"}))
+    limited_client = TestClient(client.app, base_url="https://testserver")
+    login(limited_client, limited)
+    r = limited_client.patch(
+        f"/api/v1/admin/positions/{position_id}", json={"role_id": _role_id("rukovodstvo")}
+    )
+    assert r.status_code == 403
+    assert r.json()["error"]["code"] == "privilege_escalation"
+
+
+def test_update_position_cannot_modify_own_position(
+    client: TestClient, make_user: Callable[..., SeedUser]
+) -> None:
+    actor = make_user(_make_role({"admin:roles"}))
+    login(client, actor)
+    own_position_id = _user_position_id(actor.id)
+    r = client.patch(f"/api/v1/admin/positions/{own_position_id}", json={"name": "New name"})
+    assert r.status_code == 409
+    assert r.json()["error"]["code"] == "cannot_modify_self"
+
+
+def test_update_position_deactivation_revokes_sessions_and_kills_challenge(
+    client: TestClient, admin: SeedUser, make_user: Callable[..., SeedUser]
+) -> None:
+    """I4: `update_position` lavozimdagi BARCHA foydalanuvchilarning sessiyalari VA ochiq
+    MFA challenge'larini bekor qiladi (nafaqat sessiyalarini, brief'dagidek)."""
+    victim = make_user("rukovodstvo")
+    victim_client = TestClient(client.app, base_url="https://testserver")
+    login(victim_client, victim)
+    fresh = TestClient(client.app, base_url="https://testserver")
+    step = fresh.post(
+        "/api/v1/auth/login", json={"username": victim.username, "password": victim.password}
+    )
+    assert step.status_code == 200
+    mfa_token = step.json()["mfa_token"]
+
+    position_id = _user_position_id(victim.id)
+    r = client.patch(f"/api/v1/admin/positions/{position_id}", json={"is_active": False})
+    assert r.status_code == 200 and r.json()["is_active"] is False
+    assert victim_client.get("/api/v1/auth/me").status_code == 401
+    verify = fresh.post(
+        "/api/v1/auth/2fa/verify", json={"mfa_token": mfa_token, "code": victim.next_code()}
+    )
+    assert verify.status_code == 401
+    assert verify.json()["error"]["code"] == "mfa_expired"
+
+
+def test_update_position_role_change_revokes_sessions_and_kills_challenge(
+    client: TestClient, admin: SeedUser, make_user: Callable[..., SeedUser]
+) -> None:
+    victim = make_user("rukovodstvo")
+    victim_client = TestClient(client.app, base_url="https://testserver")
+    login(victim_client, victim)
+    fresh = TestClient(client.app, base_url="https://testserver")
+    step = fresh.post(
+        "/api/v1/auth/login", json={"username": victim.username, "password": victim.password}
+    )
+    assert step.status_code == 200
+    mfa_token = step.json()["mfa_token"]
+
+    position_id = _user_position_id(victim.id)
+    r = client.patch(
+        f"/api/v1/admin/positions/{position_id}", json={"role_id": _role_id("spec_kazna")}
+    )
+    assert r.status_code == 200 and r.json()["role_code"] == "spec_kazna"
+    assert victim_client.get("/api/v1/auth/me").status_code == 401
+    verify = fresh.post(
+        "/api/v1/auth/2fa/verify", json={"mfa_token": mfa_token, "code": victim.next_code()}
+    )
+    assert verify.status_code == 401
+    assert verify.json()["error"]["code"] == "mfa_expired"
 
 
 @pytest.mark.usefixtures("admin")
@@ -215,3 +470,74 @@ def test_permissions_and_user_search(client: TestClient) -> None:
     page = client.get("/api/v1/admin/users", params={"q": "u", "page_size": 5}).json()
     assert page["page_size"] == 5 and len(page["items"]) <= 5 and page["total"] >= 1
     assert client.get("/api/v1/admin/users", params={"page_size": 501}).status_code == 422
+
+
+def test_escape_like_quotes_special_chars() -> None:
+    assert admin_service._escape_like("50%_off\\thing") == "50\\%\\_off\\\\thing"
+
+
+@pytest.mark.usefixtures("admin")
+def test_search_percent_wildcard_is_escaped(client: TestClient) -> None:
+    total = client.get("/api/v1/admin/users", params={"page_size": 1}).json()["total"]
+    assert total >= 1
+    percent = client.get("/api/v1/admin/users", params={"q": "%", "page_size": 1}).json()
+    assert percent["total"] == 0
+
+
+@pytest.mark.usefixtures("admin")
+def test_search_underscore_wildcard_is_escaped(client: TestClient) -> None:
+    username = _new_username()
+    assert "_" not in username
+    payload = {
+        "username": username, "full_name": "NoUnderscore",
+        "position_id": _position_id("rukovodstvo"),
+    }
+    assert client.post("/api/v1/admin/users", json=payload).status_code == 201
+    results = client.get(
+        "/api/v1/admin/users", params={"q": "_", "page_size": 500}
+    ).json()["items"]
+    assert username not in {u["username"] for u in results}
+
+
+@pytest.mark.usefixtures("admin")
+def test_temporary_password_not_leaked_into_audit_log(client: TestClient) -> None:
+    username = _new_username()
+    created = client.post("/api/v1/admin/users", json={
+        "username": username, "full_name": "A", "position_id": _position_id("rukovodstvo")})
+    temp_create = created.json()["temporary_password"]
+    user_id = created.json()["user"]["id"]
+    reset = client.post(f"/api/v1/admin/users/{user_id}/reset-password")
+    temp_reset = reset.json()["temporary_password"]
+    with get_engine("app").connect() as conn:
+        rows = conn.execute(
+            text(
+                "SELECT details::text FROM core.audit_log "
+                "WHERE object_type = 'user' AND object_id = :i"
+            ),
+            {"i": str(user_id)},
+        ).scalars().all()
+    blob = "\n".join(rows)
+    assert temp_create not in blob
+    assert temp_reset not in blob
+
+
+def test_forbidden_admin_access_is_audited(
+    client: TestClient, make_user: Callable[..., SeedUser]
+) -> None:
+    """Minor (fix r1): ruxsat yetishmasligi sababli rad etilgan admin so'rovi auditga
+    `security.access_denied` sifatida yoziladi (`require_perm` dependency'sida)."""
+    user = make_user("rukovodstvo")
+    login(client, user)
+    r = client.get("/api/v1/admin/users")
+    assert r.status_code == 403
+    with get_engine("app").connect() as conn:
+        row = conn.execute(
+            text(
+                "SELECT action, result FROM core.audit_log WHERE user_id = :u "
+                "ORDER BY id DESC LIMIT 1"
+            ),
+            {"u": user.id},
+        ).mappings().first()
+    assert row is not None
+    assert row["action"] == "security.access_denied"
+    assert row["result"] == "denied"

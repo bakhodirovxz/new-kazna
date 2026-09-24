@@ -39,7 +39,7 @@ def list_users(
     ctx: UsersAdmin,
     db: DB,
     q: Annotated[str | None, Query(max_length=64)] = None,
-    page: Annotated[int, Query(ge=1)] = 1,
+    page: Annotated[int, Query(ge=1, le=100000)] = 1,
     page_size: Annotated[int, Query(ge=1, le=500)] = 50,
 ) -> Page[UserOut]:
     items, total = service.list_users(db, q, page, page_size)

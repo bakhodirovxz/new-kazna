@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from datetime import UTC, datetime
 
-from sqlalchemy import Select, and_, delete, func, or_, select, update
+from sqlalchemy import Select, delete, func, or_, select, text, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -34,8 +35,8 @@ from app.auth.models import (
     RolePermission,
     User,
 )
-from app.auth.permissions import ADMIN_GUARANTEED, ADMIN_ROLE, Perm
-from app.core.errors import ConflictError, NotFoundError, ValidationFailed
+from app.auth.permissions import ADMIN_GUARANTEED, ADMIN_ROLE
+from app.core.errors import ConflictError, ForbiddenError, NotFoundError, ValidationFailed
 from app.core.request_meta import ClientMeta
 
 
@@ -62,21 +63,46 @@ def _invalidate_mfa_challenges(db: Session, user_id: int, now: datetime) -> None
 
 
 def assert_admin_remains(db: Session) -> None:
+    """I1/I2 (fix r1): `pg_advisory_xact_lock` ikkita parallel tranzaksiya (masalan, ikkita
+    administrator bir-birini bir vaqtda bloklasa) sonlashni ketma-ketlashtiradi — aks holda
+    READ COMMITTED ostida ikkalasi ham "hali kamida bitta admin bor" deb hisoblab, ikkalasi
+    ham committing bo'lib, nol administrator qolishi mumkin edi. Invariant — kamida bitta
+    FAOL foydalanuvchi FAOL lavozimda ega rol ADMIN_GUARANTEED'ning BARCHASINI (admin:users
+    VA admin:roles) ushlab turishi kerak — faqat admin:users yetarli emas (I2)."""
     db.flush()
+    db.execute(text("SELECT pg_advisory_xact_lock(hashtext('ugk_last_admin'))"))
+    guaranteed = sorted(ADMIN_GUARANTEED)
+    admin_roles = (
+        select(RolePermission.role_id)
+        .where(RolePermission.permission_code.in_(guaranteed))
+        .group_by(RolePermission.role_id)
+        .having(func.count(func.distinct(RolePermission.permission_code)) == len(guaranteed))
+    )
     count = db.execute(
         select(func.count(User.id))
         .join(Position, Position.id == User.position_id)
-        .join(
-            RolePermission,
-            and_(
-                RolePermission.role_id == Position.role_id,
-                RolePermission.permission_code == Perm.ADMIN_USERS.value,
-            ),
+        .where(
+            User.is_active.is_(True),
+            Position.is_active.is_(True),
+            Position.role_id.in_(admin_roles),
         )
-        .where(User.is_active.is_(True), Position.is_active.is_(True))
     ).scalar_one()
     if count == 0:
         raise ConflictError("last_admin")
+
+
+def _role_permission_codes(db: Session, role_id: int) -> frozenset[str]:
+    return frozenset(
+        db.execute(
+            select(RolePermission.permission_code).where(RolePermission.role_id == role_id)
+        ).scalars()
+    )
+
+
+def _assert_no_escalation(actor: AuthContext, granted: Iterable[str]) -> None:
+    """I3: admin endpointlari orqali actor o'zida yo'q ruxsatni hech kimga bera olmaydi."""
+    if not set(granted) <= actor.permissions:
+        raise ForbiddenError("privilege_escalation")
 
 
 def _user_query() -> Select[tuple[User, Position, str]]:
@@ -151,7 +177,10 @@ def _not_self(actor: AuthContext, user_id: int) -> None:
 def create_user(
     db: Session, actor: AuthContext, data: UserCreate, meta: ClientMeta
 ) -> tuple[UserOut, str]:
-    _require_position(db, data.position_id)
+    position = _require_position(db, data.position_id)
+    # I3: yangi foydalanuvchining lavozimi orqali beriladigan rol ruxsatlari actor'da
+    # yo'q ruxsatlarni o'z ichiga olmasin (imtiyoz eskalatsiyasi).
+    _assert_no_escalation(actor, _role_permission_codes(db, position.role_id))
     if db.execute(select(User.id).where(User.username == data.username)).first() is not None:
         raise ConflictError("username_taken")
     temporary = passwords.generate_temporary_password()
@@ -167,6 +196,8 @@ def create_user(
     try:
         db.flush()
     except IntegrityError as exc:
+        # Ledger: har qanday IntegrityError username_taken'ga tushiriladi — boshqa FK/CHECK
+        # buzilishi hozircha yo'q (branch_ids FK Plan 2'da keladi).
         raise ConflictError("username_taken") from exc
     log_event(
         meta,
@@ -189,7 +220,9 @@ def update_user(
         changes["full_name"] = True
     if data.position_id is not None and data.position_id != user.position_id:
         _not_self(actor, user_id)
-        _require_position(db, data.position_id)
+        position = _require_position(db, data.position_id)
+        # I3: lavozim (demak, rol) o'zgartirilganda ham eskalatsiya taqiqlanadi.
+        _assert_no_escalation(actor, _role_permission_codes(db, position.role_id))
         changes["position_id"] = [user.position_id, data.position_id]
         user.position_id = data.position_id
         now = _now()
@@ -259,11 +292,7 @@ def list_permissions(db: Session) -> list[PermissionOut]:
 
 
 def _role_out(db: Session, role: Role) -> RoleOut:
-    perms = sorted(
-        db.execute(
-            select(RolePermission.permission_code).where(RolePermission.role_id == role.id)
-        ).scalars()
-    )
+    perms = sorted(_role_permission_codes(db, role.id))
     return RoleOut(id=role.id, code=role.code, name=role.name, scope_all=role.scope_all,
                    is_system=role.is_system, permissions=perms)
 
@@ -289,11 +318,16 @@ def _set_permissions(db: Session, role_id: int, codes: list[str]) -> None:
 
 def create_role(db: Session, actor: AuthContext, data: RoleIn, meta: ClientMeta) -> RoleOut:
     perms = _validate_permissions(db, data.permissions)
+    # I3: actor faqat o'zida bor ruxsatlarni yangi rolga bera oladi.
+    _assert_no_escalation(actor, perms)
     if db.execute(select(Role.id).where(Role.code == data.code)).first() is not None:
         raise ConflictError("code_taken")
     role = Role(code=data.code, name=data.name, scope_all=data.scope_all, is_system=False)
     db.add(role)
-    db.flush()
+    try:
+        db.flush()
+    except IntegrityError as exc:
+        raise ConflictError("code_taken") from exc
     _set_permissions(db, role.id, perms)
     db.flush()
     log_event(meta, AuditAction.ROLE_CREATED, user_id=actor.user_id, object_type="role",
@@ -307,6 +341,10 @@ def update_role(
     role = db.get(Role, role_id, with_for_update=True)
     if role is None:
         raise NotFoundError()
+    # I3: actor o'z rolini (o'z lavozimidagi rolni) tahrirlay olmaydi — aks holda o'zini
+    # tasodifan huquqlardan mahrum qilishi yoki (rol bo'lsa) kengaytirishi mumkin edi.
+    if role.code == actor.role_code:
+        raise ConflictError("cannot_modify_self")
     details: dict[str, object] = {}
     if data.name is not None:
         role.name = data.name
@@ -316,6 +354,7 @@ def update_role(
         details["scope_all"] = data.scope_all
     if data.permissions is not None:
         perms = _validate_permissions(db, data.permissions)
+        _assert_no_escalation(actor, perms)
         if role.code == ADMIN_ROLE and not set(perms) >= ADMIN_GUARANTEED:
             raise ConflictError("admin_role_protected")
         _set_permissions(db, role.id, perms)
@@ -370,7 +409,10 @@ def create_position(
         raise ConflictError("code_taken")
     position = Position(code=data.code, name=data.name, role_id=data.role_id)
     db.add(position)
-    db.flush()
+    try:
+        db.flush()
+    except IntegrityError as exc:
+        raise ConflictError("code_taken") from exc
     _set_branches(db, position.id, data.branch_ids)
     db.flush()
     log_event(meta, AuditAction.POSITION_CREATED, user_id=actor.user_id, object_type="position",
@@ -379,8 +421,16 @@ def create_position(
     return _position_out(db, position)
 
 
-def update_position(db: Session, actor: AuthContext, position_id: int, data: PositionUpdate,
-                    meta: ClientMeta) -> PositionOut:
+def update_position(
+    db: Session, actor: AuthContext, position_id: int, data: PositionUpdate, meta: ClientMeta
+) -> PositionOut:
+    # I3: actor o'z lavozimini tahrirlay olmaydi (masalan, o'z filial doirasini kengaytirib
+    # qo'yishi mumkin edi).
+    actor_position_id = db.execute(
+        select(User.position_id).where(User.id == actor.user_id)
+    ).scalar_one()
+    if actor_position_id == position_id:
+        raise ConflictError("cannot_modify_self")
     position = db.get(Position, position_id, with_for_update=True)
     if position is None:
         raise NotFoundError()
@@ -391,6 +441,8 @@ def update_position(db: Session, actor: AuthContext, position_id: int, data: Pos
         details["name"] = data.name
     if data.role_id is not None and data.role_id != position.role_id:
         _require_role(db, data.role_id)
+        # I3: lavozimning roli o'zgartirilganda ham eskalatsiya taqiqlanadi.
+        _assert_no_escalation(actor, _role_permission_codes(db, data.role_id))
         details["role_id"] = [position.role_id, data.role_id]
         position.role_id = data.role_id
         scope_changed = True
@@ -404,7 +456,21 @@ def update_position(db: Session, actor: AuthContext, position_id: int, data: Pos
         scope_changed = True
     if scope_changed:
         now = _now()
-        for user_id in db.execute(select(User.id).where(User.position_id == position.id)).scalars():
+        # I4: shu lavozimdagi barcha foydalanuvchilar avval ID tartibida qulflanadi (deadlock
+        # oldini olish uchun izchil tartib), so'ng har biriga ham ochiq MFA challenge'lari,
+        # ham sessiyalari bekor qilinadi.
+        user_ids = (
+            db.execute(
+                select(User.id)
+                .where(User.position_id == position.id)
+                .order_by(User.id)
+                .with_for_update()
+            )
+            .scalars()
+            .all()
+        )
+        for user_id in user_ids:
+            _invalidate_mfa_challenges(db, user_id, now)
             sessions.revoke_all(db, user_id, "position_changed", now)
         assert_admin_remains(db)
     db.flush()

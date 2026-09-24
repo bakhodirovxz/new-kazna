@@ -17,7 +17,7 @@ from app.audit.schemas import AuditOut, VerifyOut
 from app.audit.service import AuditAction, ip_aad, log_event, verify_chain_snapshot
 from app.auth.context import AuthContext, require_perm
 from app.auth.permissions import Perm
-from app.core import keystore
+from app.core import keystore, ratelimit
 from app.core.crypto import CryptoError, Purpose
 from app.core.db import get_db
 from app.core.request_meta import Meta
@@ -27,7 +27,9 @@ DB = Annotated[Session, Depends(get_db)]
 Auditor = Annotated[AuthContext, Depends(require_perm(Perm.AUDIT_READ))]
 EXPORT_LIMIT = 50_000
 DEFAULT_WINDOW = timedelta(days=30)
-_FORMULA_PREFIXES = ("=", "+", "-", "@", "\t", "\r")
+# R1-1: "=", "+", "-", "@" — Excel/LibreOffice formula triggers; tab/CR/LF — ham xavfli (ba'zi
+# ilovalar katakni formula sifatida talqin qiladi), ham CSV qatorlarini buzishi mumkin.
+_FORMULA_PREFIXES = ("=", "+", "-", "@", "\t", "\r", "\n")
 
 
 class Filters:
@@ -89,8 +91,9 @@ def _ip(audit_id: int, blob: bytes | None) -> str | None:
         return None
 
 
-def _rows(db: Session, filters: Filters, limit: int, offset: int) -> list[AuditOut]:
-    where, params = filters.sql()
+def _rows(
+    db: Session, where: str, params: dict[str, Any], limit: int, offset: int
+) -> list[AuditOut]:
     bind = {**params, "limit": limit, "offset": offset}
     result = db.execute(text(_SELECT.format(where=where)), bind)
     return [
@@ -112,25 +115,38 @@ def list_audit(
     page: Annotated[int, Query(ge=1)] = 1,
     page_size: Annotated[int, Query(ge=1, le=500)] = 100,
 ) -> Page[AuditOut]:
-    where, params = filters.sql()
+    where, params = filters.sql()  # R1-3: bitta marta hisoblanadi, count va _rows shuni ishlatadi
     # `where` is built only from fixed clause literals in Filters.sql() (never from raw
     # user input) and all values are bound params, so this is not an injection vector.
     count_sql = text(f"SELECT count(*) FROM core.audit_log a WHERE {where}")  # noqa: S608
     total = db.execute(count_sql, params).scalar_one()
-    items = _rows(db, filters, page_size, (page - 1) * page_size)
+    items = _rows(db, where, params, page_size, (page - 1) * page_size)
     return Page[AuditOut](items=items, total=int(total), page=page, page_size=page_size)
 
 
+# R1-1: oddiy `startswith` faqat 0-pozitsiyani tekshirar edi — old belgisidan oldin bo'sh joy
+# (yoki NBSP) qo'yilsa (masalan, " =1+1"), formula triggerni "yashirish" mumkin edi. Endi
+# chap tomondagi bo'shliqlar (probel/tab/qator ko'chirish/NBSP — Python `str.lstrip()`
+# standart bo'yicha barchasini bo'sh joy deb hisoblaydi) olib tashlanib tekshiriladi, LEKIN
+# katakka yoziladigan qiymat — ASL (o'zgartirilmagan) matn, faqat oldiga `'` qo'shiladi.
 def _cell(value: object) -> str:
     text_value = "" if value is None else str(value)
-    return "'" + text_value if text_value.startswith(_FORMULA_PREFIXES) else text_value
+    if text_value.lstrip().startswith(_FORMULA_PREFIXES):
+        return "'" + text_value
+    return text_value
 
 
 @router.get("/export.csv")
 def export_csv(
     ctx: Auditor, db: DB, meta: Meta, filters: Annotated[Filters, Depends()]
 ) -> Response:
-    rows = _rows(db, filters, EXPORT_LIMIT, 0)
+    where, params = filters.sql()
+    # R1-4: chegaradan BITTA ortiq qator so'raladi — agar shuncha qaytsa, chegara chindan
+    # ham kesib tashlagani (haqiqatda ko'proq qator borligi) ma'lum bo'ladi.
+    rows = _rows(db, where, params, EXPORT_LIMIT + 1, 0)
+    truncated = len(rows) > EXPORT_LIMIT
+    if truncated:
+        rows = rows[:EXPORT_LIMIT]
     buffer = io.StringIO()
     writer = csv.writer(buffer, delimiter=";", lineterminator="\r\n")
     writer.writerow(["id", "ts", "username", "action", "result", "object_type", "object_id",
@@ -140,17 +156,24 @@ def export_csv(
             r.id, r.ts.isoformat(), r.username, r.action, r.result, r.object_type, r.object_id,
             r.request_id, r.ip, json.dumps(r.details, ensure_ascii=False))])
     log_event(meta, AuditAction.AUDIT_EXPORTED, user_id=ctx.user_id,
-              details={"filters": filters.as_dict(), "rows": len(rows)})
+              details={"filters": filters.as_dict(), "rows": len(rows), "truncated": truncated})
     filename = f"audit_{datetime.now(UTC):%Y%m%d_%H%M}.csv"
+    headers = {"Content-Disposition": f'attachment; filename="{filename}"'}
+    if truncated:
+        headers["X-Export-Truncated"] = "true"
     return Response(
         content="﻿" + buffer.getvalue(),
         media_type="text/csv; charset=utf-8",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        headers=headers,
     )
 
 
 @router.post("/verify")
 def verify(ctx: Auditor, meta: Meta) -> VerifyOut:
+    # R1-2: to'liq jadval bo'yicha HMAC skanerlash arzon amal emas — foydalanuvchi va
+    # global chegaralarni SO'ROV BOSHIDA (haqiqiy skanerlashdan oldin) tekshiramiz.
+    ratelimit.check("audit_verify_user", str(ctx.user_id), ratelimit.AUDIT_VERIFY_PER_USER)
+    ratelimit.check("audit_verify_global", "global", ratelimit.AUDIT_VERIFY_GLOBAL)
     report = verify_chain_snapshot()
     log_event(meta, AuditAction.AUDIT_VERIFIED, user_id=ctx.user_id,
               result="ok" if report.ok else "fail",

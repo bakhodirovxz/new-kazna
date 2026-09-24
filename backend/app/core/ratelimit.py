@@ -31,6 +31,11 @@ LOGIN_PER_IP = Limit(events=10, window=60)
 MFA_PER_IP = Limit(events=20, window=60)
 API_PER_USER = Limit(events=300, window=60)
 PASSWORD_CHANGE_PER_USER = Limit(events=5, window=900)
+# Task 12 fix r1: POST /audit/verify to'liq jadval bo'yicha HMAC skanerlash — arzon amal
+# emas, shuning uchun boshqa endpointlarga qaraganda ancha qattiqroq cheklanadi: har
+# foydalanuvchi UCHUN va, DoS'dan himoya sifatida, BUTUN tizim uchun ham (identity "global").
+AUDIT_VERIFY_PER_USER = Limit(events=3, window=600)
+AUDIT_VERIFY_GLOBAL = Limit(events=10, window=3600)
 
 _client_override: redis.Redis | None = None
 _lock = threading.Lock()

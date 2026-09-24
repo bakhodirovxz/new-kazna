@@ -9,6 +9,7 @@ from fastapi import FastAPI
 from fastapi.concurrency import run_in_threadpool
 
 from app import __version__
+from app.auth.router import router as auth_router
 from app.bootstrap import bootstrap_runtime
 from app.core.config import ConfigError, get_settings
 from app.core.errors import register_error_handlers
@@ -51,6 +52,7 @@ def create_app() -> FastAPI:
     app.add_middleware(SecurityHeadersMiddleware, hsts=settings.base_url.startswith("https://"))
     app.add_middleware(RequestContextMiddleware)
     app.include_router(health_router, prefix=API_PREFIX)
+    app.include_router(auth_router, prefix=API_PREFIX)
     return app
 
 

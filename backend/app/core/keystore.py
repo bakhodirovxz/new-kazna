@@ -161,6 +161,29 @@ def decrypt_str(purpose: Purpose, blob: bytes, aad: str) -> str:
     return decrypt(purpose, bytes(blob), aad).decode("utf-8")
 
 
+def hmac_key(purpose: Purpose, version: int | None = None) -> tuple[int, bytes]:
+    """Xom (32 baytli) kalitni qaytaradi — HMAC uchun, AEAD emas (masalan, audit zanjiri, F1).
+
+    `version=None` — faol versiya. Noma'lum versiya so'ralsa, `decrypt` bilan bir xil
+    tarzda keshni yangilab qayta urinadi (boshqa worker kalitni aylantirgan bo'lishi mumkin).
+    """
+    ring = get_keyring()
+    if version is None:
+        active_version = ring.active.get(purpose)
+        if active_version is None:
+            raise CryptoError("no_active_key")
+        return active_version, ring.keys[(purpose, active_version)]
+    key = ring.keys.get((purpose, version))
+    if key is not None:
+        return version, key
+    invalidate_keyring()
+    ring = get_keyring()
+    key = ring.keys.get((purpose, version))
+    if key is None:
+        raise CryptoError("unknown_key_version")
+    return version, key
+
+
 @lru_cache(maxsize=1)
 def pepper() -> bytes:
     """Sessiya/challenge tokenlari va zaxira kodlar HMAC'i uchun kalit."""

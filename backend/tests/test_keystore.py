@@ -70,6 +70,30 @@ def test_pepper_is_32_bytes() -> None:
     assert len(keystore.pepper()) == 32
 
 
+def test_hmac_key_returns_active_version_by_default() -> None:
+    version, key = keystore.hmac_key(Purpose.AUDIT_CHAIN)
+    assert len(key) == 32
+    same_version, same_key = keystore.hmac_key(Purpose.AUDIT_CHAIN, version)
+    assert (same_version, same_key) == (version, key)
+
+
+def test_hmac_key_refreshes_stale_cache_for_unknown_version() -> None:
+    stale = keystore.get_keyring()  # boshqa worker'dagi eski kesh
+    with get_engine("app").begin() as conn:
+        new_version = keystore.rotate(conn, _kek(), Purpose.AUDIT_CHAIN)
+        fresh = keystore.load_keyring(conn, _kek())
+    assert keystore.get_keyring() is stale
+    version, key = keystore.hmac_key(Purpose.AUDIT_CHAIN, new_version)
+    assert version == new_version
+    assert key == fresh.keys[(Purpose.AUDIT_CHAIN, new_version)]
+
+
+def test_hmac_key_unknown_version_raises() -> None:
+    with pytest.raises(CryptoError) as exc:
+        keystore.hmac_key(Purpose.AUDIT_CHAIN, 9999)
+    assert exc.value.reason == "unknown_key_version"
+
+
 def test_etl_role_cannot_modify_keys() -> None:
     with get_engine("etl").begin() as conn, pytest.raises(ProgrammingError):
         conn.execute(text("UPDATE core.crypto_keys SET status = 'retired'"))

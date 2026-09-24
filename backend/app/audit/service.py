@@ -1,23 +1,32 @@
 """O'zgarmas audit jurnali (spec 3.6).
 
 Har yozuv alohida qisqa tranzaksiyada yoziladi — so'rov rollback bo'lsa ham (masalan,
-noto'g'ri parol) hodisa yo'qolmaydi. Zanjir: hash = SHA-256(prev_hash || kanonik_json).
-Zanjir boshi `core.audit_head` da FOR UPDATE qulfi ostida — parallel yozuvlar ketma-ketlashadi.
+noto'g'ri parol) hodisa yo'qolmaydi. Zanjir: hash = HMAC-SHA256(chain_key[v], prev_hash ||
+canonical_json) — oddiy SHA-256 emas, chunki DB yozish huquqiga ega har kim (masalan,
+migrator/superuser) kalitsiz zanjirni qayta hisoblab qayta yoza olmasligi kerak (F1).
+
+Yozish FAQAT ikkita SECURITY DEFINER funksiya orqali: `core.audit_reserve()` navbatdagi
+id va joriy zanjir boshini zaxiralaydi (FOR UPDATE qulfi chaqiruvchi tranzaksiya
+yakunlanguncha ushlab turiladi — parallel yozuvlar ketma-ketlashadi), `core.audit_append()`
+boshni qayta tekshirib (mos kelmasa RAISE) qator qo'shadi va boshni yangilaydi. `ugk_app`/
+`ugk_etl`'ning `audit_log`/`audit_head` ustida to'g'ridan-to'g'ri yozish huquqi yo'q (F2).
 """
 
 from __future__ import annotations
 
 import hashlib
+import hmac
 import json
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import StrEnum
-from typing import Any
+from typing import Any, Literal
 
 from sqlalchemy import text
 from sqlalchemy.engine import Connection, RowMapping
 
 from app.core import keystore
+from app.core.config import DbRole
 from app.core.crypto import Purpose
 from app.core.db import get_engine
 from app.core.logging import mask
@@ -26,12 +35,15 @@ from app.core.request_meta import ClientMeta
 GENESIS = bytes(32)
 CHAIN_FIELDS = (
     "id", "ts", "user_id", "action", "result", "object_type", "object_id",
-    "request_id", "details", "ip_enc", "ua_enc",
+    "request_id", "details", "ip_enc", "ua_enc", "chain_key_version",
 )
 _SELECT = (
     "SELECT id, ts, user_id, action, result, object_type, object_id, request_id, details, "
-    "ip_enc, ua_enc, prev_hash, hash FROM core.audit_log"
+    "ip_enc, ua_enc, chain_key_version, prev_hash, hash FROM core.audit_log"
 )
+_MAX_BAD_IDS = 100
+
+AuditResult = Literal["ok", "fail", "denied"]
 
 
 class AuditAction(StrEnum):
@@ -64,7 +76,7 @@ class AuditAction(StrEnum):
 @dataclass(frozen=True, slots=True)
 class AuditEvent:
     action: AuditAction
-    result: str = "ok"
+    result: AuditResult = "ok"
     user_id: int | None = None
     object_type: str | None = None
     object_id: str | None = None
@@ -78,6 +90,7 @@ class AuditEvent:
 class ChainReport:
     ok: bool
     checked: int
+    bad_ids: list[int]
     first_bad_id: int | None
 
 
@@ -102,54 +115,78 @@ def canonical(row: dict[str, Any] | RowMapping) -> bytes:
     return json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()
 
 
-def chain_hash(prev: bytes, row: dict[str, Any] | RowMapping) -> bytes:
-    return hashlib.sha256(prev + canonical(row)).digest()
+def chain_hash(key: bytes, prev: bytes, row: dict[str, Any] | RowMapping) -> bytes:
+    return hmac.new(key, prev + canonical(row), hashlib.sha256).digest()
 
 
-def record(event: AuditEvent) -> int:
-    details = mask(event.details)
-    with get_engine("app").begin() as conn:
-        prev = bytes(
-            conn.execute(
-                text("SELECT last_hash FROM core.audit_head WHERE id = 1 FOR UPDATE")
-            ).scalar_one()
-        )
-        audit_id = int(conn.execute(text("SELECT nextval('core.audit_log_id_seq')")).scalar_one())
+def _sanitize(value: Any) -> Any:
+    """`details`ni JSON-xavfsiz primitivlarga aylantiradi (F5) — hodisa hech qachon
+    yozilmay qolmasligi kerak, hatto yovuz/g'alati kiritilgan qiymatlar bilan ham."""
+    if value is None or isinstance(value, bool):
+        return value
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        return repr(value)
+    if isinstance(value, str):
+        return value.replace("\x00", "")
+    if isinstance(value, dict):
+        return {str(k): _sanitize(v) for k, v in value.items()}
+    if isinstance(value, list | tuple):
+        return [_sanitize(v) for v in value]
+    # Decimal, UUID, datetime, bytes va h.k. — umumiy matn ko'rinishi.
+    return str(value)
+
+
+def _clean_text(value: str | None, max_len: int | None) -> str | None:
+    if value is None:
+        return None
+    cleaned = value.replace("\x00", "")
+    return cleaned[:max_len] if max_len is not None else cleaned
+
+
+def record(event: AuditEvent, *, role: DbRole = "app") -> int:
+    details = mask(_sanitize(event.details))
+    object_type = _clean_text(event.object_type, 32)
+    object_id = _clean_text(event.object_id, 64)
+    request_id = _clean_text(event.request_id, 32)
+    ip = _clean_text(event.ip, None)
+    ua = _clean_text(event.ua, 512)
+
+    with get_engine(role).begin() as conn:
+        prev_raw, audit_id_raw = conn.execute(
+            text("SELECT prev_hash, new_id FROM core.audit_reserve()")
+        ).one()
+        prev = bytes(prev_raw)
+        audit_id = int(audit_id_raw)
+        version, key = keystore.hmac_key(Purpose.AUDIT_CHAIN)
         row: dict[str, Any] = {
             "id": audit_id,
             "ts": datetime.now(UTC),
             "user_id": event.user_id,
             "action": str(event.action),
             "result": event.result,
-            "object_type": event.object_type,
-            "object_id": event.object_id,
-            "request_id": event.request_id,
+            "object_type": object_type,
+            "object_id": object_id,
+            "request_id": request_id,
             "details": details,
-            "ip_enc": (
-                keystore.encrypt_str(Purpose.AUDIT, event.ip, ip_aad(audit_id))
-                if event.ip
-                else None
-            ),
-            "ua_enc": (
-                keystore.encrypt_str(Purpose.AUDIT, event.ua[:512], ua_aad(audit_id))
-                if event.ua
-                else None
-            ),
+            "ip_enc": keystore.encrypt_str(Purpose.AUDIT, ip, ip_aad(audit_id)) if ip else None,
+            "ua_enc": keystore.encrypt_str(Purpose.AUDIT, ua, ua_aad(audit_id)) if ua else None,
+            "chain_key_version": version,
         }
-        digest = chain_hash(prev, row)
+        digest = chain_hash(key, prev, row)
         conn.execute(
             text(
-                "INSERT INTO core.audit_log (id, ts, user_id, action, result, object_type, "
-                "object_id, request_id, details, ip_enc, ua_enc, prev_hash, hash) VALUES "
-                "(:id, :ts, :user_id, :action, :result, :object_type, :object_id, :request_id, "
-                "CAST(:details AS jsonb), :ip_enc, :ua_enc, :prev_hash, :hash)"
+                "SELECT core.audit_append(:id, :ts, :user_id, :action, :result, "
+                ":object_type, :object_id, :request_id, CAST(:details AS jsonb), "
+                ":ip_enc, :ua_enc, :chain_key_version, :prev_hash, :hash)"
             ),
-            {**row, "details": json.dumps(details, ensure_ascii=False), "prev_hash": prev,
-             "hash": digest},
-        )
-        conn.execute(
-            text("UPDATE core.audit_head SET last_id = :id, last_hash = :h WHERE id = 1"),
-            {"id": audit_id, "h": digest},
+            {
+                **row,
+                "details": json.dumps(details, ensure_ascii=False, allow_nan=False),
+                "prev_hash": prev,
+                "hash": digest,
+            },
         )
     return audit_id
 
@@ -159,7 +196,7 @@ def log_event(
     action: AuditAction,
     *,
     user_id: int | None,
-    result: str = "ok",
+    result: AuditResult = "ok",
     object_type: str | None = None,
     object_id: object | None = None,
     details: dict[str, Any] | None = None,
@@ -180,27 +217,50 @@ def log_event(
 
 
 def verify_chain(conn: Connection) -> ChainReport:
-    """REPEATABLE READ tranzaksiyasi ichida chaqirilishi kerak (verify_chain_snapshot)."""
+    """REPEATABLE READ tranzaksiyasi ichida chaqirilishi kerak (verify_chain_snapshot).
+
+    Har bir qator ikki mustaqil tekshiruvdan o'tadi: (1) uning `prev_hash`'i haqiqatda
+    oldingi qatorning saqlangan `hash`'iga (yoki `core.audit_anchor`ga — zanjir boshiga)
+    teng ekanligi, (2) uning `hash`'i o'z `prev_hash`'i va tarkibidan to'g'ri hisoblanganligi.
+    Uzilish topilsa ham, keyingi qatorlar HAQIQIY saqlangan `hash` asosida mustaqil
+    tekshirilishda davom etadi — shu orqali bir nechta mustaqil buzilish alohida topiladi (F3).
+    """
     head_id, head_hash = conn.execute(
         text("SELECT last_id, last_hash FROM core.audit_head WHERE id = 1")
     ).one()
-    prev: bytes | None = None
+    anchor_hash = bytes(
+        conn.execute(
+            text("SELECT last_dropped_hash FROM core.audit_anchor WHERE id = 1")
+        ).scalar_one()
+    )
+    bad_ids: list[int] = []
+    prev = anchor_hash
     last_id: int | None = None
     checked = 0
     result = conn.execution_options(stream_results=True, yield_per=1000).execute(
         text(f"{_SELECT} ORDER BY id")
     )
     for row in result.mappings():
+        row_id = int(row["id"])
         stored_prev = bytes(row["prev_hash"])
-        if prev is not None and stored_prev != prev:
-            return ChainReport(False, checked, row["id"])
-        expected = chain_hash(stored_prev, row)
-        if expected != bytes(row["hash"]):
-            return ChainReport(False, checked, row["id"])
-        prev, last_id, checked = expected, row["id"], checked + 1
-    if head_id != last_id or (prev is not None and bytes(head_hash) != prev):
-        return ChainReport(False, checked, head_id)
-    return ChainReport(True, checked, None)
+        stored_hash = bytes(row["hash"])
+        _, key = keystore.hmac_key(Purpose.AUDIT_CHAIN, int(row["chain_key_version"]))
+        expected = chain_hash(key, stored_prev, row)
+        bad = stored_prev != prev or expected != stored_hash
+        if bad and len(bad_ids) < _MAX_BAD_IDS:
+            bad_ids.append(row_id)
+        prev, last_id, checked = stored_hash, row_id, checked + 1
+    head_bad = last_id != head_id or (last_id is not None and bytes(head_hash) != prev)
+    if head_bad:
+        bad_head_id = head_id if head_id is not None else -1
+        if bad_head_id not in bad_ids and len(bad_ids) < _MAX_BAD_IDS:
+            bad_ids.append(bad_head_id)
+    return ChainReport(
+        ok=not bad_ids,
+        checked=checked,
+        bad_ids=bad_ids,
+        first_bad_id=bad_ids[0] if bad_ids else None,
+    )
 
 
 def verify_chain_snapshot() -> ChainReport:

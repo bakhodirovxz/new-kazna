@@ -19,7 +19,8 @@ def upgrade() -> None:
         CREATE TABLE core.crypto_keys (
           id bigserial PRIMARY KEY,
           purpose text NOT NULL
-            CHECK (purpose IN ('pii', 'bank', 'mfa', 'integration_creds', 'audit_meta')),
+            CHECK (purpose IN ('pii', 'bank', 'mfa', 'integration_creds', 'audit_meta',
+                               'audit_chain')),
           version integer NOT NULL CHECK (version > 0 AND version <= 65535),
           wrapped_key bytea NOT NULL,
           status text NOT NULL CHECK (status IN ('active', 'decrypt_only', 'retired')),

@@ -1,11 +1,23 @@
+import json
+import os
 import threading
+import uuid
 from datetime import UTC, datetime
+from decimal import Decimal
 
 import pytest
 from sqlalchemy import text
-from sqlalchemy.exc import ProgrammingError
+from sqlalchemy.exc import DBAPIError, ProgrammingError
 
-from app.audit.service import AuditAction, AuditEvent, ip_aad, record, verify_chain_snapshot
+from app.audit.service import (
+    GENESIS,
+    AuditAction,
+    AuditEvent,
+    chain_hash,
+    ip_aad,
+    record,
+    verify_chain_snapshot,
+)
 from app.core import keystore
 from app.core.crypto import Purpose
 from app.core.db import get_engine, new_session
@@ -24,6 +36,25 @@ def _row(audit_id: int) -> dict[str, object]:
         )
 
 
+def _month_bounds(months_ago: int) -> tuple[datetime, datetime]:
+    """`months_ago` manfiy bo'lishi mumkin (kelajakdagi oy)."""
+    now = datetime.now(UTC)
+    total = now.year * 12 + (now.month - 1) - months_ago
+    y, m = divmod(total, 12)
+    start = datetime(y, m + 1, 1, tzinfo=UTC)
+    ey, em = divmod(total + 1, 12)
+    end = datetime(ey, em + 1, 1, tzinfo=UTC)
+    return start, end
+
+
+def _restore_row(saved: dict[str, object]) -> None:
+    cols = ", ".join(saved)
+    vals = ", ".join(f"CAST(:{c} AS jsonb)" if c == "details" else f":{c}" for c in saved)
+    saved = {**saved, "details": json.dumps(saved["details"])}
+    with get_engine("migrator").begin() as conn:
+        conn.execute(text(f"INSERT INTO core.audit_log ({cols}) VALUES ({vals})"), saved)  # noqa: S608
+
+
 def test_record_stores_encrypted_ip_and_masked_details() -> None:
     audit_id = record(
         AuditEvent(
@@ -39,7 +70,9 @@ def test_record_stores_encrypted_ip_and_masked_details() -> None:
     assert b"192.168.10.5" not in bytes(row["ip_enc"])  # type: ignore[arg-type]
     assert keystore.decrypt_str(Purpose.AUDIT, row["ip_enc"], ip_aad(audit_id)) == "192.168.10.5"  # type: ignore[arg-type]
     assert row["details"] == {"username": "ali", "password": "***"}
-    month = datetime.now(UTC).strftime("%Y%m")
+    # Oy chegarasida flake bo'lmasligi uchun qatorning o'z `ts`'idan hisoblanadi, datetime.now()
+    # emas.
+    month = row["ts"].strftime("%Y%m")  # type: ignore[union-attr]
     assert row["part"] == f"core.audit_log_{month}"
 
 
@@ -49,6 +82,7 @@ def test_chain_is_valid_after_records() -> None:
     report = verify_chain_snapshot()
     assert report.ok
     assert report.checked >= 3
+    assert report.bad_ids == []
 
 
 def test_concurrent_records_keep_chain_valid() -> None:
@@ -84,46 +118,317 @@ def test_tampering_is_detected_and_then_repaired() -> None:
     try:
         report = verify_chain_snapshot()
         assert not report.ok
+        assert report.bad_ids == [victim]
         assert report.first_bad_id == victim
     finally:
         with get_engine("migrator").begin() as conn:
             conn.execute(
                 text("UPDATE core.audit_log SET details = CAST(:d AS jsonb) WHERE id = :i"),
-                {"d": __import__("json").dumps(original), "i": victim},
+                {"d": json.dumps(original), "i": victim},
             )
     assert verify_chain_snapshot().ok
 
 
-def test_deleting_tail_is_detected() -> None:
-    last = record(AuditEvent(action=AuditAction.LOGOUT))
+def test_deletion_in_the_middle_is_detected_and_then_repaired() -> None:
+    record(AuditEvent(action=AuditAction.LOGOUT))
+    victim = record(AuditEvent(action=AuditAction.LOGOUT))
+    after = record(AuditEvent(action=AuditAction.LOGOUT))
     with get_engine("migrator").begin() as conn:
         saved = dict(
-            conn.execute(text("SELECT * FROM core.audit_log WHERE id = :i"), {"i": last})
+            conn.execute(text("SELECT * FROM core.audit_log WHERE id = :i"), {"i": victim})
             .mappings().one()
         )
-        conn.execute(text("DELETE FROM core.audit_log WHERE id = :i"), {"i": last})
+        conn.execute(text("DELETE FROM core.audit_log WHERE id = :i"), {"i": victim})
     try:
-        assert not verify_chain_snapshot().ok
+        report = verify_chain_snapshot()
+        assert not report.ok
+        assert after in report.bad_ids
     finally:
-        cols = ", ".join(saved)
-        vals = ", ".join(
-            f"CAST(:{c} AS jsonb)" if c == "details" else f":{c}" for c in saved
+        _restore_row(saved)
+    assert verify_chain_snapshot().ok
+
+
+def test_forged_head_is_detected_and_then_repaired() -> None:
+    last = record(AuditEvent(action=AuditAction.LOGOUT))
+    with get_engine("migrator").begin() as conn:
+        original = bytes(
+            conn.execute(text("SELECT last_hash FROM core.audit_head WHERE id = 1")).scalar_one()
         )
-        saved["details"] = __import__("json").dumps(saved["details"])
+        conn.execute(
+            text("UPDATE core.audit_head SET last_hash = :h WHERE id = 1"), {"h": os.urandom(32)}
+        )
+    try:
+        report = verify_chain_snapshot()
+        assert not report.ok
+        assert last in report.bad_ids
+    finally:
         with get_engine("migrator").begin() as conn:
             conn.execute(
-                text(f"INSERT INTO core.audit_log ({cols}) VALUES ({vals})"),  # noqa: S608
-                saved,
+                text("UPDATE core.audit_head SET last_hash = :h WHERE id = 1"), {"h": original}
             )
     assert verify_chain_snapshot().ok
 
 
-def test_app_role_cannot_update_or_delete_audit() -> None:
+def test_tampering_in_two_places_reports_both_ids() -> None:
+    v1 = record(AuditEvent(action=AuditAction.LOGOUT))
     record(AuditEvent(action=AuditAction.LOGOUT))
+    v2 = record(AuditEvent(action=AuditAction.LOGOUT))
+    record(AuditEvent(action=AuditAction.LOGOUT))
+    with get_engine("migrator").begin() as conn:
+        o1 = conn.execute(
+            text("SELECT details FROM core.audit_log WHERE id = :i"), {"i": v1}
+        ).scalar_one()
+        o2 = conn.execute(
+            text("SELECT details FROM core.audit_log WHERE id = :i"), {"i": v2}
+        ).scalar_one()
+        conn.execute(
+            text("""UPDATE core.audit_log SET details = '{"x": "1"}' WHERE id = :i"""), {"i": v1}
+        )
+        conn.execute(
+            text("""UPDATE core.audit_log SET details = '{"x": "2"}' WHERE id = :i"""), {"i": v2}
+        )
+    try:
+        report = verify_chain_snapshot()
+        assert not report.ok
+        assert set(report.bad_ids) >= {v1, v2}
+    finally:
+        with get_engine("migrator").begin() as conn:
+            conn.execute(
+                text("UPDATE core.audit_log SET details = CAST(:d AS jsonb) WHERE id = :i"),
+                {"d": json.dumps(o1), "i": v1},
+            )
+            conn.execute(
+                text("UPDATE core.audit_log SET details = CAST(:d AS jsonb) WHERE id = :i"),
+                {"d": json.dumps(o2), "i": v2},
+            )
+    assert verify_chain_snapshot().ok
+
+
+def test_prefix_deletion_without_anchor_update_is_detected_and_then_repaired() -> None:
+    record(AuditEvent(action=AuditAction.LOGOUT))
+    with get_engine("migrator").begin() as conn:
+        oldest_id = conn.execute(text("SELECT min(id) FROM core.audit_log")).scalar_one()
+        saved = dict(
+            conn.execute(text("SELECT * FROM core.audit_log WHERE id = :i"), {"i": oldest_id})
+            .mappings().one()
+        )
+        conn.execute(text("DELETE FROM core.audit_log WHERE id = :i"), {"i": oldest_id})
+        new_oldest = conn.execute(text("SELECT min(id) FROM core.audit_log")).scalar_one()
+    try:
+        report = verify_chain_snapshot()
+        assert not report.ok
+        assert new_oldest in report.bad_ids
+    finally:
+        _restore_row(saved)
+    assert verify_chain_snapshot().ok
+
+
+def test_app_role_cannot_write_audit_tables_directly() -> None:
+    record(AuditEvent(action=AuditAction.LOGOUT))
+    with get_engine("app").connect() as conn:
+        partition = conn.execute(
+            text(
+                "SELECT inhrelid::regclass::text FROM pg_inherits "
+                "WHERE inhparent = 'core.audit_log'::regclass "
+                "AND inhrelid::regclass::text ~ 'audit_log_[0-9]{6}$' LIMIT 1"
+            )
+        ).scalar_one()
     with new_session() as s, pytest.raises(ProgrammingError, match="permission denied"):
-        s.execute(text("UPDATE core.audit_log SET result = 'ok'"))
+        s.execute(text("INSERT INTO core.audit_log (id) VALUES (999999999)"))
     with new_session() as s, pytest.raises(ProgrammingError, match="permission denied"):
-        s.execute(text("DELETE FROM core.audit_log"))
+        s.execute(text("UPDATE core.audit_head SET last_id = last_id"))
+    with new_session() as s, pytest.raises(ProgrammingError, match="permission denied"):
+        s.execute(text(f"UPDATE {partition} SET result = 'ok'"))  # noqa: S608 -- regclass'dan
+    with new_session() as s, pytest.raises(ProgrammingError, match="permission denied"):
+        s.execute(text(f"DELETE FROM {partition}"))  # noqa: S608 -- nom regclass so'rovidan
+
+
+def test_audit_append_rejects_wrong_prev_hash() -> None:
+    with get_engine("app").begin() as conn, pytest.raises(DBAPIError):
+        conn.execute(
+            text(
+                "SELECT core.audit_append(:id, now(), NULL, 'test.x', 'ok', NULL, NULL, NULL, "
+                "'{}'::jsonb, NULL, NULL, 1, :prev, :hash)"
+            ),
+            {"id": 999999998, "prev": os.urandom(32), "hash": os.urandom(32)},
+        )
+
+
+def test_record_with_etl_role_works() -> None:
+    audit_id = record(AuditEvent(action=AuditAction.LOGOUT), role="etl")
+    assert verify_chain_snapshot().ok
+    with get_engine("migrator").connect() as conn:
+        count = conn.execute(
+            text("SELECT count(*) FROM core.audit_log WHERE id = :i"), {"i": audit_id}
+        ).scalar_one()
+    assert count == 1
+
+
+def test_sanitizes_hostile_details_and_still_verifies() -> None:
+    audit_id = record(
+        AuditEvent(
+            action=AuditAction.USER_UPDATED,
+            details={
+                "nul": "a\x00b",
+                "big_float": 1e16,
+                "nan": float("nan"),
+                "amount": Decimal("12.50"),
+                "id": uuid.uuid4(),
+                "when": datetime.now(UTC),
+            },
+        )
+    )
+    row = _row(audit_id)
+    details = row["details"]
+    assert isinstance(details, dict)
+    assert "\x00" not in json.dumps(details)
+    assert isinstance(details["big_float"], str)
+    assert isinstance(details["nan"], str)
+    assert isinstance(details["amount"], str)
+    assert isinstance(details["id"], str)
+    assert isinstance(details["when"], str)
+    assert verify_chain_snapshot().ok
+
+
+def test_truncates_overlong_object_id() -> None:
+    audit_id = record(AuditEvent(action=AuditAction.USER_UPDATED, object_id="x" * 200))
+    row = _row(audit_id)
+    assert row["object_id"] == "x" * 64
+    assert verify_chain_snapshot().ok
+
+
+def test_drop_old_partitions_respects_12_month_floor() -> None:
+    with get_engine("etl").begin() as conn:
+        dropped_zero = conn.execute(text("SELECT core.drop_old_audit_partitions(0)")).scalar_one()
+        dropped_neg = conn.execute(
+            text("SELECT core.drop_old_audit_partitions(-1)")
+        ).scalar_one()
+    assert dropped_zero == 0
+    assert dropped_neg == 0
+
+
+def test_drop_old_partitions_updates_anchor_to_dropped_rows_hash() -> None:
+    # To'liq, jamlanuvchi (session bo'yicha umumiy) zanjirga 14 oy oldingi haqiqiy bog'langan
+    # qatorni "to'qish" amalda murakkab va mo'rt (task-6-findings-r1.md F4 izohi buni tan oladi).
+    # Eng yaqin haqiqiy variant: mustaqil, o'zi ichida izchil (to'g'ri HMAC) bitta qatorli eski
+    # partitsiya yaratamiz, uni core.drop_old_audit_partitions bilan o'chiramiz va anchor
+    # ANIQ shu qatorning hash'iga yangilanganini tekshiramiz — bu funksiyaning anchor-yangilash
+    # mantig'ini to'g'ridan-to'g'ri isbotlaydi (butun jamlanuvchi zanjirni oxirigacha
+    # tekshirmasdan).
+    start, end = _month_bounds(months_ago=14)
+    table = f"audit_log_{start.strftime('%Y%m')}"
+    version, key = keystore.hmac_key(Purpose.AUDIT_CHAIN)
+    synth_id = 900_000_001
+    row: dict[str, object] = {
+        "id": synth_id, "ts": start, "user_id": None, "action": "test.marker", "result": "ok",
+        "object_type": None, "object_id": None, "request_id": None, "details": {},
+        "ip_enc": None, "ua_enc": None, "chain_key_version": version,
+    }
+    synth_hash = chain_hash(key, GENESIS, row)
+    with get_engine("migrator").begin() as conn:
+        before = dict(
+            conn.execute(
+                text(
+                    "SELECT last_dropped_id, last_dropped_hash FROM core.audit_anchor WHERE id = 1"
+                )
+            ).mappings().one()
+        )
+        # PARTITION OF ... FOR VALUES chegaralari bog'lash parametrlarini qabul qilmaydi —
+        # Postgres bu qiymatlarni DDL vaqtida literal sifatida kutadi.
+        conn.execute(
+            text(
+                f"CREATE TABLE core.{table} PARTITION OF core.audit_log "
+                f"FOR VALUES FROM ('{start.isoformat()}') TO ('{end.isoformat()}')"
+            )
+        )
+        params = {
+            **row, "details": json.dumps(row["details"]), "prev_hash": GENESIS, "hash": synth_hash,
+        }
+        conn.execute(
+            text(
+                "INSERT INTO core.audit_log (id, ts, user_id, action, result, object_type, "
+                "object_id, request_id, details, ip_enc, ua_enc, chain_key_version, "
+                "prev_hash, hash) VALUES (:id, :ts, :user_id, :action, :result, :object_type, "
+                ":object_id, :request_id, CAST(:details AS jsonb), :ip_enc, :ua_enc, "
+                ":chain_key_version, :prev_hash, :hash)"
+            ),
+            params,
+        )
+    try:
+        with get_engine("etl").begin() as conn:
+            dropped = conn.execute(text("SELECT core.drop_old_audit_partitions(12)")).scalar_one()
+        assert dropped >= 1
+        with get_engine("migrator").connect() as conn:
+            regclass = conn.execute(text("SELECT to_regclass(:t)"), {"t": f"core.{table}"}).scalar()
+            assert regclass is None
+            anchor = dict(
+                conn.execute(
+                    text(
+                        "SELECT last_dropped_id, last_dropped_hash "
+                        "FROM core.audit_anchor WHERE id = 1"
+                    )
+                ).mappings().one()
+            )
+        assert anchor["last_dropped_id"] == synth_id
+        assert bytes(anchor["last_dropped_hash"]) == synth_hash  # type: ignore[arg-type]
+    finally:
+        with get_engine("migrator").begin() as conn:
+            conn.execute(
+                text(
+                    "UPDATE core.audit_anchor SET last_dropped_id = :id, "
+                    "last_dropped_hash = :h WHERE id = 1"
+                ),
+                {"id": before["last_dropped_id"], "h": bytes(before["last_dropped_hash"])},  # type: ignore[arg-type]
+            )
+
+
+def test_ensure_audit_partitions_moves_default_rows_into_new_partition() -> None:
+    start, _ = _month_bounds(months_ago=-5)  # 5 oy kelajakda — hozirgi ufqdan (3) tashqarida
+    table = f"audit_log_{start.strftime('%Y%m')}"
+    version, key = keystore.hmac_key(Purpose.AUDIT_CHAIN)
+    synth_id = 900_000_002
+    row: dict[str, object] = {
+        "id": synth_id, "ts": start, "user_id": None, "action": "test.future", "result": "ok",
+        "object_type": None, "object_id": None, "request_id": None, "details": {},
+        "ip_enc": None, "ua_enc": None, "chain_key_version": version,
+    }
+    synth_hash = chain_hash(key, GENESIS, row)
+    with get_engine("migrator").begin() as conn:
+        # Bu partitsiya avvalgi (DB qayta yaratilmagan) test yugurishidan qolgan bo'lishi
+        # mumkin — testni takroriy yugurishlarga mustahkam qilish uchun oldindan tozalanadi.
+        conn.execute(text(f"DROP TABLE IF EXISTS core.{table}"))
+        params = {
+            **row, "details": json.dumps(row["details"]), "prev_hash": GENESIS, "hash": synth_hash,
+        }
+        conn.execute(
+            text(
+                "INSERT INTO core.audit_log_default (id, ts, user_id, action, result, "
+                "object_type, object_id, request_id, details, ip_enc, ua_enc, "
+                "chain_key_version, prev_hash, hash) VALUES (:id, :ts, :user_id, :action, "
+                ":result, :object_type, :object_id, :request_id, CAST(:details AS jsonb), "
+                ":ip_enc, :ua_enc, :chain_key_version, :prev_hash, :hash)"
+            ),
+            params,
+        )
+    try:
+        with get_engine("app").begin() as conn:
+            conn.execute(text("SELECT core.ensure_audit_partitions(6)"))
+        with get_engine("migrator").connect() as conn:
+            partition = conn.execute(
+                text("SELECT tableoid::regclass::text FROM core.audit_log WHERE id = :i"),
+                {"i": synth_id},
+            ).scalar_one()
+            still_in_default = conn.execute(
+                text("SELECT count(*) FROM ONLY core.audit_log_default WHERE id = :i"),
+                {"i": synth_id},
+            ).scalar_one()
+        assert partition == f"core.{table}"
+        assert still_in_default == 0
+    finally:
+        # `ensure_audit_partitions` yaratgan partitsiya ishlab chiqarishda doimiy qoladi;
+        # testni takroriy (DB qayta yaratilmagan) yugurishlar uchun toza holatda qoldiramiz.
+        with get_engine("migrator").begin() as conn:
+            conn.execute(text(f"DROP TABLE IF EXISTS core.{table}"))
 
 
 def test_partitions_exist_for_next_months() -> None:

@@ -32,6 +32,11 @@ class Purpose(StrEnum):
     MFA = "mfa"
     INTEGRATION = "integration_creds"
     AUDIT = "audit_meta"
+    # Audit hash-chain HMAC kaliti (spec 3.6, F1). Rotatsiya qilinishi mumkin (yangi versiya
+    # faol bo'ladi, eski versiyalar `verify_chain`'da mos `chain_key_version` orqali ishlatiladi),
+    # LEKIN hech qachon retire qilinmasin: eski qatorlarni qayta tekshirish uchun kalit kerak
+    # bo'lib qoladi. Task 13 (kalit boshqaruvi API'si) buni NON_RETIRABLE deb belgilashi kerak.
+    AUDIT_CHAIN = "audit_chain"
 
 
 class CryptoError(Exception):

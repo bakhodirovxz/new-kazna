@@ -20,7 +20,7 @@ def _reset_core() -> None:
             conn.execute(
                 text(
                     "SELECT format('%I.%I', schemaname, tablename) FROM pg_tables "
-                    "WHERE schemaname = 'core' AND tablename <> 'audit_head'"
+                    "WHERE schemaname = 'core' AND tablename NOT IN ('audit_head', 'audit_anchor')"
                 )
             )
             .scalars()
@@ -33,6 +33,13 @@ def _reset_core() -> None:
                 text(
                     "UPDATE core.audit_head SET last_id = NULL, "
                     "last_hash = decode(repeat('00', 32), 'hex')"
+                )
+            )
+        if conn.execute(text("SELECT to_regclass('core.audit_anchor')")).scalar() is not None:
+            conn.execute(
+                text(
+                    "UPDATE core.audit_anchor SET last_dropped_id = NULL, "
+                    "last_dropped_hash = decode(repeat('00', 32), 'hex')"
                 )
             )
 

@@ -43,6 +43,26 @@ docker compose -f deploy/compose.yml run --rm migrate python -m app.cli retire-k
 
 (`make retire-keys` / `make rewrap-keys f=...` — Linux/prod uchun qulay yorliqlar, `Makefile`ga qarang.)
 
+### `rewrap-keys` — KEK rotatsiyasi
+
+Yangi KEK (base64, aynan 32 bayt) alohida faylga yozilib, `migrate` konteyneriga **absolyut**
+yo'l bilan (Docker bind-mount nisbiy yo'lni konteyner ichida kutilganidek hal qilmaydi) va
+konteyner foydalanuvchisi (`10001:10001`) o'qiy oladigan huquqlar bilan bog'lanadi:
+
+```bash
+python -c "import base64, secrets; open('/tmp/new_kek','w').write(base64.b64encode(secrets.token_bytes(32)).decode())"
+chmod 644 /tmp/new_kek   # yoki: chown/chmod uid 10001 o'qiy oladigan qilib
+docker compose -f deploy/compose.yml run --rm -v "/tmp/new_kek:/tmp/new_kek:ro" migrate \
+  python -m app.cli rewrap-keys --new-kek-file /tmp/new_kek
+shred -u /tmp/new_kek   # yoki: rm -P /tmp/new_kek — fayl diskda qolmasin
+```
+
+Buyruq yangi KEK joriy KEK bilan bir xil bo'lsa rad etadi (chiqish kodi 1). Muvaffaqiyatli
+tugagach, baza allaqachon YANGI KEK bilan o'ralgan bo'ladi — shu zahoti
+`deploy/secrets/master_kek`ni yangi qiymat bilan almashtirib, `api`/`migrate` xizmatlarini
+qayta ishga tushiring (aks holda ular eski KEK bilan ishga tushishga urinib, kalitlarni
+ocha olmay yiqiladi).
+
 ## Xavfsizlik asoslari
 
 - Sirlar faqat Docker secrets orqali (`deploy/secrets.example/README.md`).

@@ -29,7 +29,11 @@ docker compose -f deploy/compose.yml run --rm migrate python -m app.cli retire-k
 ```
 
 kabi `migrate` konteynerida ishga tushiriladi. `rewrap-keys` uchun yangi KEK (base64, 32 bayt)
-alohida faylga yozilib, konteynerga bind-mount qilinadi (masalan `-v $(pwd)/new_kek:/tmp/new_kek:ro`),
-so'ng `--new-kek-file /tmp/new_kek` beriladi; joriy `master_kek` siri (eski KEK) — shifrni ochish
-uchun — konteynerda allaqachon bor. Muvaffaqiyatli tugagach, `deploy/secrets/master_kek`ni yangi
-qiymat bilan almashtirib, `api`/`migrate` xizmatlarini qayta ishga tushiring.
+alohida faylga yozilib, konteynerga bind-mount qilinadi — yo'l **absolyut** bo'lishi va fayl
+konteyner foydalanuvchisi (`10001:10001`) o'qiy olishi SHART (masalan `-v $(pwd)/new_kek:/tmp/new_kek:ro`,
+`chmod 644` yoki uid 10001'ga tegishli qilib), so'ng `--new-kek-file /tmp/new_kek` beriladi;
+joriy `master_kek` siri (eski KEK) — shifrni ochish uchun — konteynerda allaqachon bor. Buyruq
+yangi KEK joriy KEK bilan bir xil bo'lsa rad etadi. Muvaffaqiyatli tugagach, host'dagi vaqtinchalik
+KEK faylini SHRED qiling (`shred -u new_kek` yoki `rm -P new_kek` — oddiy `rm` diskda iz qoldirishi
+mumkin) va `deploy/secrets/master_kek`ni yangi qiymat bilan almashtirib, `api`/`migrate`
+xizmatlarini qayta ishga tushiring.

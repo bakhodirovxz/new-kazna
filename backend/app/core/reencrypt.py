@@ -6,11 +6,11 @@ AUDIT_CHAIN kalitlari saqlash muddati davomida `decrypt_only` holatida qoladi va
 qachon retire qilinmaydi (`core.mfa_challenges.pending_secret_enc`dan farqli o'laroq,
 audit qatorlari yillar davomida qayta tekshirilishi kerak).
 
-`core.mfa_challenges.pending_secret_enc` (Purpose.MFA) qasddan REGISTRY'ga kiritilmagan:
-challenge'ning umri atigi 5 daqiqa, `retire-keys`ning standart grace muddati (>= 10 daqiqa)
-uni allaqachon qamrab oladi — rotatsiya paytida "hozir kutilayotgan" qiymat bo'lsa ham, u
-eski faol kalit bilan shifrlangan bo'lib qoladi va grace muddati ichida tabiiy ravishda
-tugaydi/o'chiriladi (`app.cli cleanup`), shuning uchun uni alohida qayta shifrlash ortiqcha.
+`REGISTRY`/`REENCRYPT_EXEMPT` to'liqligi `tests/test_reencrypt_registry.py`da sxema
+introspeksiyasi bilan tekshiriladi (I1): core/stg/dwh/mart sxemalaridagi har bir `*_enc`
+nomli `bytea` ustun ikkalasining birida bo'lishi SHART — aks holda kalit retire
+qilinganda o'sha ustun sukut bo'yicha qayta shifrlanmay, "jimgina" o'qib bo'lmaydigan
+holga kelishi mumkin edi.
 """
 
 from __future__ import annotations
@@ -21,7 +21,13 @@ from datetime import timedelta
 from sqlalchemy import text
 from sqlalchemy.engine import Connection
 
+from app.core import keystore
 from app.core.crypto import Keyring, Purpose
+from app.core.logging import get_logger
+
+log = get_logger("ugekazna.reencrypt")
+
+MIN_RETIRE_GRACE = timedelta(minutes=10)
 
 
 @dataclass(frozen=True, slots=True)
@@ -39,6 +45,27 @@ REGISTRY: tuple[EncryptedColumn, ...] = (
     EncryptedColumn("core.users", "id", "totp_secret_enc", Purpose.MFA),
     EncryptedColumn("core.sessions", "id", "ip_enc", Purpose.PII),
 )
+# I1: `REGISTRY`da YO'Q, lekin sxemada mavjud har bir `*_enc` ustun shu yerda ANIQ sababi
+# bilan ro'yxatga olinishi SHART (kalit `schema.table.column` formatida) — aks holda
+# to'liqlik testi (`test_reencrypt_registry.py`) yiqiladi. Bo'sh REGISTRY'ga ega maqsadlar
+# (`retire_unused` refuses purposes with no REGISTRY columns) bilan chalkashtirmaslik kerak:
+# bu yerdagi ustunlar ATAYLAB hech qachon qayta shifrlanmaydi (sababi ko'rsatilgan), pastdagi
+# esa hali umuman REGISTRY qilinmagan (kelajakdagi reja ularni ro'yxatga oladi).
+REENCRYPT_EXEMPT: dict[str, str] = {
+    "core.audit_log.ip_enc": (
+        "Purpose.AUDIT — NON_RETIRABLE, audit yozuvlari umrbod saqlanadi va hech qachon "
+        "qayta shifrlanmaydi (jurnal faqat qo'shishga ochiq)."
+    ),
+    "core.audit_log.ua_enc": (
+        "Purpose.AUDIT — NON_RETIRABLE, audit yozuvlari umrbod saqlanadi va hech qachon "
+        "qayta shifrlanmaydi (jurnal faqat qo'shishga ochiq)."
+    ),
+    "core.mfa_challenges.pending_secret_enc": (
+        "Purpose.MFA — challenge umri atigi 5 daqiqa, retire grace (>=10 daqiqa) muddati "
+        "ichida tabiiy tugaydi/o'chiriladi (`app.cli cleanup`), shuning uchun qayta "
+        "shifrlash ortiqcha."
+    ),
+}
 NON_RETIRABLE = frozenset({Purpose.AUDIT, Purpose.AUDIT_CHAIN})
 _VERSION_SQL = "(get_byte({col}, 1) * 256 + get_byte({col}, 2))"
 
@@ -81,7 +108,9 @@ def versions_in_use(conn: Connection, purpose: Purpose) -> set[int]:
     return used
 
 
-def retire_unused(conn: Connection, purpose: Purpose, grace: timedelta) -> list[int]:
+def retire_unused(
+    conn: Connection, purpose: Purpose, grace: timedelta, *, allow_short_grace: bool = False
+) -> list[int]:
     """Ishlatilmayotgan `decrypt_only` versiyalarni yo'q qiladi (o'ralgan kalit o'chiriladi).
 
     Operator amali — `ugk_migrator` (jadval egasi) sifatida bajariladi: `ugk_app`'ning
@@ -89,9 +118,29 @@ def retire_unused(conn: Connection, purpose: Purpose, grace: timedelta) -> list[
     bu funksiya `wrapped_key`ni bo'shatadi.
 
     Faol versiya `grace` dan eski bo'lishi shart: boshqa worker'larning keyring keshi
-    (60 s) eski versiya bilan yozib ulgurgan qiymatlar qolmasligi uchun.
+    (60 s) eski versiya bilan yozib ulgurgan qiymatlar qolmasligi uchun. `grace` odatda
+    `MIN_RETIRE_GRACE` (10 daqiqa)dan kam bo'lishi mumkin emas — bu operator xatosidan
+    himoya (juda qisqa grace boshqa worker'larning keshini "quvib o'tib", hali eski
+    versiya bilan yozilayotgan qiymatlarni o'qib bo'lmaydigan holga keltirishi mumkin);
+    faqat testlar `allow_short_grace=True` bilan bu tekshiruvni ongli bosib o'tadi.
+
+    `purpose`da hech qanday REGISTRY ustuni bo'lmasa (I1: masalan, BANK, INTEGRATION —
+    hali qayta shifrlash uchun ro'yxatga olinmagan), funksiya RAD ETADI: bo'sh ro'yxat
+    qaytaradi va ogohlantirish yozadi — aks holda shu maqsaddagi eski kalitlar, ularga
+    tegishli ustunlar hali REGISTRY qilinmagani uchun HECH QACHON qayta shifrlanmasdan
+    turib yo'q qilinib, kelajakda o'sha ustunlar ro'yxatga olinganda allaqachon o'qib
+    bo'lmaydigan holga kelishi mumkin edi.
     """
+    keystore.take_key_lock(conn)
+    if not allow_short_grace and grace < MIN_RETIRE_GRACE:
+        raise ValueError(
+            "grace >= 10 daqiqa bo'lishi kerak "
+            "(faqat testlar allow_short_grace=True bilan bosib o'tadi)"
+        )
     if purpose in NON_RETIRABLE:
+        return []
+    if not _columns(purpose):
+        log.warning("retire_refused_no_registry_columns", purpose=purpose.value)
         return []
     fresh = conn.execute(
         text(

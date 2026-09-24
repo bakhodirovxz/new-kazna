@@ -59,10 +59,24 @@ def list_keys(ctx: KeysAdmin, db: DB) -> list[KeyOut]:
 
 @router.post("/{purpose}/rotate")
 def rotate_key(purpose: Purpose, ctx: KeysAdmin, db: DB, meta: Meta) -> RotateOut:
+    """Tartib muhim: avval mutatsiya + `db.commit()`, SO'NGGINA audit "ok".
+
+    Agar audit "ok" mutatsiyadan OLDIN yozilsa, keyinroq commit muvaffaqiyatsiz bo'lganda
+    jurnalda sodir bo'lmagan hodisa "ok" deb qolib ketishi mumkin edi. Xato bo'lsa —
+    rollback va audit "fail" (kalit materialisiz: faqat maqsad/xato turi).
+    """
     kek = get_settings().key_bytes("master_kek")
     conn = db.connection()
-    version = keystore.rotate(conn, kek, purpose)
-    count = reencrypt(conn, keystore.load_keyring(conn, kek), purpose)
+    try:
+        version = keystore.rotate(conn, kek, purpose)
+        count = reencrypt(conn, keystore.load_keyring(conn, kek), purpose)
+        db.commit()
+    except Exception as exc:
+        db.rollback()
+        log_event(meta, AuditAction.KEY_ROTATED, user_id=ctx.user_id, result="fail",
+                  object_type="key", object_id=purpose.value,
+                  details={"purpose": purpose.value, "error": type(exc).__name__})
+        raise
     keystore.invalidate_keyring()
     log_event(meta, AuditAction.KEY_ROTATED, user_id=ctx.user_id, object_type="key",
               object_id=purpose.value, details={"version": version, "reencrypted": count})

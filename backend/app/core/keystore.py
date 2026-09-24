@@ -20,8 +20,14 @@ _cache: tuple[Keyring, float] | None = None
 
 
 def _take_key_lock(conn: Connection) -> None:
-    """Kalit mutatsiyalarini (ensure/rotate/rewrap) o'zaro serializatsiya qiladi."""
+    """Kalit mutatsiyalarini (ensure/rotate/rewrap/retire) o'zaro serializatsiya qiladi."""
     conn.execute(text("SELECT pg_advisory_xact_lock(hashtext(:k))"), {"k": _ADVISORY_LOCK_KEY})
+
+
+def take_key_lock(conn: Connection) -> None:
+    """`_take_key_lock`ning ochiq wrapperi — boshqa modullar (masalan,
+    `app.core.reencrypt.retire_unused`) shu bitta qulfdan xotirjam foydalanishi uchun."""
+    _take_key_lock(conn)
 
 
 def _verify_kek(conn: Connection, kek: bytes, purpose: Purpose | None = None) -> None:
@@ -91,6 +97,22 @@ def invalidate_keyring() -> None:
     global _cache
     with _lock:
         _cache = None
+
+
+def set_keyring_for_process(ring: Keyring) -> None:
+    """Faqat operator CLI uchun (`app.cli._rewrap`): keshni qo'lda o'rnatadi.
+
+    KEK rotatsiyasidan (`rewrap_all`) keyin baza allaqachon YANGI KEK bilan qayta o'ralgan,
+    lekin `Settings.master_kek` (fayl/env) operator uni almashtirib qayta ishga
+    tushirmaguncha hali ESKI qiymatda turadi — shu oraliqda oddiy `get_keyring()` eski
+    KEK bilan ochishga urinib `unwrap_failed` bilan yiqilar edi. CLI shu funksiya bilan
+    keshni qo'lda YANGI KEK bilan ochilgan `ring`ga o'rnatib, o'sha jarayon ichida audit
+    yozuvini (AUDIT_CHAIN HMAC kaliti kerak) muvaffaqiyatli yoza oladi. Oddiy so'rov
+    oqimida (HTTP) HECH QACHON ishlatilmasin.
+    """
+    global _cache
+    with _lock:
+        _cache = (ring, time.monotonic())
 
 
 def rotate(conn: Connection, kek: bytes, purpose: Purpose) -> int:

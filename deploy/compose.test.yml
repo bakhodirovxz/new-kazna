@@ -1,0 +1,62 @@
+# Test stack. Parollar va kalitlar — faqat test uchun ochiq qiymatlar
+# (prod'da ishlatilsa Settings.problems() ishga tushirmaydi).
+name: ugekazna-test
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: test-superuser
+      POSTGRES_DB: ugekazna
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C.UTF-8"
+      DB_MIGRATOR_PASSWORD: test-migrator
+      DB_APP_PASSWORD: test-app
+      DB_ETL_PASSWORD: test-etl
+    volumes:
+      - ./postgres/initdb:/docker-entrypoint-initdb.d:ro
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U postgres -d ugekazna"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--requirepass", "test-redis", "--save", ""]
+    healthcheck:
+      test: ["CMD", "redis-cli", "--no-auth-warning", "-a", "test-redis", "ping"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  test:
+    build:
+      context: ../backend
+      args:
+        INSTALL_DEV: "true"
+    image: ugekazna-backend:dev
+    working_dir: /app
+    environment:
+      ENV: test
+      ARGON2_PROFILE: fast_test
+      BASE_URL: https://testserver
+      DB_HOST: db
+      DB_APP_PASSWORD: test-app
+      DB_ETL_PASSWORD: test-etl
+      DB_MIGRATOR_PASSWORD: test-migrator
+      REDIS_HOST: redis
+      REDIS_PASSWORD: test-redis
+      MASTER_KEK: AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=
+      BLIND_INDEX_KEY: ICEiIyQlJicoKSorLC0uLzAxMjM0NTY3ODk6Ozw9Pj8=
+      SESSION_PEPPER: QEFCQ0RFRkdISUpLTE1OT1BRUlNUVVZXWFlaW1xdXl8=
+      COVERAGE_FILE: /tmp/.coverage
+    volumes:
+      - ../backend:/app
+    tmpfs:
+      - /tmp
+    depends_on:
+      db: {condition: service_healthy}
+      redis: {condition: service_healthy}

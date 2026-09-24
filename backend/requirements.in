@@ -1,0 +1,14 @@
+# To'g'ridan-to'g'ri bog'liqliklar. Qulflash: make lock (requirements.txt, hash bilan).
+fastapi>=0.115,<1
+uvicorn[standard]>=0.34,<1
+sqlalchemy>=2.0.36,<2.1
+psycopg[binary,pool]>=3.2,<4
+alembic>=1.14,<2
+pydantic>=2.10,<3
+pydantic-settings>=2.7,<3
+argon2-cffi>=23.1
+pyotp>=2.9,<3
+segno>=1.6,<2
+cryptography>=44
+redis>=5.2,<7
+structlog>=24.4

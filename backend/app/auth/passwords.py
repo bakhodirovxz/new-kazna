@@ -18,7 +18,7 @@ STANDARD_PARAMS = (3, 64 * 1024, 4)  # time_cost, memory_cost (KiB), parallelism
 FAST_TEST_PARAMS = (1, 8 * 1024, 1)
 MIN_LENGTH = 12
 HISTORY_DEPTH = 5
-CONTEXT_WORDS = ("ugekazna", "gidroenergo", "password", "qwerty", "admin")
+CONTEXT_WORDS = ("ugekazna", "gidroenergo", "password", "parol", "пароль", "qwerty", "admin")
 _TEMP_ALPHABET = string.ascii_letters + string.digits + "-_!@#%+="
 
 

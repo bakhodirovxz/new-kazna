@@ -14,7 +14,8 @@ STEP_SECONDS = 30
 DIGITS = 6
 BACKUP_CODE_COUNT = 10
 _BACKUP_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"  # I, L, O, 0, 1 yo'q
-_BACKUP_RE = re.compile(r"^[A-Z0-9]{5}-?[A-Z0-9]{5}$")
+# 12 belgi, 31 belgili alifbo -> ~59 bit entropiya (loyihada belgilangan >=50 bit)
+_BACKUP_RE = re.compile(r"^(?:[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}|[A-Z0-9]{12})$")
 
 
 def new_secret() -> str:
@@ -51,8 +52,8 @@ def verify(secret: str, code: str, last_step: int | None, now: float) -> int | N
 def generate_backup_codes() -> list[str]:
     codes: set[str] = set()
     while len(codes) < BACKUP_CODE_COUNT:
-        raw = "".join(secrets.choice(_BACKUP_ALPHABET) for _ in range(10))
-        codes.add(f"{raw[:5]}-{raw[5:]}")
+        raw = "".join(secrets.choice(_BACKUP_ALPHABET) for _ in range(12))
+        codes.add(f"{raw[:4]}-{raw[4:8]}-{raw[8:]}")
     return sorted(codes)
 
 

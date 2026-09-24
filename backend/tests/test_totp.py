@@ -45,8 +45,10 @@ def test_backup_codes() -> None:
     codes = totp.generate_backup_codes()
     assert len(codes) == totp.BACKUP_CODE_COUNT == len(set(codes))
     for c in codes:
-        assert len(c) == 11 and c[5] == "-"
-        assert totp.normalize_backup_code(c) == c.replace("-", "")
+        assert len(c) == 14 and c[4] == "-" and c[9] == "-"
+        normalized = totp.normalize_backup_code(c)
+        assert normalized == c.replace("-", "")
+        assert normalized is not None and len(normalized) == 12
         assert totp.normalize_backup_code(c.lower().replace("-", " ")) == c.replace("-", "")
     assert totp.normalize_backup_code("123456") is None
     assert totp.normalize_backup_code("ABCDE-FGH") is None

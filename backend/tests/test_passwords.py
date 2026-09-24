@@ -8,7 +8,7 @@ from app.auth.passwords import (
     verify_password,
 )
 
-GOOD = "Kuchli-Parol-2026!"
+GOOD = "Kuchli-Maxfiy-2026!"
 
 
 def test_standard_params_match_spec() -> None:
@@ -45,6 +45,11 @@ def test_contains_username_case_insensitive() -> None:
 def test_common_and_context_words() -> None:
     assert "password_common" in policy_problems("Ugekazna-2026!", username="u")
     assert "password_common" in policy_problems("Qwerty-12345!", username="u")
+
+
+def test_context_words_parol_variants() -> None:
+    assert "password_common" in policy_problems("Mening-Parolim-2026!", username="u")
+    assert "password_common" in policy_problems("Мой-Пароль-2026!x", username="u")
 
 
 def test_reused_password() -> None:

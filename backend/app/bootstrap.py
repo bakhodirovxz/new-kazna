@@ -4,9 +4,10 @@ from __future__ import annotations
 
 from sqlalchemy import text
 
+from app.auth.seed import sync_reference
 from app.core import keystore
 from app.core.config import get_settings
-from app.core.db import get_engine
+from app.core.db import get_engine, new_session
 
 
 def bootstrap_runtime() -> None:
@@ -16,3 +17,6 @@ def bootstrap_runtime() -> None:
         keystore.ensure_keys(conn, kek)
     keystore.invalidate_keyring()
     keystore.get_keyring()  # noto'g'ri master_kek ishga tushishdayoq aniqlansin
+    with new_session() as db:
+        sync_reference(db)
+        db.commit()

@@ -27,7 +27,7 @@ from sqlalchemy.engine import Connection, RowMapping
 
 from app.core import keystore
 from app.core.config import DbRole
-from app.core.crypto import Purpose
+from app.core.crypto import CryptoError, Purpose
 from app.core.db import get_engine
 from app.core.logging import mask
 from app.core.request_meta import ClientMeta
@@ -119,9 +119,17 @@ def chain_hash(key: bytes, prev: bytes, row: dict[str, Any] | RowMapping) -> byt
     return hmac.new(key, prev + canonical(row), hashlib.sha256).digest()
 
 
+def _clean_str(value: str) -> str:
+    """NUL baytlarni olib tashlaydi va yolg'on surrogate kod nuqtalarini (masalan,
+    so'rov tanasidagi buzuq UTF-16 juftlikdan hosil bo'lgan `\\ud800`) almashtiradi (R2-1) —
+    ikkalasi ham keyinroq jsonb yozishda yoki UTF-8 kodlashda xato bilan yiqilishga olib keladi."""
+    return value.replace("\x00", "").encode("utf-8", "replace").decode("utf-8")
+
+
 def _sanitize(value: Any) -> Any:
-    """`details`ni JSON-xavfsiz primitivlarga aylantiradi (F5) — hodisa hech qachon
-    yozilmay qolmasligi kerak, hatto yovuz/g'alati kiritilgan qiymatlar bilan ham."""
+    """`details`ni JSON-xavfsiz primitivlarga aylantiradi (F5/R2-1) — hodisa hech qachon
+    yozilmay qolmasligi kerak, hatto yovuz/g'alati kiritilgan qiymatlar (NUL, yolg'on
+    surrogatlar, NaN, katta float, Decimal/UUID/datetime va h.k.) bilan ham."""
     if value is None or isinstance(value, bool):
         return value
     if isinstance(value, int):
@@ -129,19 +137,19 @@ def _sanitize(value: Any) -> Any:
     if isinstance(value, float):
         return repr(value)
     if isinstance(value, str):
-        return value.replace("\x00", "")
+        return _clean_str(value)
     if isinstance(value, dict):
-        return {str(k): _sanitize(v) for k, v in value.items()}
+        return {_clean_str(str(k)): _sanitize(v) for k, v in value.items()}
     if isinstance(value, list | tuple):
         return [_sanitize(v) for v in value]
     # Decimal, UUID, datetime, bytes va h.k. — umumiy matn ko'rinishi.
-    return str(value)
+    return _clean_str(str(value))
 
 
 def _clean_text(value: str | None, max_len: int | None) -> str | None:
     if value is None:
         return None
-    cleaned = value.replace("\x00", "")
+    cleaned = _clean_str(value)
     return cleaned[:max_len] if max_len is not None else cleaned
 
 
@@ -152,6 +160,11 @@ def record(event: AuditEvent, *, role: DbRole = "app") -> int:
     request_id = _clean_text(event.request_id, 32)
     ip = _clean_text(event.ip, None)
     ua = _clean_text(event.ua, 512)
+
+    # R2-4: keshni tranzaksiyadan TASHQARIDA isitib qo'yamiz — aks holda kesh eskirgan
+    # bo'lsa, `core.audit_head`ning FOR UPDATE qulfi ostida turib (audit_reserve() ichida)
+    # pool'dan yana bir ulanish so'ralishi mumkin edi (parallel yuklamada tiqilib qolish xavfi).
+    keystore.get_keyring()
 
     with get_engine(role).begin() as conn:
         prev_raw, audit_id_raw = conn.execute(
@@ -244,13 +257,27 @@ def verify_chain(conn: Connection) -> ChainReport:
         row_id = int(row["id"])
         stored_prev = bytes(row["prev_hash"])
         stored_hash = bytes(row["hash"])
-        _, key = keystore.hmac_key(Purpose.AUDIT_CHAIN, int(row["chain_key_version"]))
-        expected = chain_hash(key, stored_prev, row)
-        bad = stored_prev != prev or expected != stored_hash
+        try:
+            _, key = keystore.hmac_key(Purpose.AUDIT_CHAIN, int(row["chain_key_version"]))
+        except CryptoError:
+            # R2-3: noma'lum (masalan, buzilgan yoki hech qachon bo'lmagan) kalit versiyasi
+            # butun tekshiruvni to'xtatmasligi kerak — qatorni buzuq deb belgilab, qolgan
+            # zanjirni HAQIQIY saqlangan hash asosida mustaqil tekshirishda davom etamiz.
+            bad = True
+        else:
+            expected = chain_hash(key, stored_prev, row)
+            bad = stored_prev != prev or expected != stored_hash
         if bad and len(bad_ids) < _MAX_BAD_IDS:
             bad_ids.append(row_id)
         prev, last_id, checked = stored_hash, row_id, checked + 1
-    head_bad = last_id != head_id or (last_id is not None and bytes(head_hash) != prev)
+    if checked == 0:
+        # R2-4: retention hamma qatorni o'chirib yuborgan bo'lishi mumkin — bu holda "ok"
+        # faqat anchor haqiqatan ham boshning o'zi bilan mos kelsa (yoki ikkalasi ham
+        # genesis'da bo'lsa); aks holda (qatorlar yo'q, lekin bosh boshqa narsaga ishora
+        # qilsa) bu xato hisoblanadi.
+        head_bad = bytes(head_hash) != anchor_hash
+    else:
+        head_bad = last_id != head_id or bytes(head_hash) != prev
     if head_bad:
         bad_head_id = head_id if head_id is not None else -1
         if bad_head_id not in bad_ids and len(bad_ids) < _MAX_BAD_IDS:

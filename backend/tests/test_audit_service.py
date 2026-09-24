@@ -2,11 +2,12 @@ import json
 import os
 import threading
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
 import pytest
 from sqlalchemy import text
+from sqlalchemy.engine import Connection
 from sqlalchemy.exc import DBAPIError, ProgrammingError
 
 from app.audit.service import (
@@ -21,6 +22,18 @@ from app.audit.service import (
 from app.core import keystore
 from app.core.crypto import Purpose
 from app.core.db import get_engine, new_session
+
+_APPEND_SQL = (
+    "SELECT core.audit_append(:id, :ts, NULL, 'test.x', 'ok', NULL, NULL, NULL, "
+    "'{}'::jsonb, NULL, NULL, :chain_key_version, :prev, :hash)"
+)
+
+
+def _reserve(conn: Connection) -> tuple[bytes, int]:
+    prev, new_id = conn.execute(
+        text("SELECT prev_hash, new_id FROM core.audit_reserve()")
+    ).one()
+    return bytes(prev), int(new_id)
 
 
 def _row(audit_id: int) -> dict[str, object]:
@@ -223,6 +236,46 @@ def test_prefix_deletion_without_anchor_update_is_detected_and_then_repaired() -
     assert verify_chain_snapshot().ok
 
 
+def test_unknown_chain_key_version_is_reported_and_verification_continues() -> None:
+    # R2-3: bitta qatorning chain_key_version'i noma'lum bo'lsa ham, tekshiruv butunlay
+    # to'xtamasligi va zanjirdagi keyingi mustaqil buzilishni ham topa olishi kerak.
+    victim = record(AuditEvent(action=AuditAction.LOGOUT))
+    record(AuditEvent(action=AuditAction.LOGOUT))
+    second_victim = record(AuditEvent(action=AuditAction.USER_CREATED, details={"a": 1}))
+    record(AuditEvent(action=AuditAction.LOGOUT))
+    with get_engine("migrator").begin() as conn:
+        original_version = conn.execute(
+            text("SELECT chain_key_version FROM core.audit_log WHERE id = :i"), {"i": victim}
+        ).scalar_one()
+        conn.execute(
+            text("UPDATE core.audit_log SET chain_key_version = 9999 WHERE id = :i"),
+            {"i": victim},
+        )
+        original_details = conn.execute(
+            text("SELECT details FROM core.audit_log WHERE id = :i"), {"i": second_victim}
+        ).scalar_one()
+        conn.execute(
+            text("""UPDATE core.audit_log SET details = '{"a": 2}' WHERE id = :i"""),
+            {"i": second_victim},
+        )
+    try:
+        report = verify_chain_snapshot()
+        assert not report.ok
+        assert victim in report.bad_ids
+        assert second_victim in report.bad_ids
+    finally:
+        with get_engine("migrator").begin() as conn:
+            conn.execute(
+                text("UPDATE core.audit_log SET chain_key_version = :v WHERE id = :i"),
+                {"v": original_version, "i": victim},
+            )
+            conn.execute(
+                text("UPDATE core.audit_log SET details = CAST(:d AS jsonb) WHERE id = :i"),
+                {"d": json.dumps(original_details), "i": second_victim},
+            )
+    assert verify_chain_snapshot().ok
+
+
 def test_app_role_cannot_write_audit_tables_directly() -> None:
     record(AuditEvent(action=AuditAction.LOGOUT))
     with get_engine("app").connect() as conn:
@@ -243,15 +296,97 @@ def test_app_role_cannot_write_audit_tables_directly() -> None:
         s.execute(text(f"DELETE FROM {partition}"))  # noqa: S608 -- nom regclass so'rovidan
 
 
-def test_audit_append_rejects_wrong_prev_hash() -> None:
-    with get_engine("app").begin() as conn, pytest.raises(DBAPIError):
-        conn.execute(
-            text(
-                "SELECT core.audit_append(:id, now(), NULL, 'test.x', 'ok', NULL, NULL, NULL, "
-                "'{}'::jsonb, NULL, NULL, 1, :prev, :hash)"
-            ),
-            {"id": 999999998, "prev": os.urandom(32), "hash": os.urandom(32)},
+def test_app_role_cannot_write_audit_anchor() -> None:
+    with new_session() as s, pytest.raises(ProgrammingError, match="permission denied"):
+        s.execute(
+            text("INSERT INTO core.audit_anchor (id, last_dropped_hash) VALUES (2, :h)"),
+            {"h": os.urandom(32)},
         )
+    with new_session() as s, pytest.raises(ProgrammingError, match="permission denied"):
+        s.execute(text("UPDATE core.audit_anchor SET last_dropped_id = last_dropped_id"))
+
+
+def test_app_role_cannot_setval_audit_sequence() -> None:
+    with new_session() as s, pytest.raises(ProgrammingError, match="permission denied"):
+        s.execute(text("SELECT setval('core.audit_log_id_seq', 1)"))
+
+
+def test_etl_role_cannot_select_audit_log() -> None:
+    with (
+        get_engine("etl").connect() as conn,
+        pytest.raises(ProgrammingError, match="permission denied"),
+    ):
+        conn.execute(text("SELECT count(*) FROM core.audit_log"))
+
+
+def test_audit_append_rejects_wrong_prev_hash() -> None:
+    # `audit_reserve()` avval chaqiriladi — shu bilan p_id currval() talabini qanoatlantiradi,
+    # shunda xato aniq prev_hash tekshiruvidan kelishi kafolatlanadi (R2-2 boshqa tekshiruvlar
+    # bilan aralashib ketmasin).
+    with get_engine("app").begin() as conn, pytest.raises(DBAPIError):
+        _prev, new_id = _reserve(conn)
+        conn.execute(
+            text(_APPEND_SQL),
+            {
+                "id": new_id,
+                "ts": datetime.now(UTC),
+                "chain_key_version": 1,
+                "prev": os.urandom(32),
+                "hash": os.urandom(32),
+            },
+        )
+
+
+def test_audit_append_rejects_id_not_matching_reserved_sequence() -> None:
+    with get_engine("app").begin() as conn, pytest.raises(DBAPIError):
+        prev, new_id = _reserve(conn)
+        conn.execute(
+            text(_APPEND_SQL),
+            {
+                "id": new_id + 1,
+                "ts": datetime.now(UTC),
+                "chain_key_version": 1,
+                "prev": prev,
+                "hash": os.urandom(32),
+            },
+        )
+
+
+def test_audit_append_rejects_ts_far_from_now() -> None:
+    with get_engine("app").begin() as conn, pytest.raises(DBAPIError):
+        prev, new_id = _reserve(conn)
+        conn.execute(
+            text(_APPEND_SQL),
+            {
+                "id": new_id,
+                "ts": datetime.now(UTC) - timedelta(days=1),
+                "chain_key_version": 1,
+                "prev": prev,
+                "hash": os.urandom(32),
+            },
+        )
+
+
+def test_audit_append_rejects_unknown_chain_key_version() -> None:
+    with get_engine("app").begin() as conn, pytest.raises(DBAPIError):
+        prev, new_id = _reserve(conn)
+        conn.execute(
+            text(_APPEND_SQL),
+            {
+                "id": new_id,
+                "ts": datetime.now(UTC),
+                "chain_key_version": 9999,
+                "prev": prev,
+                "hash": os.urandom(32),
+            },
+        )
+
+
+def test_record_still_works_after_audit_append_hardening() -> None:
+    audit_id = record(AuditEvent(action=AuditAction.LOGOUT))
+    assert verify_chain_snapshot().ok
+    row = _row(audit_id)
+    assert row["id"] == audit_id
 
 
 def test_record_with_etl_role_works() -> None:
@@ -297,6 +432,36 @@ def test_truncates_overlong_object_id() -> None:
     assert verify_chain_snapshot().ok
 
 
+def test_sanitizes_nul_in_details_keys() -> None:
+    # R2-1: `_sanitize` kalitlarni ham tozalashi kerak — NUL bo'lgan kalit jsonb yozishda
+    # xato beradi.
+    audit_id = record(AuditEvent(action=AuditAction.USER_UPDATED, details={"a\x00": 1}))
+    row = _row(audit_id)
+    assert row["details"] == {"a": 1}
+    assert verify_chain_snapshot().ok
+
+
+def test_sanitizes_lone_surrogate_in_details_value() -> None:
+    # R2-1: yolg'on surrogate (masalan, so'rov tanasidan noto'g'ri UTF-16 juftlikdan hosil
+    # bo'lgan) qiymat UTF-8'ga kodlashda yiqilib tushmasligi kerak.
+    audit_id = record(AuditEvent(action=AuditAction.USER_UPDATED, details={"k": "\ud800"}))
+    row = _row(audit_id)
+    details = row["details"]
+    assert isinstance(details, dict)
+    # Python'ning standart UTF-8 "replace" kodlash xato ishlovchisi noto'g'ri belgini
+    # ASCII "?" (0x3F) bilan almashtiradi (dekodlashdagi U+FFFD'dan farqli) — muhimi,
+    # asl surrogate saqlanib qolmaydi va qiymat xavfsiz UTF-8 satrga aylanadi.
+    assert details["k"] == "?"
+    assert verify_chain_snapshot().ok
+
+
+def test_sanitizes_lone_surrogate_in_object_id() -> None:
+    audit_id = record(AuditEvent(action=AuditAction.USER_UPDATED, object_id="\ud800x"))
+    row = _row(audit_id)
+    assert row["object_id"] == "?x"
+    assert verify_chain_snapshot().ok
+
+
 def test_drop_old_partitions_respects_12_month_floor() -> None:
     with get_engine("etl").begin() as conn:
         dropped_zero = conn.execute(text("SELECT core.drop_old_audit_partitions(0)")).scalar_one()
@@ -305,6 +470,31 @@ def test_drop_old_partitions_respects_12_month_floor() -> None:
         ).scalar_one()
     assert dropped_zero == 0
     assert dropped_neg == 0
+
+
+def test_drop_old_partitions_floor_protects_recent_old_partition() -> None:
+    # R2-4: 12 oylik pol argumentga qaramay amal qilishi kerak — 6 oylik (hali "eski"
+    # bo'lmagan) partitsiya keep_months=0 bilan ham o'chirilmasin.
+    start, end = _month_bounds(months_ago=6)
+    table = f"audit_log_{start.strftime('%Y%m')}"
+    with get_engine("migrator").begin() as conn:
+        conn.execute(text(f"DROP TABLE IF EXISTS core.{table}"))
+        conn.execute(
+            text(
+                f"CREATE TABLE core.{table} PARTITION OF core.audit_log "
+                f"FOR VALUES FROM ('{start.isoformat()}') TO ('{end.isoformat()}')"
+            )
+        )
+    try:
+        with get_engine("etl").begin() as conn:
+            dropped = conn.execute(text("SELECT core.drop_old_audit_partitions(0)")).scalar_one()
+        assert dropped == 0
+        with get_engine("migrator").connect() as conn:
+            regclass = conn.execute(text("SELECT to_regclass(:t)"), {"t": f"core.{table}"}).scalar()
+        assert regclass is not None
+    finally:
+        with get_engine("migrator").begin() as conn:
+            conn.execute(text(f"DROP TABLE IF EXISTS core.{table}"))
 
 
 def test_drop_old_partitions_updates_anchor_to_dropped_rows_hash() -> None:

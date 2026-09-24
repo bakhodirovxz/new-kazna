@@ -189,21 +189,49 @@ STATEMENTS = [
     END
     $$
     """,
+    # R2-2: caller-chosen p_id/p_ts/p_chain_key_version endi qattiq tekshiriladi — aks holda
+    # (a) o'zboshimcha p_id (masalan, bigint maksimumi) barcha kelajakdagi yozuvlarni
+    # abadiy "not monotonic" bilan bloklab qo'yishi mumkin, (b) o'zboshimcha p_ts eski
+    # partitsiyaga tushib, retention anchor'ini chalkashtirishi mumkin, (c) noma'lum
+    # chain_key_version qatorni umuman tekshirib bo'lmaydigan qilib qo'yadi.
     f"""
     CREATE FUNCTION {AUDIT_APPEND_SIG} RETURNS void
     LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp AS $$
     DECLARE
       cur_last_id bigint;
       cur_last_hash bytea;
+      reserved_id bigint;
     BEGIN
       SELECT h.last_id, h.last_hash INTO cur_last_id, cur_last_hash
       FROM core.audit_head h WHERE h.id = 1 FOR UPDATE;
+
+      -- p_id shu SESSIYAda avvalroq audit_reserve() chaqirgan nextval()'ga bog'lanadi;
+      -- agar bu sessiyada hali nextval() chaqirilmagan bo'lsa, currval() o'zi xato beradi.
+      reserved_id := pg_catalog.currval('core.audit_log_id_seq');
+      IF p_id <> reserved_id THEN
+        RAISE EXCEPTION 'audit id does not match reserved sequence value';
+      END IF;
+
       IF cur_last_hash <> p_prev_hash THEN
         RAISE EXCEPTION 'audit chain head mismatch';
       END IF;
       IF cur_last_id IS NOT NULL AND p_id <= cur_last_id THEN
         RAISE EXCEPTION 'audit id not monotonic';
       END IF;
+
+      IF p_ts < pg_catalog.clock_timestamp() - interval '5 minutes'
+         OR p_ts > pg_catalog.clock_timestamp() + interval '5 minutes' THEN
+        RAISE EXCEPTION 'audit ts out of bounds';
+      END IF;
+
+      IF NOT EXISTS (
+        SELECT 1 FROM core.crypto_keys
+        WHERE purpose = 'audit_chain' AND version = p_chain_key_version
+          AND status IN ('active', 'decrypt_only')
+      ) THEN
+        RAISE EXCEPTION 'unknown audit chain key version';
+      END IF;
+
       INSERT INTO core.audit_log (
         id, ts, user_id, action, result, object_type, object_id, request_id, details,
         ip_enc, ua_enc, chain_key_version, prev_hash, hash

@@ -18,6 +18,27 @@ Fix round 1 (task-7-findings-r1.md):
   ketmaydi", faqat ularning umumiy soni cheklangan bo'lishi mumkin.
 - M2/M3: `run_checks` chaqiruvchi konteksti (RLS scope, build/run mosligi) haqida qat'iy
   taxminlar qiladi — noto'g'ri chaqirilsa jim noto'g'ri "ok" qaytarish o'rniga yiqiladi.
+
+Fix round 2 (task-7-findings-r2.md):
+- R2-1: `_UNVERIFIABLE_SQL`ning oy chegaralari endi HAQIQIY TAKVIM oyi bo'yicha (har doim
+  1-kundan) hisoblanadi — `window.date_from` oy o'rtasida bo'lsa ham (Task-8 inkremental
+  oynasi: `min(watermark−45kun, joriy oy 1-kuni)`), aks holda `date_from`dan OLDIN, lekin
+  oy ICHIDA (1-kundan keyin) yotgan yozuvlar noto'g'ri "avvalgi qoldiq mavjud" deb
+  hisoblanardi.
+- R2-2: `_UNVERIFIABLE_SQL` N×oy `before_month` JOIN o'rniga har `(branch_id, bank_id)` uchun
+  BITTA `min(date_id)` (hisobning birinchi-yozuvi) hisoblaydi — "hisobning birinchi yozuvi
+  M oyiga tushadi" ⇔ "M oyi shu filial uchun tekshirib bo'lmaydi", xuddi avvalgisi kabi,
+  lekin ancha arzon (join o'lchami endi hisoblar soniga proportsional, hisoblar×oylarga emas).
+- R2-3: `mandatory_dims` endi branch kaliti BUTUNLAY yo'q/NULL bo'lgan rad etilgan qatorlarni
+  ham hisoblaydi: `missing_branch` KODI BILAN BIRGA, `missing_value` KODI VA `message` USTUNI
+  (core.etl_error'da alohida "field" ustuni yo'q — haqiqiy maydon nomi shu yerda saqlanadi)
+  `'branch_code'`ga teng bo'lgan qatorlar ham hisobga olinadi. Diagnostika (ushbu tuzatish
+  paytida tekshirildi): hozirgi `app/etl/merge.py` mantig'ida `branch_code IS NULL` allaqachon
+  `missing_branch` (branch — nullable=False lookup, LEFT JOIN hech qachon mos kelmaydi) beradi,
+  hech qachon `missing_value`ni EMAS (chunki `branch_code` hech qaysi maqsadning `t.columns`
+  a'zosi emas — u har doim Lookup, to'g'ridan-to'g'ri ustun emas) — shuning uchun ikkinchi
+  shart HOZIRGI sxemada amalda ishlamaydi, lekin ruling talabiga muvofiq va kelajakdagi maqsad
+  o'zgarishlariga qarshi himoya sifatida qo'shilgan.
 """
 
 from __future__ import annotations
@@ -81,22 +102,31 @@ def _control_totals(conn: Connection, source: str, window: Window,
 # filial-oy uchun "nachalniy qoldiq" TO'LIQ emas (yangi hisob ulushi tushib qoladi) — bunday
 # filial-oylar tekshirib bo'lmaydi (`unverifiable`) va `violations`dan chiqarib tashlanadi.
 # Bu Task-6 agregatlarini o'zgartirmaydi — bevosita `dwh.fact_balance`ga so'rov beriladi.
+#
+# R2-1: oy chegaralari `date_trunc('month', :date_from)`dan (HAQIQIY TAKVIM oyi, 1-kundan)
+# hisoblanadi, xom `:date_from`dan emas — aks holda `:date_from` oy o'rtasida bo'lganda
+# (inkremental oyna) oyning 1-kundan `:date_from`gacha bo'lgan haqiqiy yozuvlar noto'g'ri
+# "oydan OLDIN" deb hisoblanib, yangi hisob YASHIRIN qolib ketardi.
+#
+# R2-2: N×oy `before_month` JOIN o'rniga — har `(branch_id, bank_id)` juftligi uchun BITTA
+# `min(date_id)` (hisobning BIRINCHI-YOZUVI): "birinchi yozuv M oyiga tushadi" ⇔ "M oyi shu
+# hisob uchun tekshirib bo'lmaydi" (agar birinchi yozuv M oyidan OLDINGI biror oyga tushsa,
+# M oyi uchun "avvalgi qoldiq" har doim mavjud — hech qanday keyingi oy tekshirib
+# bo'lmasligiga sabab bo'lolmaydi, chunki min(date_id) ANIQ BIR marta, ANIQ BIR oyga tushadi).
 _UNVERIFIABLE_SQL = text(
     "WITH months AS (\n"
     "  SELECT month_id, min(date_id) AS first_id, max(date_id) AS end_id\n"
-    "  FROM dwh.dim_date WHERE date BETWEEN CAST(:date_from AS date) AND CAST(:date_to AS date)\n"
+    "  FROM dwh.dim_date\n"
+    "  WHERE date BETWEEN date_trunc('month', CAST(:date_from AS date))::date\n"
+    "    AND CAST(:date_to AS date)\n"
     "  GROUP BY month_id),\n"
-    "in_month AS (\n"
-    "  SELECT DISTINCT fb.branch_id, m.month_id, fb.bank_id\n"
-    "  FROM dwh.fact_balance fb JOIN months m ON fb.date_id BETWEEN m.first_id AND m.end_id),\n"
-    "before_month AS (\n"
-    "  SELECT DISTINCT fb.branch_id, fb.bank_id, m.month_id\n"
-    "  FROM dwh.fact_balance fb JOIN months m ON fb.date_id < m.first_id)\n"
-    "SELECT DISTINCT im.branch_id, im.month_id FROM in_month im\n"
-    "LEFT JOIN before_month bm ON bm.branch_id = im.branch_id AND bm.bank_id = im.bank_id\n"
-    "  AND bm.month_id = im.month_id\n"
-    "WHERE bm.bank_id IS NULL\n"
-    "ORDER BY im.month_id, im.branch_id"
+    "first_ever AS (\n"
+    "  SELECT branch_id, bank_id, min(date_id) AS first_date_id\n"
+    "  FROM dwh.fact_balance GROUP BY branch_id, bank_id)\n"
+    "SELECT DISTINCT fe.branch_id, m.month_id\n"
+    "FROM first_ever fe\n"
+    "JOIN months m ON fe.first_date_id BETWEEN m.first_id AND m.end_id\n"
+    "ORDER BY m.month_id, fe.branch_id"
 )
 
 
@@ -146,6 +176,20 @@ def _warning_counts(conn: Connection, run_id: int) -> dict[str, int]:
             {"r": run_id},
         ).all()
     }
+
+
+def _missing_branch_count(conn: Connection, run_id: int) -> int:
+    # R2-3: `missing_branch` kodiga QO'SHIMCHA, branch kaliti BUTUNLAY yo'q/NULL bo'lgani
+    # sabab rad etilgan qatorlar `missing_value` kodi bilan yozilgan bo'lishi ham mumkin —
+    # `core.etl_error`da alohida "field" ustuni yo'q, haqiqiy maydon nomi `message`da
+    # saqlanadi (`app/etl/merge.py`dagi `early_branches`: `missing_value` xabari ANIQ ustun
+    # nomi, masalan "branch_code").
+    return int(conn.execute(
+        text("SELECT count(*) FROM core.etl_error WHERE run_id = :r AND severity = 'error' "
+             "AND (code = 'missing_branch' "
+             "OR (code = 'missing_value' AND message = 'branch_code'))"),
+        {"r": run_id},
+    ).scalar_one())
 
 
 def _capacity(conn: Connection, window: Window) -> CheckResult:
@@ -203,7 +247,7 @@ def run_checks(conn: Connection, *, run_id: int, build_id: int, source: str, win
 
     errors = _error_counts(conn, run_id)
     warnings = _warning_counts(conn, run_id)
-    missing_branch = errors.get("missing_branch", 0)
+    missing_branch = _missing_branch_count(conn, run_id)
     missing_dim = errors.get("missing_dim", 0)
     missing_item = warnings.get("missing_item", 0)
     return [

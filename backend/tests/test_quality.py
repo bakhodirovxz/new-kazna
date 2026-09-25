@@ -197,6 +197,37 @@ def test_balance_identity_unverifiable_new_account_excluded(source: str) -> None
     assert mine == []
 
 
+def test_balance_identity_mid_month_window_uses_calendar_month(source: str) -> None:
+    # R2-1: `_UNVERIFIABLE_SQL` oy chegaralarini HAQIQIY TAKVIM oyi (1-kundan) bo'yicha
+    # hisoblashi kerak, hatto `window.date_from` oy o'rtasida bo'lsa ham (Task-8 inkremental
+    # oynasi kabi). Hisobning BIRINCHI yozuvi 3-avgust — avgust oyi ICHIDA (1-avgustdan
+    # keyin), lekin `window.date_from` 6-avgustdan boshlanadi: agar oy chegarasi xom
+    # `date_from`dan hisoblansa, 3-avgust "6-avgustdan OLDIN" (demak "avvalgi qoldiq
+    # mavjud") deb noto'g'ri hisoblanib, yangi hisob YASHIRIN qolib ketadi.
+    tag = new_tag()
+    b = branch_row(tag)
+    code = b["code"]
+    rows: dict[str, list[dict[str, Any]]] = {
+        "dim_branch": [b],
+        "dim_bank": [{"code": f"ACC-{tag}", "bank_name": "Тест", "currency": "UZS"}],
+        "fact_balance": [
+            {"doc_type": "statement", "src_id": "a-o", "date_id": 20260803, "branch_code": code,
+             "bank_code": f"ACC-{tag}", "balance": 100},
+        ],
+    }
+    window = Window(date(2026, 8, 6), FULL_WINDOW.date_to)
+    run_id, build_id = load_and_build(source, rows, window=window)
+    with etl_transaction() as conn:
+        results = {
+            r.code: r for r in run_checks(conn, run_id=run_id, build_id=build_id,
+                                          source=source, window=window, totals=None)
+        }
+    bid = _branch_id(code)
+    assert results["balance_identity"].ok
+    assert {"branch_id": bid, "month_id": 202608} in results["balance_identity"].detail[
+        "unverifiable"]
+
+
 def test_balance_identity_scoped_to_own_build(source: str) -> None:
     # M6: `mart.agg_cash_month` bir nechta build'ning qatorlarini BIRGALIKDA saqlaydi
     # (build_all — butun ombor sinovi, har safar qayta hisoblanadi) — shuning uchun eski,
@@ -240,6 +271,24 @@ def test_balance_identity_scoped_to_own_build(source: str) -> None:
 def test_missing_branch_fails_mandatory_dims(source: str) -> None:
     rows = _clean(new_tag())
     rows["fact_cashflow"].append(cash_row("x", 20260805, "NO-BRANCH", 5))
+    results = _check(source, rows)
+    assert not results["mandatory_dims"].ok
+    assert results["mandatory_dims"].detail["logged_errors"] == 1
+
+
+def test_missing_branch_key_none_fails_mandatory_dims(source: str) -> None:
+    # R2-3: branch kaliti BUTUNLAY yo'q/NULL bo'lgan qator ham (nafaqat noma'lum kod)
+    # mandatory_dims'ni buzishi kerak.
+    tag = new_tag()
+    b = branch_row(tag)
+    rows: dict[str, list[dict[str, Any]]] = {
+        "dim_branch": [b],
+        "fact_cashflow": [
+            {"doc_type": "bank_entry", "src_id": "nb-none", "date_id": 20260805,
+             "branch_code": None, "item_code": OTHER_OUT_ITEM, "direction": "out",
+             "amount": 5, "gl_account": "5110"},
+        ],
+    }
     results = _check(source, rows)
     assert not results["mandatory_dims"].ok
     assert results["mandatory_dims"].detail["logged_errors"] == 1

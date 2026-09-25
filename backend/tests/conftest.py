@@ -1,6 +1,7 @@
 """Umumiy fixture'lar. Testlar HAQIQIY PostgreSQL 16 va Redis'ga qarshi ishlaydi."""
 
 from collections.abc import Callable, Iterator
+from datetime import date
 
 import pytest
 import redis as redis_lib
@@ -13,6 +14,10 @@ from app.bootstrap import bootstrap_runtime
 from app.core import keystore
 from app.core.config import get_settings
 from app.core.db import get_engine, new_session
+from app.dwh import builds
+from app.dwh.aggregates import BuildParams, build_all
+from app.etl.db import etl_transaction
+from app.etl.runner import RunResult
 from tests.helpers import SeedUser, create_user
 
 
@@ -94,3 +99,34 @@ def _clear_rate_limits() -> None:
 @pytest.fixture
 def make_user() -> Callable[..., SeedUser]:
     return create_user
+
+
+SYNTHETIC_SEED = 7
+
+
+@pytest.fixture(scope="session")
+def synthetic_run() -> RunResult:
+    """Butun sessiya uchun bir marta: sintetik ma'lumotning to'liq yuklanishi (~20–40 s)."""
+    from app.etl.runner import Runner
+    from app.etl.synthetic import SyntheticConnector
+    from app.etl.types import Mode
+    from tests.etl_helpers import TEST_AS_OF
+
+    result = Runner(SyntheticConnector(seed=SYNTHETIC_SEED, as_of=TEST_AS_OF),
+                    mode=Mode.FULL, today=TEST_AS_OF, sleep=lambda _: None).run()
+    assert result.status == "success", result
+    return result
+
+
+@pytest.fixture
+def published_synthetic(synthetic_run: RunResult) -> int:
+    """Aktiv build'da sintetik ma'lumot bo'lishini kafolatlaydi (boshqa testlar bo'sh
+    build publish qilgan bo'lishi mumkin)."""
+    from tests.etl_helpers import TEST_AS_OF
+
+    with etl_transaction() as conn:
+        build_id = builds.create_build(conn, synthetic_run.run_id)
+        build_all(conn, build_id, BuildParams(as_of=TEST_AS_OF, date_from=date(2024, 1, 1)))
+        builds.mark_ready(conn, build_id)
+        builds.publish(conn, build_id, keep=3)
+    return build_id

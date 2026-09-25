@@ -12,3 +12,4 @@ segno>=1.6,<2
 cryptography>=44
 redis>=5.2,<7
 structlog>=24.4
+apscheduler>=3.10,<4

@@ -20,7 +20,12 @@ from app.core.config import DbRole, get_settings
 @lru_cache(maxsize=3)
 def get_engine(role: DbRole = "app") -> Engine:
     settings = get_settings()
-    timeout = settings.db_statement_timeout_ms if role == "app" else 0
+    if role == "app":
+        timeout = settings.db_statement_timeout_ms
+    elif role == "etl":
+        timeout = settings.etl_statement_timeout_ms
+    else:
+        timeout = 0
     options = (
         f"-c statement_timeout={timeout} "
         "-c idle_in_transaction_session_timeout=60000 -c TimeZone=UTC"

@@ -66,7 +66,7 @@ def _restore_row(saved: dict[str, object]) -> None:
     vals = ", ".join(f"CAST(:{c} AS jsonb)" if c == "details" else f":{c}" for c in saved)
     saved = {**saved, "details": json.dumps(saved["details"])}
     with get_engine("migrator").begin() as conn:
-        conn.execute(text(f"INSERT INTO core.audit_log ({cols}) VALUES ({vals})"), saved)  # noqa: S608
+        conn.execute(text(f"INSERT INTO core.audit_log ({cols}) VALUES ({vals})"), saved)
 
 
 def test_record_stores_encrypted_ip_and_masked_details() -> None:
@@ -300,9 +300,9 @@ def test_app_role_cannot_write_audit_tables_directly() -> None:
     with new_session() as s, pytest.raises(ProgrammingError, match="permission denied"):
         s.execute(text("UPDATE core.audit_head SET last_id = last_id"))
     with new_session() as s, pytest.raises(ProgrammingError, match="permission denied"):
-        s.execute(text(f"UPDATE {partition} SET result = 'ok'"))  # noqa: S608 -- regclass'dan
+        s.execute(text(f"UPDATE {partition} SET result = 'ok'"))
     with new_session() as s, pytest.raises(ProgrammingError, match="permission denied"):
-        s.execute(text(f"DELETE FROM {partition}"))  # noqa: S608 -- nom regclass so'rovidan
+        s.execute(text(f"DELETE FROM {partition}"))
 
 
 def test_app_role_cannot_write_audit_anchor() -> None:

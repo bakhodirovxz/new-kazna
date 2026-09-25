@@ -55,3 +55,17 @@ def test_pg_url_escapes_password() -> None:
     url = make(db_app_password="p@ss:w/rd").pg_url("app")
     assert "p%40ss%3Aw%2Frd@" in url
     assert url.startswith("postgresql+psycopg://ugk_app:")
+
+
+def test_smtp_host_without_recipients_is_a_problem() -> None:
+    assert any("smtp_to" in p for p in make(smtp_host="relay").problems())
+    assert make(smtp_host="relay", smtp_to="a@uge.uz").problems() == []
+
+
+def test_etl_engine_has_long_statement_timeout() -> None:
+    from sqlalchemy import text
+
+    from app.core.db import get_engine
+
+    with get_engine("etl").connect() as conn:
+        assert conn.execute(text("SHOW statement_timeout")).scalar_one() == "30min"

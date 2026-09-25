@@ -66,6 +66,22 @@ class Settings(BaseSettings):
     login_max_failures: int = 5
     login_lockout_minutes: int = 15
 
+    etl_statement_timeout_ms: int = 1_800_000
+    etl_file_dir: str = "/data/inbox"
+    synthetic_seed: int = 916202617
+
+    smtp_host: str = ""
+    smtp_port: int = 25
+    smtp_from: str = "ugekazna@localhost"
+    smtp_to: str = ""
+    smtp_user: str = ""
+    smtp_password: SecretStr = SecretStr("")
+    smtp_starttls: bool = True
+
+    @property
+    def smtp_recipients(self) -> list[str]:
+        return [a.strip() for a in self.smtp_to.split(",") if a.strip()]
+
     def pg_url(self, role: DbRole) -> str:
         user: str = getattr(self, f"db_{role}_user")
         password: SecretStr = getattr(self, f"db_{role}_password")
@@ -105,6 +121,8 @@ class Settings(BaseSettings):
             out.append("db_app_password bo'sh")
         if self.argon2_profile == "fast_test" and self.env != "test":
             out.append("argon2_profile=fast_test faqat test muhitida")
+        if self.smtp_host and not self.smtp_recipients:
+            out.append("smtp_host berilgan, lekin smtp_to bo'sh")
         if self.env == "prod":
             if not self.base_url.startswith("https://"):
                 out.append("base_url https bo'lishi shart")

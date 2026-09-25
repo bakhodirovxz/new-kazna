@@ -12,6 +12,7 @@ Haqiqiy fayllar `deploy/secrets/` da (git'ga tushmaydi). Yaratish: `python scrip
 | master_kek | base64, 32 bayt — DEK'larni o'raydi |
 | blind_index_key | base64, 32 bayt — shifrlangan maydon qidiruvi |
 | session_pepper | base64, 32 bayt — token HMAC'lari |
+| smtp_password | ichki SMTP relay paroli (ixtiyoriy, bo'sh bo'lishi mumkin) — faqat worker |
 
 Prod (Linux): `chown root:10001 deploy/secrets/* && chmod 0440 deploy/secrets/*`.
 `master_kek` zaxirasi boshqa joyda (seyf/HSM) saqlanadi — u yo'qolsa shifrlangan ma'lumot tiklanmaydi.

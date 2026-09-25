@@ -20,6 +20,8 @@ PASSWORDS = (
     "db_etl_password",
     "redis_password",
 )
+# Ichki SMTP relay parolsiz bo'lsa bo'sh qoladi; kerak bo'lsa operator to'ldiradi.
+EMPTY_OPTIONAL = ("smtp_password",)
 
 
 def _write(path: Path, value: str) -> None:
@@ -37,6 +39,8 @@ def main(target: Path) -> None:
         _write(target / name, base64.b64encode(secrets.token_bytes(32)).decode("ascii"))
     for name in PASSWORDS:
         _write(target / name, secrets.token_urlsafe(32))
+    for name in EMPTY_OPTIONAL:
+        _write(target / name, "")
 
 
 if __name__ == "__main__":

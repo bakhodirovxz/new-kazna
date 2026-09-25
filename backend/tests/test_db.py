@@ -80,7 +80,20 @@ def test_etl_engine_hides_parameters() -> None:
 
 
 def test_etl_engine_does_not_leak_bound_value_on_error() -> None:
+    """Fix r2, Minor 3: haqiqiy bog'langan parametr — `hide_parameters` faqat SQLAlchemy o'zi
+    xato matniga qo'shadigan "[parameters: ...]" qismini nazorat qiladi (Postgres'ning o'z
+    server-side xato DETAIL'ini emas — masalan `CAST('x' AS int)`dagi kabi "invalid input
+    syntax" xatolari qiymatni serverning o'zi qaytaradi, hide_parameters'dan qat'i nazar —
+    shu sababli xato SQL STRUKTURASI bilan bog'liq, qiymat bilan emas, qilib tanlangan:
+    mavjud bo'lmagan jadval — Postgres qiymatni hech qachon aks ettirmaydi, faqat SQLAlchemy
+    o'zi qo'shadi). Avval `app` ulanishida XATO XABARIDA QIYMAT CHIQISHINI tasdiqlaymiz (aks
+    holda test hech narsani isbotlamas edi), keyin `etl` ulanishida chiqmasligini."""
     secret = "super-secret-inn-value-should-not-leak"
-    with get_engine("etl").connect() as conn, pytest.raises(DBAPIError) as exc:
-        conn.execute(text("SELECT :v::int"), {"v": secret})
-    assert secret not in str(exc.value)
+
+    with get_engine("app").connect() as conn, pytest.raises(DBAPIError) as app_exc:
+        conn.execute(text("SELECT :v FROM core.no_such_table_xyz"), {"v": secret})
+    assert secret in str(app_exc.value)
+
+    with get_engine("etl").connect() as conn, pytest.raises(DBAPIError) as etl_exc:
+        conn.execute(text("SELECT :v FROM core.no_such_table_xyz"), {"v": secret})
+    assert secret not in str(etl_exc.value)

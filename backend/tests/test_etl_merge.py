@@ -1,3 +1,4 @@
+import time
 from collections.abc import Iterator
 from datetime import date
 from typing import Any
@@ -386,3 +387,139 @@ def test_recounterparty_inn_merge_is_noop(source: str) -> None:
     run2 = _stage_cp()
     stats2 = {s.target: s for s in merge_all(run2, source)}
     assert stats2["dim_counterparty"].upserted == 0
+
+
+# ── Fix r2, R2-1: umumiy CHECK/NOT NULL tekshiruvi (nonneg regex o'rniga) ──
+
+
+def test_check_in_list_violation_becomes_check_violation(source: str) -> None:
+    branch = branch_row(new_tag())
+    run_id, stats = _load(source, {"dim_branch": [branch], "fact_cashflow": [
+        cash_row("baddir", 20260805, branch["code"], 5, direction="x"),
+        cash_row("ok8", 20260805, branch["code"], 3),
+    ]})
+    assert stats["fact_cashflow"].upserted == 1
+    assert stats["fact_cashflow"].errors == 1
+    assert [r[0] for r in _cash(source)] == ["ok8"]
+    assert ("error", "check_violation") in _errors(run_id)
+
+
+def test_null_amount_becomes_missing_value_error(source: str) -> None:
+    branch = branch_row(new_tag())
+    run_id, stats = _load(source, {"dim_branch": [branch], "fact_cashflow": [
+        cash_row("noamt", 20260805, branch["code"], None),
+        cash_row("ok9", 20260805, branch["code"], 3),
+    ]})
+    assert stats["fact_cashflow"].upserted == 1
+    assert stats["fact_cashflow"].errors == 1
+    assert [r[0] for r in _cash(source)] == ["ok9"]
+    assert ("error", "missing_value") in _errors(run_id)
+
+
+def test_missing_src_id_becomes_missing_value_error(source: str) -> None:
+    branch = branch_row(new_tag())
+    run_id = open_run(source)
+    stage(run_id, source, {"dim_branch": [branch], "fact_cashflow": [
+        {"doc_type": "bank_entry", "date_id": 20260805, "branch_code": branch["code"],
+         "item_code": OTHER_OUT_ITEM, "direction": "out", "amount": 3, "gl_account": "5110"},
+    ]})
+    stats = {s.target: s for s in merge_all(run_id, source)}
+    assert stats["fact_cashflow"].upserted == 0
+    assert stats["fact_cashflow"].errors == 1
+    assert ("error", "missing_value") in _errors(run_id)
+
+
+def test_bad_currency_becomes_check_violation(source: str) -> None:
+    run_id = open_run(source)
+    stage(run_id, source, {"fx_rate": [{"currency": "usd", "date_id": 20260805, "rate": 1.0}]})
+    stats = {s.target: s for s in merge_all(run_id, source)}
+    assert stats["fx_rate"].upserted == 0
+    assert stats["fx_rate"].errors == 1
+    assert ("error", "check_violation") in _errors(run_id)
+
+
+def test_zero_fx_rate_becomes_check_violation(source: str) -> None:
+    run_id = open_run(source)
+    stage(run_id, source, {"fx_rate": [{"currency": "USD", "date_id": 20260805, "rate": 0}]})
+    stats = {s.target: s for s in merge_all(run_id, source)}
+    assert stats["fx_rate"].upserted == 0
+    assert stats["fx_rate"].errors == 1
+    assert ("error", "check_violation") in _errors(run_id)
+
+
+# ── Fix r2, R2-2 (regressiya): NULL/yo'q date_id jimgina tashlab yuborilmaydi ──
+
+
+def test_null_date_id_becomes_error_not_silently_dropped(source: str) -> None:
+    branch = branch_row(new_tag())
+    run_id, stats = _load(source, {"dim_branch": [branch], "fact_cashflow": [
+        cash_row("nodate", None, branch["code"], 5),
+        cash_row("ok10", 20260805, branch["code"], 3),
+    ]})
+    assert stats["fact_cashflow"].upserted == 1
+    assert stats["fact_cashflow"].errors == 1
+    assert [r[0] for r in _cash(source)] == ["ok10"]
+    assert ("error", "missing_value") in _errors(run_id)
+
+
+# ── Fix r2, R2-3: dedup TEKSHIRUVDAN OLDIN — batch ichida eskiroq yaroqli qatorga qaytilmaydi ──
+
+
+def test_dedupe_before_validation_latest_invalid_skips_document(source: str) -> None:
+    branch = branch_row(new_tag())
+    run_id, stats = _load(source, {"dim_branch": [branch], "fact_cashflow": [
+        cash_row("dv2", 20260805, branch["code"], 10),          # yaroqli, eskiroq (kichik seq)
+        cash_row("dv2", 20260805, branch["code"], "garbage"),   # yaroqsiz, oxirgi (katta seq)
+    ]})
+    assert stats["fact_cashflow"].upserted == 0
+    assert _cash(source) == []
+    assert ("error", "invalid_type") in _errors(run_id)
+
+
+# ── Fix r2, Minor 3: hide_parameters — haqiqiy bind-parametr, app ENGINE oqib chiqishini ham
+# tekshiradi (test ma'noliligini isbotlash uchun) — bu test tests/test_db.py'ga ko'chirildi.
+
+
+# ── Fix r2, Minor 4: bo'sh satr nullable lookup uchun "berilmagan" deb ko'riladi ──
+
+
+def test_empty_nullable_lookup_code_treated_as_absent(source: str) -> None:
+    branch = branch_row(new_tag())
+    _, stats = _load(source, {"dim_branch": [branch], "fact_cashflow": [
+        cash_row("cp-empty", 20260805, branch["code"], 5, cp_code=""),
+    ]})
+    assert stats["fact_cashflow"].upserted == 1
+    assert stats["fact_cashflow"].errors == 0
+    with etl_transaction() as conn:
+        cp_id = conn.execute(
+            text("SELECT cp_id FROM dwh.fact_cashflow WHERE src_system = :s AND src_id = "
+                 "'cp-empty'"), {"s": source}).scalar_one()
+    assert cp_id is None
+
+
+# ── Fix r2, Minor 6: tur xatosi VA lookup yo'qligi bitta qatorda — faqat bitta xato ──
+
+
+def test_type_error_and_lookup_miss_counted_once(source: str) -> None:
+    run_id, stats = _load(source, {"fact_cashflow": [
+        cash_row("bad_both", 20260805, "NO-BRANCH", "abc"),
+    ]})
+    assert stats["fact_cashflow"].errors == 1
+    assert stats["fact_cashflow"].upserted == 0
+    assert _errors(run_id) == [("error", "invalid_type")]
+
+
+# ── Fix r2, R2-4: unumdorlik — bitta katta partiya oqilona vaqtda tugashi kerak ──
+
+
+def test_large_batch_merges_within_time_budget(source: str) -> None:
+    branch = branch_row(new_tag())
+    run_id = open_run(source)
+    n = 20_000
+    rows = [cash_row(f"perf-{i}", 20260805, branch["code"], 1) for i in range(n)]
+    stage(run_id, source, {"dim_branch": [branch], "fact_cashflow": rows})
+    start = time.monotonic()
+    stats = {s.target: s for s in merge_all(run_id, source)}
+    elapsed = time.monotonic() - start
+    assert stats["fact_cashflow"].upserted == n
+    assert elapsed < 20.0

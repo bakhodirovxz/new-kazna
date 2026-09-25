@@ -444,24 +444,38 @@ def staged_targets(conn: Connection, load_id: int) -> set[str]:
         text("SELECT target FROM stg.batch WHERE load_id = :l"), {"l": load_id}).scalars())
 
 
+# Fix r-quality-1 (I2): `core.etl_error` yozuvi hozon ham `ERROR_LIMIT`ga cheklangan — ammo
+# tasodifiy (rejalashtiruvchi tanlagan) tartibda emas, BLOKLOVCHI kodlar ustuvor tartibda
+# yoziladi (`missing_branch` → `missing_dim` → qolganlari, barqaror tie-break `stage_src_id`
+# bo'yicha), shunda cheklov ostida ham kamida bitta bloklovchi kod (agar mavjud bo'lsa)
+# har doim yozib qolinadi — sifat tekshiruvlari (`app/etl/quality.py`) faqat shu yozilgan
+# qatorlarni ko'radi. `LIMIT` endi bog'lash parametri (`:limit`) — moduldagi `ERROR_LIMIT`
+# global o'zgaruvchisi har chaqiruvda o'qiladi (testlarda monkeypatch qilinishi mumkin).
 _ERROR_COUNT_SQL = f"SELECT count(*) FROM {STAGE_TABLE} WHERE NOT ok"
 _ERROR_INSERT_SQL = (
     "INSERT INTO core.etl_error (run_id, step, severity, target, src_id, code, message)\n"
     "SELECT :load_id, :step, error_severity, CAST(:target AS varchar), stage_src_id, error_code, "
-    f"error_detail\nFROM {STAGE_TABLE} WHERE NOT ok\nLIMIT {ERROR_LIMIT}"
+    f"error_detail\nFROM {STAGE_TABLE} WHERE NOT ok\n"
+    "ORDER BY (CASE error_code WHEN 'missing_branch' THEN 0 WHEN 'missing_dim' THEN 1 "
+    "ELSE 2 END), stage_src_id\n"
+    "LIMIT :limit"
 )
 _WARNING_COUNT_SQL = f"SELECT count(*) FROM {STAGE_TABLE} WHERE warn_code IS NOT NULL"
 _WARNING_INSERT_SQL = (
     "INSERT INTO core.etl_error (run_id, step, severity, target, src_id, code, message)\n"
     "SELECT :load_id, :step, 'warning', CAST(:target AS varchar), stage_src_id, warn_code, "
-    f"warn_detail\nFROM {STAGE_TABLE} WHERE warn_code IS NOT NULL\nLIMIT {ERROR_LIMIT}"
+    f"warn_detail\nFROM {STAGE_TABLE} WHERE warn_code IS NOT NULL\nORDER BY stage_src_id\n"
+    "LIMIT :limit"
 )
 
 
 def merge_target(conn: Connection, name: str, *, load_id: int, source: str, step: str,
                  as_of: date, window: Window | None = None, replace: bool = False) -> MergeStats:
     t = TARGETS[name]
-    params = {"load_id": load_id, "source": source, "target": name, "step": step}
+    # `limit` — global `ERROR_LIMIT`dan HAR CHAQIRUVDA o'qiladi (fix r-quality-1, I2): testlar
+    # `app.etl.merge.ERROR_LIMIT`ni monkeypatch qilib cheklovni kichraytirishi mumkin.
+    params = {"load_id": load_id, "source": source, "target": name, "step": step,
+             "limit": ERROR_LIMIT}
 
     # Fix r2, R2-4: bitta partiya uchun bitta materiallashtirish — pastdagi barcha hisob va
     # yozuvlar shu jadvaldan, stg.rows'ni qayta skanlamay olinadi.

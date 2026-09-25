@@ -328,11 +328,12 @@ def test_update_role_cannot_edit_own_role(client: TestClient) -> None:
 def test_admin_role_permissions_are_protected(
     client: TestClient, make_user: Callable[..., SeedUser]
 ) -> None:
-    """I3/admin_role_protected: "admin" rolining o'zida bo'lmagan actor (faqat `admin:roles`
-    va `section:obzor:view`ga ega) "admin" rolidan ADMIN_GUARANTEED ruxsatlarini olib
-    tashlashga urinadi — `cannot_modify_self` bu yerda ishlamaydi (actor.role_code != "admin"),
-    shuning uchun `admin_role_protected` chin sinaladi."""
-    actor = make_user(_make_role({"admin:roles", "section:obzor:view"}))
+    """I3/admin_role_protected: "admin" rolining o'zida bo'lmagan, lekin uning BARCHA
+    HOZIRGI ruxsatlariga ega actor (F2 pre-check'dan o'tishi uchun) "admin" rolidan
+    ADMIN_GUARANTEED ruxsatlarini olib tashlashga urinadi — `cannot_modify_self` bu yerda
+    ishlamaydi (actor.role_code != "admin"), shuning uchun `admin_role_protected` chin
+    sinaladi."""
+    actor = make_user(_make_role(_role_perms_for_code("admin") | {"section:obzor:view"}))
     login(client, actor)
     roles = client.get("/api/v1/admin/roles").json()
     admin_role = next(x for x in roles if x["code"] == "admin")
@@ -476,6 +477,41 @@ def test_update_role_scope_all_forbidden_for_branch_limited_actor(
     assert r.json()["error"]["code"] == "privilege_escalation"
 
 
+def test_update_role_current_permissions_out_of_reach_forbidden(
+    client: TestClient, make_user: Callable[..., SeedUser]
+) -> None:
+    """F2 (R2-2 mirror): faqat `admin:roles`ga ega actor "admin" rolini — uning HOZIRGI
+    ruxsatlari actor'da yo'q bo'lgani uchun — hech qanday maydon (hatto faqat `name`) bo'yicha
+    ham tahrirlay olmaydi. `cannot_modify_self` bu yerda ishlamaydi (actor.role_code != "admin")."""
+    actor = make_user(_make_role({"admin:roles"}))
+    login(client, actor)
+    roles = client.get("/api/v1/admin/roles").json()
+    admin_role = next(x for x in roles if x["code"] == "admin")
+    r = client.patch(f"/api/v1/admin/roles/{admin_role['id']}", json={"name": "X"})
+    assert r.status_code == 403
+    assert r.json()["error"]["code"] == "privilege_escalation"
+
+
+def test_update_role_current_scope_all_forbidden_for_branch_limited_actor(
+    client: TestClient, admin: SeedUser, make_user: Callable[..., SeedUser]
+) -> None:
+    """F2: filial doirasi bilan cheklangan actor HOZIRGI scope_all=True rolga umuman
+    tegina olmaydi — `scope_all` maydoni PATCH so'rovida ishtirok etmasa (masalan, faqat
+    `name` o'zgartirilsa) ham."""
+    created = client.post("/api/v1/admin/roles", json={
+        "code": f"tgt_{uuid.uuid4().hex[:6]}", "name": "Target", "scope_all": True,
+        "permissions": []})
+    assert created.status_code == 201
+    role_id = created.json()["id"]
+
+    limited = make_user(_make_role({"admin:roles"}, scope_all=False), branch_ids=(1,))
+    limited_client = TestClient(client.app, base_url="https://testserver")
+    login(limited_client, limited)
+    r = limited_client.patch(f"/api/v1/admin/roles/{role_id}", json={"name": "Renamed"})
+    assert r.status_code == 403
+    assert r.json()["error"]["code"] == "privilege_escalation"
+
+
 def test_create_position_branch_escalation_forbidden(
     client: TestClient, make_user: Callable[..., SeedUser]
 ) -> None:
@@ -493,14 +529,18 @@ def test_create_position_branch_escalation_forbidden(
 def test_update_position_branch_escalation_forbidden(
     client: TestClient, admin: SeedUser, make_user: Callable[..., SeedUser]
 ) -> None:
-    """R2-3(b): xuddi shu narsa mavjud lavozimni yangilashda ham amal qiladi."""
+    """R2-3(b): xuddi shu narsa mavjud lavozimni yangilashda ham amal qiladi. Actor'ga
+    lavozimning HOZIRGI roli (`economist_filiala`) ruxsatlari ham beriladi — aks holda F2
+    (R2-2 mirror) pre-check bu testdan OLDIN ishlab, uni branch-escalation emas, "HOZIRGI
+    rol yetib bo'lmas" holatiga aylantirib qo'yardi."""
     created = client.post("/api/v1/admin/positions", json={
         "code": f"pos_{uuid.uuid4().hex[:6]}", "name": "X",
         "role_id": _role_id("economist_filiala"), "branch_ids": [1]})
     assert created.status_code == 201
     position_id = created.json()["id"]
 
-    limited = make_user(_make_role({"admin:roles"}, scope_all=False), branch_ids=(1,))
+    actor_perms = _role_perms_for_code("economist_filiala") | {"admin:roles"}
+    limited = make_user(_make_role(actor_perms, scope_all=False), branch_ids=(1,))
     limited_client = TestClient(client.app, base_url="https://testserver")
     login(limited_client, limited)
     r = limited_client.patch(
@@ -566,6 +606,9 @@ def test_update_user_position_scope_all_forbidden_for_branch_limited_actor(
 def test_update_position_role_privilege_escalation_forbidden(
     client: TestClient, admin: SeedUser, make_user: Callable[..., SeedUser]
 ) -> None:
+    """Actor'ga lavozimning HOZIRGI roli (`economist_filiala`) ruxsatlari ham beriladi —
+    aks holda F2 (R2-2 mirror) pre-check bu testdan OLDIN ishlab, uni "yangi rolga
+    eskalatsiya" emas, "HOZIRGI rol yetib bo'lmas" holatiga aylantirib qo'yardi."""
     code = f"pos_{uuid.uuid4().hex[:6]}"
     created = client.post("/api/v1/admin/positions", json={
         "code": code, "name": "Test position", "role_id": _role_id("economist_filiala"),
@@ -573,11 +616,87 @@ def test_update_position_role_privilege_escalation_forbidden(
     assert created.status_code == 201
     position_id = created.json()["id"]
 
-    limited = make_user(_make_role({"admin:roles"}))
+    actor_perms = _role_perms_for_code("economist_filiala") | {"admin:roles"}
+    limited = make_user(_make_role(actor_perms))
     limited_client = TestClient(client.app, base_url="https://testserver")
     login(limited_client, limited)
     r = limited_client.patch(
         f"/api/v1/admin/positions/{position_id}", json={"role_id": _role_id("rukovodstvo")}
+    )
+    assert r.status_code == 403
+    assert r.json()["error"]["code"] == "privilege_escalation"
+
+
+def test_update_position_current_role_out_of_reach_forbidden(
+    client: TestClient, admin: SeedUser, make_user: Callable[..., SeedUser]
+) -> None:
+    """F2 (R2-2 mirror): faqat `admin:roles`ga ega actor "admin" rolidagi lavozimni —
+    uning HOZIRGI roli orqali beriladigan ruxsatlar actor'da yo'qligi sababli — hech qanday
+    maydon (hatto faqat `is_active`) bo'yicha ham o'zgartira olmaydi."""
+    created = client.post("/api/v1/admin/positions", json={
+        "code": f"pos_{uuid.uuid4().hex[:6]}", "name": "Admin position copy",
+        "role_id": _role_id("admin"), "branch_ids": []})
+    assert created.status_code == 201
+    position_id = created.json()["id"]
+
+    limited = make_user(_make_role({"admin:roles"}))
+    limited_client = TestClient(client.app, base_url="https://testserver")
+    login(limited_client, limited)
+    r = limited_client.patch(
+        f"/api/v1/admin/positions/{position_id}", json={"is_active": False}
+    )
+    assert r.status_code == 403
+    assert r.json()["error"]["code"] == "privilege_escalation"
+
+
+def test_update_position_current_scope_all_forbidden_for_branch_limited_actor(
+    client: TestClient, admin: SeedUser, make_user: Callable[..., SeedUser]
+) -> None:
+    """F2: filial doirasi bilan cheklangan actor HOZIRGI scope_all rolidagi lavozimga
+    umuman tegina olmaydi — `role_id`/`branch_ids` maydonlari PATCH'da ishtirok etmasa
+    (masalan, faqat `name` o'zgartirilsa) ham."""
+    created = client.post("/api/v1/admin/positions", json={
+        "code": f"pos_{uuid.uuid4().hex[:6]}", "name": "X",
+        "role_id": _role_id("profil_sluzhba"), "branch_ids": []})
+    assert created.status_code == 201
+    position_id = created.json()["id"]
+
+    actor_perms = _role_perms_for_code("profil_sluzhba") | {"admin:roles"}
+    limited = make_user(_make_role(actor_perms, scope_all=False), branch_ids=(1,))
+    limited_client = TestClient(client.app, base_url="https://testserver")
+    login(limited_client, limited)
+    r = limited_client.patch(
+        f"/api/v1/admin/positions/{position_id}", json={"name": "Renamed"}
+    )
+    assert r.status_code == 403
+    assert r.json()["error"]["code"] == "privilege_escalation"
+
+
+def test_update_position_new_role_id_scope_all_forbidden_for_branch_limited_actor(
+    client: TestClient, admin: SeedUser, make_user: Callable[..., SeedUser]
+) -> None:
+    """F2: kechiktirilgan nuqson — lavozimning YANGI `role_id`si ham doira tekshiruvidan
+    o'tishi kerak: filial doirasi bilan cheklangan actor lavozimni scope_all rolga
+    ko'chira olmaydi, garchi HOZIRGI rol (`economist_filiala`) va filiallar uning doirasida
+    bo'lsa va u yangi rolning (`profil_sluzhba`) barcha ruxsatlariga ega bo'lsa ham (I3 emas,
+    aynan yangi rol uchun doira tekshiruvi ishlashi izolyatsiya qilingan)."""
+    created = client.post("/api/v1/admin/positions", json={
+        "code": f"pos_{uuid.uuid4().hex[:6]}", "name": "X",
+        "role_id": _role_id("economist_filiala"), "branch_ids": [1]})
+    assert created.status_code == 201
+    position_id = created.json()["id"]
+
+    actor_perms = (
+        _role_perms_for_code("economist_filiala")
+        | _role_perms_for_code("profil_sluzhba")
+        | {"admin:roles"}
+    )
+    limited = make_user(_make_role(actor_perms, scope_all=False), branch_ids=(1,))
+    limited_client = TestClient(client.app, base_url="https://testserver")
+    login(limited_client, limited)
+    r = limited_client.patch(
+        f"/api/v1/admin/positions/{position_id}",
+        json={"role_id": _role_id("profil_sluzhba")},
     )
     assert r.status_code == 403
     assert r.json()["error"]["code"] == "privilege_escalation"
@@ -717,6 +836,48 @@ def test_temporary_password_not_leaked_into_audit_log(client: TestClient) -> Non
     blob = "\n".join(rows)
     assert temp_create not in blob
     assert temp_reset not in blob
+
+
+@pytest.mark.usefixtures("admin")
+def test_role_created_audit_details_contain_unmasked_role_code(client: TestClient) -> None:
+    """F1: `details`dagi kalit `role_code` (`code` emas) — `logging.mask` `code` kalitini
+    "sezgir" deb topib "***"ga aylantirib qo'yishi oldini oladi."""
+    code = f"aud_{uuid.uuid4().hex[:6]}"
+    r = client.post("/api/v1/admin/roles", json={
+        "code": code, "name": "Audit Role", "scope_all": True, "permissions": []})
+    assert r.status_code == 201, r.text
+    role_id = r.json()["id"]
+    with get_engine("app").connect() as conn:
+        details = conn.execute(
+            text(
+                "SELECT details FROM core.audit_log "
+                "WHERE object_type = 'role' AND object_id = :i"
+            ),
+            {"i": str(role_id)},
+        ).scalar_one()
+    assert details["role_code"] == code
+
+
+@pytest.mark.usefixtures("admin")
+def test_position_created_audit_details_contain_unmasked_position_code(
+    client: TestClient,
+) -> None:
+    """F1: xuddi shu narsa lavozimlar uchun — `position_code` maskalanmaydi."""
+    code = f"aud_{uuid.uuid4().hex[:6]}"
+    r = client.post("/api/v1/admin/positions", json={
+        "code": code, "name": "Audit Position",
+        "role_id": _role_id("economist_filiala"), "branch_ids": []})
+    assert r.status_code == 201, r.text
+    position_id = r.json()["id"]
+    with get_engine("app").connect() as conn:
+        details = conn.execute(
+            text(
+                "SELECT details FROM core.audit_log "
+                "WHERE object_type = 'position' AND object_id = :i"
+            ),
+            {"i": str(position_id)},
+        ).scalar_one()
+    assert details["position_code"] == code
 
 
 def test_forbidden_admin_access_is_audited(

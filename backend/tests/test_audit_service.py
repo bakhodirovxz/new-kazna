@@ -17,6 +17,7 @@ from app.audit.service import (
     chain_hash,
     ip_aad,
     record,
+    ua_aad,
     verify_chain_snapshot,
 )
 from app.core import keystore
@@ -87,6 +88,14 @@ def test_record_stores_encrypted_ip_and_masked_details() -> None:
     # emas.
     month = row["ts"].strftime("%Y%m")  # type: ignore[union-attr]
     assert row["part"] == f"core.audit_log_{month}"
+
+
+def test_ip_ua_aad_follow_global_convention() -> None:
+    """Cheap minor (final review): AAD `{schema}.{table}.{column}:{pk}` global konvensiyasiga
+    mos bo'lishi kerak — `reencrypt.REENCRYPT_EXEMPT` registridagi ustun nomlari
+    (`core.audit_log.ip_enc`/`ua_enc`) bilan bir xil, "ip"/"ua" emas."""
+    assert ip_aad(42) == "core.audit_log.ip_enc:42"
+    assert ua_aad(42) == "core.audit_log.ua_enc:42"
 
 
 def test_chain_is_valid_after_records() -> None:

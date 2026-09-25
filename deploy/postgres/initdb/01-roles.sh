@@ -18,9 +18,14 @@ for v in "$MIGRATOR_PW" "$APP_PW" "$ETL_PW"; do
   fi
 done
 
-psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" \
-  -v migrator_pw="$MIGRATOR_PW" -v app_pw="$APP_PW" -v etl_pw="$ETL_PW" \
-  -v dbname="$POSTGRES_DB" <<'SQL'
+# Parollar `psql -v` argv orqali EMAS — STDIN orqali `\set` meta-buyrug'i bilan uzatiladi:
+# argv konteyner ichida boshqa (hatto imtiyozsiz) jarayonlarga `ps`/`/proc/<pid>/cmdline`
+# orqali ko'rinadi, STDIN esa yo'q. `dbname` sir emas, argv'da qolaveradi.
+{
+  printf '\\set migrator_pw %s\n' "$MIGRATOR_PW"
+  printf '\\set app_pw %s\n' "$APP_PW"
+  printf '\\set etl_pw %s\n' "$ETL_PW"
+  cat <<'SQL'
 CREATE ROLE ugk_migrator LOGIN PASSWORD :'migrator_pw';
 CREATE ROLE ugk_app LOGIN NOBYPASSRLS PASSWORD :'app_pw';
 CREATE ROLE ugk_etl LOGIN NOBYPASSRLS PASSWORD :'etl_pw';
@@ -30,3 +35,5 @@ GRANT CONNECT ON DATABASE :"dbname" TO ugk_migrator, ugk_app, ugk_etl;
 ALTER SCHEMA public OWNER TO ugk_migrator;
 REVOKE ALL ON SCHEMA public FROM PUBLIC;
 SQL
+} | psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" \
+  -v dbname="$POSTGRES_DB"

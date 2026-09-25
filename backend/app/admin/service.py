@@ -389,8 +389,10 @@ def create_role(db: Session, actor: AuthContext, data: RoleIn, meta: ClientMeta)
         raise ConflictError("code_taken") from exc
     _set_permissions(db, role.id, perms)
     db.flush()
+    # F1: `code` kaliti logging.mask'da "sezgir" deb topilib "***"ga aylantiriladi — audit
+    # qatorida rol kodini o'qish uchun `role_code` ishlatiladi.
     log_event(meta, AuditAction.ROLE_CREATED, user_id=actor.user_id, object_type="role",
-              object_id=role.id, details={"code": role.code, "permissions": perms})
+              object_id=role.id, details={"role_code": role.code, "permissions": perms})
     return _role_out(db, role)
 
 
@@ -404,6 +406,15 @@ def update_role(
     # tasodifan huquqlardan mahrum qilishi yoki (rol bo'lsa) kengaytirishi mumkin edi.
     if role.code == actor.role_code:
         raise ConflictError("cannot_modify_self")
+    # F2 (R2-2 mirror): PATCH boshlanishidan oldin — rolning HOZIRGI ruxsatlari actor'da
+    # bo'lishi shart, aks holda faqat admin:roles'ga ega actor "admin" rolini (yoki o'zida
+    # yo'q ruxsatlarga ega istalgan rolni) hech qanday maydon bo'yicha (hatto faqat `name`)
+    # tahrirlay olardi.
+    _assert_no_escalation(actor, _role_permission_codes(db, role.id))
+    # F2: filial doirasi bilan cheklangan actor HOZIRGI scope_all=True rolga umuman tegina
+    # olmaydi — bu tekshiruv `data.scope_all`dan qat'i nazar (masalan, actor bir vaqtning
+    # o'zida `scope_all: false`ga o'zgartirib, tekshiruvni "aylanib o'tishga" harakat qilsa ham).
+    _assert_no_scope_all_escalation(actor, role.scope_all)
     # R2-3(a): natijaviy (yangi yoki o'zgarishsiz qolgan) scope_all qiymati True bo'lsa,
     # filial doirasi bilan cheklangan actor bu rolni boshqara olmaydi.
     effective_scope_all = data.scope_all if data.scope_all is not None else role.scope_all
@@ -459,9 +470,11 @@ def _set_branches(db: Session, position_id: int, branch_ids: list[int]) -> None:
         db.add(PositionBranch(position_id=position_id, branch_id=branch))
 
 
-def _require_role(db: Session, role_id: int) -> None:
-    if db.get(Role, role_id) is None:
+def _require_role(db: Session, role_id: int) -> Role:
+    role = db.get(Role, role_id)
+    if role is None:
         raise ValidationFailed("validation_failed", fields=["role_id"])
+    return role
 
 
 def create_position(
@@ -481,9 +494,11 @@ def create_position(
         raise ConflictError("code_taken") from exc
     _set_branches(db, position.id, data.branch_ids)
     db.flush()
+    # F1: `code` mask ostiga tushadi — audit qatorida `position_code` ishlatiladi.
     log_event(meta, AuditAction.POSITION_CREATED, user_id=actor.user_id, object_type="position",
-              object_id=position.id, details={"code": position.code, "role_id": position.role_id,
-                                              "branch_ids": sorted(set(data.branch_ids))})
+              object_id=position.id,
+              details={"position_code": position.code, "role_id": position.role_id,
+                       "branch_ids": sorted(set(data.branch_ids))})
     return _position_out(db, position)
 
 
@@ -500,15 +515,26 @@ def update_position(
     position = db.get(Position, position_id, with_for_update=True)
     if position is None:
         raise NotFoundError()
+    # F2 (R2-2 mirror): PATCH boshlanishidan oldin — lavozimning HOZIRGI roli orqali beriladigan
+    # ruxsatlar actor'da bo'lishi shart, aks holda faqat admin:roles'ga ega actor "admin"
+    # lavozimini (hatto faqat `is_active`/`branch_ids`ni) o'zgartira olardi. Filial doirasi
+    # bilan cheklangan actor uchun qo'shimcha: HOZIRGI rol scope_all bo'lmasin va HOZIRGI
+    # filiallar to'plami actor doirasida bo'lsin (R2-3).
+    _assert_no_escalation(actor, _role_permission_codes(db, position.role_id))
+    _assert_no_scope_escalation(db, actor, position)
     details: dict[str, object] = {}
     scope_changed = False
     if data.name is not None:
         position.name = data.name
         details["name"] = data.name
     if data.role_id is not None and data.role_id != position.role_id:
-        _require_role(db, data.role_id)
+        new_role = _require_role(db, data.role_id)
         # I3: lavozimning roli o'zgartirilganda ham eskalatsiya taqiqlanadi.
         _assert_no_escalation(actor, _role_permission_codes(db, data.role_id))
+        # F2: kechiktirilgan nuqson — yangi `role_id` ham doira tekshiruvidan o'tishi kerak
+        # (R2-3(a) mirror): filial doirasi bilan cheklangan actor lavozimni scope_all rolga
+        # ko'chira olmaydi.
+        _assert_no_scope_all_escalation(actor, new_role.scope_all)
         details["role_id"] = [position.role_id, data.role_id]
         position.role_id = data.role_id
         scope_changed = True

@@ -15,8 +15,16 @@ RUN python -m venv /opt/venv \
 # ── 2-bosqich: ishchi image ─────────────────────────────────────────
 FROM python:3.12-slim-bookworm AS runtime
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PATH="/opt/venv/bin:$PATH"
+# Korporativ TLS-inspeksiya CA'sini RUNTIME image'ga ishonchli deb belgilash ixtiyoriy
+# (build-arg, sukut bo'yicha `false`) — bugun (10.0.90.52) 1C oddiy HTTP orqali ishlaydi,
+# runtime'da tashqi HTTPS integratsiyasi yo'q. Faqat shunday integratsiya kerak bo'lganda
+# `--build-arg RUNTIME_EXTRA_CA=true` bilan yoqiladi (backend/certs/README.md'ga qarang).
+ARG RUNTIME_EXTRA_CA=false
 COPY certs/ /usr/local/share/ca-certificates/
-RUN update-ca-certificates \
+RUN if [ "$RUNTIME_EXTRA_CA" != "true" ]; then \
+      find /usr/local/share/ca-certificates/ -name '*.crt' -delete; \
+    fi \
+ && update-ca-certificates \
  && groupadd --gid 10001 ugk \
  && useradd --uid 10001 --gid 10001 --no-create-home --shell /usr/sbin/nologin ugk
 ENV SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt

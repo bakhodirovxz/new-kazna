@@ -98,11 +98,14 @@ class ChainReport:
 
 
 def ip_aad(audit_id: int) -> str:
-    return f"core.audit_log.ip:{audit_id}"
+    # Global konvensiyaga moslashtirilgan (cheap minor, final review): {schema}.{table}.
+    # {column}:{pk} — REENCRYPT_EXEMPT registridagi kalit ("core.audit_log.ip_enc") bilan
+    # bir xil ustun nomi.
+    return f"core.audit_log.ip_enc:{audit_id}"
 
 
 def ua_aad(audit_id: int) -> str:
-    return f"core.audit_log.ua:{audit_id}"
+    return f"core.audit_log.ua_enc:{audit_id}"
 
 
 def _encode(value: Any) -> Any:

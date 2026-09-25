@@ -8,6 +8,7 @@ from app.auth.seed import sync_reference
 from app.core import keystore
 from app.core.config import get_settings
 from app.core.db import get_engine, new_session
+from app.dwh.reference import ensure_reference
 
 
 def bootstrap_runtime() -> None:
@@ -16,6 +17,8 @@ def bootstrap_runtime() -> None:
         conn.execute(text("SELECT pg_advisory_xact_lock(hashtext('ugk_bootstrap'))"))
         keystore.ensure_keys(conn, kek)
         conn.execute(text("SELECT core.ensure_audit_partitions(3)"))
+    with get_engine("app").begin() as conn:
+        ensure_reference(conn)
     keystore.invalidate_keyring()
     keystore.get_keyring()  # noto'g'ri master_kek ishga tushishdayoq aniqlansin
     with new_session() as db:

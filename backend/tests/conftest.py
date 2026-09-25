@@ -51,6 +51,11 @@ def _reset_core() -> None:
         if conn.execute(text("SELECT to_regclass('dwh.dim_counterparty')")).scalar() is not None:
             conn.execute(text("UPDATE dwh.dim_counterparty SET inn_enc = NULL, inn_bidx = NULL"))
             conn.execute(text("UPDATE dwh.dim_bank SET account_enc = NULL, account_bidx = NULL"))
+        # core.etl_run RESTART IDENTITY bilan tozalandi — run id'lar qayta ishlatiladi,
+        # eski staging qatorlari yangi yuklashga "yopishib" qolmasin.
+        for table in ("stg.rows", "stg.batch"):
+            if conn.execute(text("SELECT to_regclass(:t)"), {"t": table}).scalar() is not None:
+                conn.execute(text(f"TRUNCATE {table}"))
 
 
 @pytest.fixture(scope="session", autouse=True)

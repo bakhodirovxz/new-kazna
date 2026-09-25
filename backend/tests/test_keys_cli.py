@@ -111,25 +111,26 @@ def test_retire_unused_allow_short_grace_bypasses_minimum() -> None:
 
 
 def test_retire_unused_refuses_purpose_without_registry_columns() -> None:
-    """I1: BANK/INTEGRATION hali REGISTRY qilinmagan — retire ularni yo'q qilishi mumkin
-    emas, aks holda o'sha maqsaddagi ustunlar kelajakda REGISTRY qilinganda allaqachon
-    o'qib bo'lmaydigan holga kelgan bo'lardi."""
+    """I1: INTEGRATION hali REGISTRY qilinmagan (BANK Task 2'da dwh.dim_bank.account_enc
+    bilan ro'yxatga olindi) — retire uni yo'q qilishi mumkin emas, aks holda o'sha
+    maqsaddagi ustunlar kelajakda REGISTRY qilinganda allaqachon o'qib bo'lmaydigan holga
+    kelgan bo'lardi."""
     with get_engine("migrator").begin() as conn:
         before = conn.execute(
             text(
                 "SELECT version, status FROM core.crypto_keys WHERE purpose = ANY(:ps) "
                 "ORDER BY purpose, version"
             ),
-            {"ps": [Purpose.BANK.value, Purpose.INTEGRATION.value]},
+            {"ps": [Purpose.INTEGRATION.value]},
         ).all()
-        for purpose in (Purpose.BANK, Purpose.INTEGRATION):
+        for purpose in (Purpose.INTEGRATION,):
             assert retire_unused(conn, purpose, grace=timedelta(0), allow_short_grace=True) == []
         after = conn.execute(
             text(
                 "SELECT version, status FROM core.crypto_keys WHERE purpose = ANY(:ps) "
                 "ORDER BY purpose, version"
             ),
-            {"ps": [Purpose.BANK.value, Purpose.INTEGRATION.value]},
+            {"ps": [Purpose.INTEGRATION.value]},
         ).all()
     assert before == after, "REGISTRY'siz maqsad uchun crypto_keys o'zgarmasligi kerak"
 

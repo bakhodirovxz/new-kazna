@@ -19,8 +19,8 @@ from app.core.reencrypt import REENCRYPT_EXEMPT, REGISTRY
 
 # `ugk_migrator` sxemalarning egasi (barcha migratsiyalar shu rol bilan bajariladi) —
 # shuning uchun introspeksiya to'liq ko'rinishni ta'minlash uchun shu ulanishda ishlaydi
-# (masalan, `ugk_app`ning `stg`/`dwh`/`mart`ga USAGE huquqi yo'q va ular hozircha bo'sh
-# bo'lsa ham, kelajakda jadval qo'shilganda bu test "ko'r" bo'lib qolmasligi kerak).
+# (`ugk_app` `dwh`/`mart`ga USAGE huquqini 0005/0008'da oldi, lekin barcha ustunlarga emas
+# — kelajakda jadval qo'shilganda bu test "ko'r" bo'lib qolmasligi uchun shu ulanish saqlanadi).
 _SCHEMAS = ("core", "stg", "dwh", "mart")
 
 
@@ -62,6 +62,7 @@ def test_at_least_the_known_columns_are_found() -> None:
     found = set(_enc_columns())
     assert {"core.users.totp_secret_enc", "core.sessions.ip_enc"} <= found
     assert {"core.audit_log.ip_enc", "core.audit_log.ua_enc"} <= found
+    assert {"dwh.dim_counterparty.inn_enc", "dwh.dim_bank.account_enc"} <= found
 
 
 def test_exempt_reasons_are_documented() -> None:

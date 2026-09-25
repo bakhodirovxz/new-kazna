@@ -573,7 +573,7 @@ def test_create_user_into_out_of_branch_position_forbidden(
     filiallarga ega (lekin scope_all bo'lmagan) lavozimga ham joylashtira olmaydi."""
     created = client.post("/api/v1/admin/positions", json={
         "code": f"pos_{uuid.uuid4().hex[:6]}", "name": "X",
-        "role_id": _role_id("economist_filiala"), "branch_ids": [99]})
+        "role_id": _role_id("economist_filiala"), "branch_ids": [9]})
     assert created.status_code == 201
     position_id = created.json()["id"]
 

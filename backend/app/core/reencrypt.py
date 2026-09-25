@@ -44,6 +44,9 @@ class EncryptedColumn:
 REGISTRY: tuple[EncryptedColumn, ...] = (
     EncryptedColumn("core.users", "id", "totp_secret_enc", Purpose.MFA),
     EncryptedColumn("core.sessions", "id", "ip_enc", Purpose.PII),
+    # Витрина: AAD tabiiy kalit (code) bo'yicha — ETL shifrlaganda surrogat id hali noma'lum.
+    EncryptedColumn("dwh.dim_counterparty", "code", "inn_enc", Purpose.PII),
+    EncryptedColumn("dwh.dim_bank", "code", "account_enc", Purpose.BANK),
 )
 # I1: `REGISTRY`da YO'Q, lekin sxemada mavjud har bir `*_enc` ustun shu yerda ANIQ sababi
 # bilan ro'yxatga olinishi SHART (kalit `schema.table.column` formatida) — aks holda
@@ -124,7 +127,7 @@ def retire_unused(
     versiya bilan yozilayotgan qiymatlarni o'qib bo'lmaydigan holga keltirishi mumkin);
     faqat testlar `allow_short_grace=True` bilan bu tekshiruvni ongli bosib o'tadi.
 
-    `purpose`da hech qanday REGISTRY ustuni bo'lmasa (I1: masalan, BANK, INTEGRATION —
+    `purpose`da hech qanday REGISTRY ustuni bo'lmasa (I1: masalan, INTEGRATION —
     hali qayta shifrlash uchun ro'yxatga olinmagan), funksiya RAD ETADI: bo'sh ro'yxat
     qaytaradi va ogohlantirish yozadi — aks holda shu maqsaddagi eski kalitlar, ularga
     tegishli ustunlar hali REGISTRY qilinmagani uchun HECH QACHON qayta shifrlanmasdan

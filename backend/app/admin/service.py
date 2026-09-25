@@ -464,7 +464,23 @@ def list_positions(db: Session) -> list[PositionOut]:
     return [_position_out(db, p) for p in rows]
 
 
+def _validate_branches(db: Session, branch_ids: list[int]) -> None:
+    wanted = sorted(set(branch_ids))
+    if not wanted:
+        return
+    found = set(
+        db.execute(
+            text("SELECT branch_id FROM dwh.dim_branch WHERE branch_id = ANY(:ids)"),
+            {"ids": wanted},
+        ).scalars()
+    )
+    missing = [b for b in wanted if b not in found]
+    if missing:
+        raise ValidationFailed("validation_failed", fields=["branch_ids"], missing=missing)
+
+
 def _set_branches(db: Session, position_id: int, branch_ids: list[int]) -> None:
+    _validate_branches(db, branch_ids)
     db.execute(delete(PositionBranch).where(PositionBranch.position_id == position_id))
     for branch in sorted(set(branch_ids)):
         db.add(PositionBranch(position_id=position_id, branch_id=branch))

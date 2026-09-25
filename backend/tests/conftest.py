@@ -45,6 +45,12 @@ def _reset_core() -> None:
                     "last_dropped_hash = decode(repeat('00', 32), 'hex')"
                 )
             )
+        # crypto_keys yuqorida qayta yaratiladi — eski DEK bilan shifrlangan витрина
+        # rekvizitlari o'qib bo'lmaydi. bidx ham NULL: keyingi yuklash qayta shifrlaydi
+        # (merge o'zgarishni bidx bo'yicha aniqlaydi).
+        if conn.execute(text("SELECT to_regclass('dwh.dim_counterparty')")).scalar() is not None:
+            conn.execute(text("UPDATE dwh.dim_counterparty SET inn_enc = NULL, inn_bidx = NULL"))
+            conn.execute(text("UPDATE dwh.dim_bank SET account_enc = NULL, account_bidx = NULL"))
 
 
 @pytest.fixture(scope="session", autouse=True)

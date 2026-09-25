@@ -9,9 +9,13 @@ cleanup        — eskirgan sessiya va 2FA challenge'larni o'chirish
 
 `retire-keys` va `rewrap-keys` `wrapped_key` ustunini bo'shatadi/qayta yozadi — bu ustunga
 `ugk_app`ning yozish huquqi yo'q (crypto-shredding'dan himoya, spec 3.5), shuning uchun bu
-ikki buyruq jadval egasi — `ugk_migrator` — ulanishida ishlaydi. Dev'da `api` konteyneriga
-migrator siri berilmagan: shu buyruqlarni `docker compose ... run --rm migrate
-python -m app.cli retire-keys` orqali ishga tushiring (README'ga qarang).
+ikki buyruq jadval egasi — `ugk_migrator` — ulanishida ishlaydi. `rotate-key` ham endi
+qisman migrator ulanishidan foydalanadi (fix r1, I1): `dwh.*` shifrlangan rekvizitlar
+(`dwh.dim_counterparty.inn_enc`, `dwh.dim_bank.account_enc`) `ugk_app`ga umuman ochiq emas,
+shuning uchun ularni faqat migrator ulanishi qayta shifrlay oladi. Dev'da `api` konteyneriga
+migrator siri berilmagan: shu uch buyruqni `docker compose ... run --rm migrate
+python -m app.cli rotate-key --purpose ...` (yoki `retire-keys`/`rewrap-keys`) orqali ishga
+tushiring (README'ga qarang).
 
 Har bir kalit-mutatsiya buyrug'ida (`rotate-key`, `retire-keys`, `rewrap-keys`) tartib
 muhim: avval haqiqiy mutatsiya va uning committi (`with engine.begin(): ...` bloki
@@ -92,11 +96,22 @@ def _create_admin(username: str, full_name: str) -> int:
 
 
 def _rotate(purpose: Purpose) -> int:
+    """DEK rotatsiyasi + qayta shifrlash.
+
+    Fix r1 (I1): `ugk_app`ning `dwh.*` shifrlangan rekvizitlarga (role="migrator") hech
+    qanday huquqi yo'q, shuning uchun ikki bosqich: avval "app" ulanishida versiya
+    yaratiladi va `core.*` (role="app") ustunlar qayta shifrlanadi (bitta tranzaksiya),
+    so'ng "migrator" ulanishida `dwh.*` (role="migrator") ustunlar alohida qayta
+    shifrlanadi. Bu buyruq faqat `migrate` konteynerida (migrator siri bor joyda) ishga
+    tushiriladi — README'ga qarang.
+    """
     kek = get_settings().key_bytes("master_kek")
     try:
         with get_engine("app").begin() as conn:
             version = keystore.rotate(conn, kek, purpose)
-            count = reencrypt(conn, keystore.load_keyring(conn, kek), purpose)
+            count = reencrypt(conn, keystore.load_keyring(conn, kek), purpose, role="app")
+        with get_engine("migrator").begin() as conn:
+            count += reencrypt(conn, keystore.load_keyring(conn, kek), purpose, role="migrator")
     except Exception as exc:
         record(AuditEvent(
             action=AuditAction.KEY_ROTATED, user_id=None, result="fail", object_type="key",

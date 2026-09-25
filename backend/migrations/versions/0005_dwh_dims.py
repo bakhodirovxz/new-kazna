@@ -63,6 +63,9 @@ def _row(values: tuple[object, ...]) -> str:
 
 
 def upgrade() -> None:
+    # SCD-2 (branch/loan versiyalari) davr-qoplanish EXCLUDE'lari uchun (fix r1). btree_gist
+    # PG16'da "trusted" — database egasi (`ugk_migrator`, superuser emas) ham o'rnatishi mumkin.
+    op.execute("CREATE EXTENSION IF NOT EXISTS btree_gist")
     op.execute(
         """
         CREATE TABLE dwh.dim_date (
@@ -115,7 +118,12 @@ def upgrade() -> None:
           valid_to date,
           is_current boolean NOT NULL,
           PRIMARY KEY (branch_id, valid_from),
-          CHECK (valid_to IS NULL OR valid_to >= valid_from)
+          CHECK (is_current = (valid_to IS NULL)),
+          CHECK (valid_to IS NULL OR valid_to > valid_from),
+          EXCLUDE USING gist (
+            branch_id WITH =,
+            daterange(valid_from, coalesce(valid_to, 'infinity'), '[)') WITH &&
+          )
         )
         """
     )
@@ -164,6 +172,7 @@ def upgrade() -> None:
             CHECK (kind IN ('supplier', 'buyer', 'bank', 'budget', 'ifi', 'other')),
           inn_enc bytea,
           inn_bidx bytea,
+          CHECK ((inn_enc IS NULL) = (inn_bidx IS NULL)),
           {TECH}
         )
         """
@@ -177,7 +186,8 @@ def upgrade() -> None:
           bank_name varchar(200) NOT NULL,
           account_enc bytea,
           account_bidx bytea,
-          currency char(3) NOT NULL DEFAULT 'UZS',
+          currency char(3) NOT NULL DEFAULT 'UZS' CHECK (currency ~ '^[A-Z]{{3}}$'),
+          CHECK ((account_enc IS NULL) = (account_bidx IS NULL)),
           {TECH}
         )
         """
@@ -250,7 +260,7 @@ def upgrade() -> None:
           code varchar(32) NOT NULL UNIQUE,
           creditor varchar(200) NOT NULL,
           project varchar(300) NOT NULL,
-          currency char(3) NOT NULL,
+          currency char(3) NOT NULL CHECK (currency ~ '^[A-Z]{{3}}$'),
           rate numeric(8,5) NOT NULL,
           grace_until date,
           maturity date NOT NULL,
@@ -270,7 +280,12 @@ def upgrade() -> None:
           valid_to date,
           is_current boolean NOT NULL,
           PRIMARY KEY (loan_id, valid_from),
-          CHECK (valid_to IS NULL OR valid_to >= valid_from)
+          CHECK (is_current = (valid_to IS NULL)),
+          CHECK (valid_to IS NULL OR valid_to > valid_from),
+          EXCLUDE USING gist (
+            loan_id WITH =,
+            daterange(valid_from, coalesce(valid_to, 'infinity'), '[)') WITH &&
+          )
         )
         """
     )
@@ -292,7 +307,7 @@ def upgrade() -> None:
     op.execute(
         f"""
         CREATE TABLE dwh.fx_rate (
-          currency char(3) NOT NULL,
+          currency char(3) NOT NULL CHECK (currency ~ '^[A-Z]{{3}}$'),
           date_id integer NOT NULL REFERENCES dwh.dim_date (date_id),
           rate numeric(18,6) NOT NULL CHECK (rate > 0),
           {TECH},
@@ -312,14 +327,14 @@ def upgrade() -> None:
     tables = ", ".join(f"dwh.{t}" for t in DIM_TABLES)
     op.execute(f"GRANT SELECT, INSERT, UPDATE, DELETE ON {tables} TO ugk_etl")
     op.execute("GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA dwh TO ugk_etl")
-    # ugk_app: filiallar/statyalar ro'yxati (pub view'lar, admin tekshiruvi) va kalit
-    # rotatsiyasi uchun faqat shifrlangan ustunlar.
+    # ugk_app: faqat filiallar/statyalar ro'yxati (pub view'lar, admin filial tekshiruvi).
+    # Fix r1 (I1): dwh.dim_counterparty.inn_enc / dwh.dim_bank.account_enc'ga (yoki boshqa
+    # ustuniga) ugk_app'ning HECH QANDAY huquqi yo'q — internetga qaragan, keyring'ni
+    # ushlab turadigan ulanish shifrlangan rekvizitlarni o'qiy/yoza olmasligi kerak. Ularni
+    # qayta shifrlash faqat operator CLI'da (`rotate-key`, migrator ulanishi) bajariladi —
+    # app.core.reencrypt.EncryptedColumn.role'ga qarang.
     op.execute("GRANT USAGE ON SCHEMA dwh TO ugk_app")
     op.execute("GRANT SELECT ON dwh.dim_branch, dwh.dim_item TO ugk_app")
-    op.execute("GRANT SELECT (code, inn_enc), UPDATE (inn_enc) ON dwh.dim_counterparty TO ugk_app")
-    op.execute(
-        "GRANT SELECT (code, account_enc), UPDATE (account_enc) ON dwh.dim_bank TO ugk_app"
-    )
     op.execute(
         "ALTER TABLE core.position_branches ADD CONSTRAINT position_branches_branch_fk "
         "FOREIGN KEY (branch_id) REFERENCES dwh.dim_branch (branch_id)"
@@ -328,5 +343,6 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     op.execute("ALTER TABLE core.position_branches DROP CONSTRAINT position_branches_branch_fk")
+    op.execute("REVOKE USAGE ON SCHEMA dwh FROM ugk_app")
     for table in reversed(DIM_TABLES):
         op.execute(f"DROP TABLE dwh.{table}")

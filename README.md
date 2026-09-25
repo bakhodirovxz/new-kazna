@@ -26,7 +26,7 @@ docker compose -f deploy/compose.test.yml down
 | Buyruq | Nima qiladi | Qayerda ishga tushiriladi |
 |---|---|---|
 | `create-admin --username U --full-name F` | birinchi administrator (vaqtinchalik parol bir marta chiqadi) | `api` konteyneri |
-| `rotate-key --purpose P` | DEK rotatsiyasi + qayta shifrlash | `api` konteyneri |
+| `rotate-key --purpose P` | DEK rotatsiyasi + qayta shifrlash | **faqat `migrate` konteyneri** |
 | `retire-keys [--grace-minutes N]` | ishlatilmayotgan eski DEK'larni yo'q qilish | **faqat `migrate` konteyneri** |
 | `rewrap-keys --new-kek-file F` | KEK rotatsiyasi (barcha DEK'larni yangi KEK bilan qayta o'raydi) | **faqat `migrate` konteyneri** |
 | `audit-verify` | audit zanjirini tekshirish (buzilgan bo'lsa chiqish kodi 2) | `api` konteyneri |
@@ -35,9 +35,15 @@ docker compose -f deploy/compose.test.yml down
 `retire-keys` va `rewrap-keys` `core.crypto_keys.wrapped_key` ustunini bo'shatadi/qayta yozadi —
 bu ustunga `ugk_app`(API)ning yozish huquqi yo'q (crypto-shredding'dan himoya, spec 3.5), shuning
 uchun dev'da `api` konteyneriga migrator siri berilmagan va bu ikki buyruq faqat shunday ishga
-tushiriladi:
+tushiriladi. `rotate-key` ham endi migrator ulanishini talab qiladi (fix r1, I1): `ugk_app`
+`dwh.dim_counterparty.inn_enc`/`dwh.dim_bank.account_enc`ga umuman kira olmaydi, shuning uchun
+bu buyruq avval "app" ulanishida `core.*` ustunlarni, so'ng "migrator" ulanishida `dwh.*`
+ustunlarni qayta shifrlaydi. Admin API (`POST /admin/keys/{purpose}/rotate`) hamon ishlaydi,
+lekin faqat `core.*` (role="app") ustunlarni qayta shifrlaydi — `dwh.*` ustunlar operator
+`rotate-key` buyrug'ini kutadi:
 
 ```bash
+docker compose -f deploy/compose.yml run --rm migrate python -m app.cli rotate-key --purpose pii
 docker compose -f deploy/compose.yml run --rm migrate python -m app.cli retire-keys
 ```
 

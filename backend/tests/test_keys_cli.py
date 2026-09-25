@@ -1,5 +1,6 @@
 import base64
 import os
+import uuid
 from collections.abc import Callable, Iterator
 from datetime import timedelta
 from pathlib import Path
@@ -13,10 +14,11 @@ from app import cli
 from app.auth.models import User
 from app.core import keystore
 from app.core.config import get_settings
-from app.core.crypto import Purpose, blob_version
+from app.core.crypto import Purpose, blind_index, blob_version
 from app.core.db import get_engine, new_session
 from app.core.errors import register_error_handlers
 from app.core.reencrypt import retire_unused, versions_in_use
+from app.etl.db import etl_transaction
 from app.main import _mount_openapi, create_app
 from tests.helpers import SeedUser, issue_session, login, use_session
 
@@ -86,6 +88,53 @@ def test_rotate_failure_rolls_back_and_audits_fail(
     assert row is not None
     assert row["result"] == "fail"
     assert row["details"]["error"] == "RuntimeError"
+
+
+def test_api_rotate_leaves_dwh_columns_on_old_version_and_retire_keeps_it(
+    client: TestClient, make_user: Callable[..., SeedUser]
+) -> None:
+    """Fix r1 (I1): `POST /admin/keys/{purpose}/rotate` `ugk_app` ulanishida ishlaydi va
+    endi faqat `role="app"` (`core.*`) ustunlarni qayta shifrlaydi —
+    `dwh.dim_counterparty.inn_enc` (`role="migrator"`) ustuni ESKI versiyada qoladi.
+    `retire_unused` shu sabab o'sha eski versiyani "hali ishlatilyapti" deb saqlab qoladi:
+    `versions_in_use` BARCHA rollardagi (app VA migrator) ustunlarni skanerlaydi. dwh
+    ustunini qayta shifrlash faqat operator `rotate-key` CLI buyrug'i (migrator ulanishi)
+    orqali bajariladi — `test_dwh_dims.py::test_counterparty_inn_reencrypted_on_pii_rotation`
+    aynan shuni tekshiradi."""
+    code = f"CP-K{uuid.uuid4().hex[:8]}"
+    aad = f"dwh.dim_counterparty.inn_enc:{code}"
+    bidx = blind_index(get_settings().key_bytes("blind_index_key"), "inn", "305222222")
+    with etl_transaction() as conn:
+        before_version = conn.execute(
+            text("SELECT version FROM core.crypto_keys WHERE purpose='pii' AND status='active'")
+        ).scalar_one()
+        conn.execute(
+            text(
+                "INSERT INTO dwh.dim_counterparty (code, name, kind, inn_enc, inn_bidx, "
+                "src_system) VALUES (:c, 'ООО «К»', 'supplier', :e, :b, 'test')"
+            ),
+            {"c": code, "e": keystore.encrypt_str(Purpose.PII, "305222222", aad), "b": bidx},
+        )
+    try:
+        login(client, make_user("admin"))
+        r = client.post("/api/v1/admin/keys/pii/rotate")
+        assert r.status_code == 200, r.text
+        keystore.invalidate_keyring()
+        with etl_transaction() as conn:
+            blob = conn.execute(
+                text("SELECT inn_enc FROM dwh.dim_counterparty WHERE code = :c"), {"c": code}
+            ).scalar_one()
+        assert blob_version(bytes(blob)) == before_version, (
+            "API rotate role='app' — dwh ustuniga tegmasligi kerak edi"
+        )
+        with get_engine("migrator").begin() as conn:
+            retired = retire_unused(conn, Purpose.PII, grace=timedelta(0), allow_short_grace=True)
+        assert before_version not in retired, (
+            "dwh ustuni hali eski versiyani ishlatyapti — retire uni saqlab qolishi kerak edi"
+        )
+    finally:
+        with etl_transaction() as conn:
+            conn.execute(text("DELETE FROM dwh.dim_counterparty WHERE code = :c"), {"c": code})
 
 
 def test_retire_unused_respects_grace() -> None:

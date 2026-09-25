@@ -5,6 +5,14 @@ Rotatsiya (`POST /{purpose}/rotate`) `ugk_app` ulanishida bajariladi: bu faqat I
 (spec 3.5). `wrapped_key`ni bo'shatadigan operatsiyalar (eski kalitlarni retire qilish,
 KEK rotatsiyasi) esa faqat operator CLI orqali, jadval egasi (`ugk_migrator`) sifatida
 bajariladi — `app.cli`ga qarang.
+
+Fix r1 (I1): `ugk_app`da `dwh.*` shifrlangan rekvizitlarga (masalan,
+`dwh.dim_counterparty.inn_enc`) hech qanday huquq yo'q, shuning uchun bu endpoint faqat
+`role="app"` ustunlarni (`core.*`) qayta shifrlaydi — `reencrypted` soni shunga mos. `dwh.*`
+(role="migrator") ustunlar eski versiyada qoladi va `python -m app.cli rotate-key`
+(migrator ulanishi, `migrate` konteyneri) ularni alohida qayta shifrlaguncha shunday
+qolaveradi; `retire_unused` bu davrda o'sha versiyani hali ishlatilyapti deb saqlab qoladi
+(`versions_in_use` barcha rollarni skanerlaydi).
 """
 
 from __future__ import annotations
@@ -69,7 +77,7 @@ def rotate_key(purpose: Purpose, ctx: KeysAdmin, db: DB, meta: Meta) -> RotateOu
     conn = db.connection()
     try:
         version = keystore.rotate(conn, kek, purpose)
-        count = reencrypt(conn, keystore.load_keyring(conn, kek), purpose)
+        count = reencrypt(conn, keystore.load_keyring(conn, kek), purpose, role="app")
         db.commit()
     except Exception as exc:
         db.rollback()

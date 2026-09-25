@@ -22,6 +22,7 @@ from sqlalchemy import text
 from sqlalchemy.engine import Connection
 
 from app.core import keystore
+from app.core.config import DbRole
 from app.core.crypto import Keyring, Purpose
 from app.core.logging import get_logger
 
@@ -36,17 +37,25 @@ class EncryptedColumn:
     pk: str
     column: str
     purpose: Purpose
+    # Fix r1 (I1): qaysi DB ulanishi bu ustunni qayta shifrlashi MUMKIN — `ugk_app`da
+    # `dwh.*` shifrlangan rekvizitlarga o'qish/yozish huquqi yo'q (I1 fix r1), shuning
+    # uchun ular faqat "migrator" ulanishida (operator CLI, `migrate` konteyneri)
+    # qayta shifrlanadi. `core.*` ustunlar an'anaviy — "app" ulanishida (admin API).
+    role: DbRole
 
     def aad(self, pk_value: object) -> str:
         return f"{self.table}.{self.column}:{pk_value}"
 
 
 REGISTRY: tuple[EncryptedColumn, ...] = (
-    EncryptedColumn("core.users", "id", "totp_secret_enc", Purpose.MFA),
-    EncryptedColumn("core.sessions", "id", "ip_enc", Purpose.PII),
+    EncryptedColumn("core.users", "id", "totp_secret_enc", Purpose.MFA, "app"),
+    EncryptedColumn("core.sessions", "id", "ip_enc", Purpose.PII, "app"),
     # Витрина: AAD tabiiy kalit (code) bo'yicha — ETL shifrlaganda surrogat id hali noma'lum.
-    EncryptedColumn("dwh.dim_counterparty", "code", "inn_enc", Purpose.PII),
-    EncryptedColumn("dwh.dim_bank", "code", "account_enc", Purpose.BANK),
+    # role="migrator": ugk_app'ning bu ustunlarga hech qanday huquqi yo'q (I1 fix r1) —
+    # qayta shifrlash faqat `python -m app.cli rotate-key` (migrator ulanishi, `migrate`
+    # konteyneri) orqali bajariladi.
+    EncryptedColumn("dwh.dim_counterparty", "code", "inn_enc", Purpose.PII, "migrator"),
+    EncryptedColumn("dwh.dim_bank", "code", "account_enc", Purpose.BANK, "migrator"),
 )
 # I1: `REGISTRY`da YO'Q, lekin sxemada mavjud har bir `*_enc` ustun shu yerda ANIQ sababi
 # bilan ro'yxatga olinishi SHART (kalit `schema.table.column` formatida) — aks holda
@@ -73,14 +82,24 @@ NON_RETIRABLE = frozenset({Purpose.AUDIT, Purpose.AUDIT_CHAIN})
 _VERSION_SQL = "(get_byte({col}, 1) * 256 + get_byte({col}, 2))"
 
 
-def _columns(purpose: Purpose) -> list[EncryptedColumn]:
-    return [c for c in REGISTRY if c.purpose == purpose]
+def _columns(purpose: Purpose, role: DbRole | None = None) -> list[EncryptedColumn]:
+    return [c for c in REGISTRY if c.purpose == purpose and (role is None or c.role == role)]
 
 
-def reencrypt(conn: Connection, ring: Keyring, purpose: Purpose, batch: int = 500) -> int:
+def reencrypt(
+    conn: Connection, ring: Keyring, purpose: Purpose, *, role: DbRole, batch: int = 500
+) -> int:
+    """Faqat `role` ulanishi yoza oladigan ustunlarni qayta shifrlaydi (I1 fix r1).
+
+    `ugk_app` ulanishida `role="app"` bilan chaqirilsa, `dwh.*` (role="migrator") ustunlar
+    tegilmaydi — ular eski versiyada qolaveradi, toki operator CLI migrator ulanishida
+    o'zi qayta shifrlamaguncha. Bu ataylab shunday: `versions_in_use` (pastda) BARCHA
+    rollardagi ustunlarni skanerlaydi, shuning uchun `retire_unused` eski versiyani hali
+    role="migrator" ustun ishlatayotgan bo'lsa yo'q qilmaydi.
+    """
     active = ring.active[purpose]
     total = 0
-    for col in _columns(purpose):
+    for col in _columns(purpose, role):
         version = _VERSION_SQL.format(col=col.column)
         # Identifikatorlar faqat REGISTRY'dan olinadi — foydalanuvchi kiritmaydi.
         select_sql = text(

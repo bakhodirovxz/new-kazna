@@ -119,10 +119,13 @@ def upgrade() -> None:
           is_current boolean NOT NULL,
           PRIMARY KEY (branch_id, valid_from),
           CHECK (is_current = (valid_to IS NULL)),
-          CHECK (valid_to IS NULL OR valid_to > valid_from),
+          CHECK (valid_to IS NULL OR valid_to >= valid_from),
+          -- Fix r2: valid_to INKLYUZIV (reja: yopish valid_to = as_of - 1 deb belgilaydi,
+          -- join'lar d.date <= v.valid_to) — daterange '[]' bilan ikkala chegara ham
+          -- kiritiladi, bir kunlik versiya (valid_from = valid_to) qonuniy bo'ladi.
           EXCLUDE USING gist (
             branch_id WITH =,
-            daterange(valid_from, coalesce(valid_to, 'infinity'), '[)') WITH &&
+            daterange(valid_from, coalesce(valid_to, 'infinity'::date), '[]') WITH &&
           )
         )
         """
@@ -281,10 +284,11 @@ def upgrade() -> None:
           is_current boolean NOT NULL,
           PRIMARY KEY (loan_id, valid_from),
           CHECK (is_current = (valid_to IS NULL)),
-          CHECK (valid_to IS NULL OR valid_to > valid_from),
+          CHECK (valid_to IS NULL OR valid_to >= valid_from),
+          -- Fix r2: valid_to INKLYUZIV — dim_branch_version'dagi bilan bir xil sabab.
           EXCLUDE USING gist (
             loan_id WITH =,
-            daterange(valid_from, coalesce(valid_to, 'infinity'), '[)') WITH &&
+            daterange(valid_from, coalesce(valid_to, 'infinity'::date), '[]') WITH &&
           )
         )
         """

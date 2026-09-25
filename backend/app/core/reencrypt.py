@@ -17,18 +17,24 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import timedelta
+from typing import Literal
 
 from sqlalchemy import text
 from sqlalchemy.engine import Connection
 
 from app.core import keystore
-from app.core.config import DbRole
 from app.core.crypto import Keyring, Purpose
 from app.core.logging import get_logger
 
 log = get_logger("ugekazna.reencrypt")
 
 MIN_RETIRE_GRACE = timedelta(minutes=10)
+
+# Fix r2 (cheap): faqat shifrlangan ustunlarni qayta shifrlaydigan ikkita ulanish bor —
+# `app.core.config.DbRole`ning uchinchi qiymati ("etl") bu yerda hech qachon uchramaydi
+# (ETL shifrlangan ustunlarni qayta shifrlamaydi, faqat yozadi/o'qiydi), shuning uchun
+# kengroq `DbRole`dan foydalanish o'rniga shu ikkitasiga qattiq toraytirilgan.
+EncryptedColumnRole = Literal["app", "migrator"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -41,7 +47,7 @@ class EncryptedColumn:
     # `dwh.*` shifrlangan rekvizitlarga o'qish/yozish huquqi yo'q (I1 fix r1), shuning
     # uchun ular faqat "migrator" ulanishida (operator CLI, `migrate` konteyneri)
     # qayta shifrlanadi. `core.*` ustunlar an'anaviy — "app" ulanishida (admin API).
-    role: DbRole
+    role: EncryptedColumnRole
 
     def aad(self, pk_value: object) -> str:
         return f"{self.table}.{self.column}:{pk_value}"
@@ -82,12 +88,19 @@ NON_RETIRABLE = frozenset({Purpose.AUDIT, Purpose.AUDIT_CHAIN})
 _VERSION_SQL = "(get_byte({col}, 1) * 256 + get_byte({col}, 2))"
 
 
-def _columns(purpose: Purpose, role: DbRole | None = None) -> list[EncryptedColumn]:
+def _columns(
+    purpose: Purpose, role: EncryptedColumnRole | None = None
+) -> list[EncryptedColumn]:
     return [c for c in REGISTRY if c.purpose == purpose and (role is None or c.role == role)]
 
 
 def reencrypt(
-    conn: Connection, ring: Keyring, purpose: Purpose, *, role: DbRole, batch: int = 500
+    conn: Connection,
+    ring: Keyring,
+    purpose: Purpose,
+    *,
+    role: EncryptedColumnRole,
+    batch: int = 500,
 ) -> int:
     """Faqat `role` ulanishi yoza oladigan ustunlarni qayta shifrlaydi (I1 fix r1).
 

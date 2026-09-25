@@ -192,6 +192,85 @@ def test_branch_version_overlap_with_current_rejected() -> None:
         )
 
 
+def test_branch_version_boundary_dates() -> None:
+    """Fix r2: `valid_to` INKLYUZIV deb hisoblanadi (reja: yopish `valid_to = as_of - 1`
+    belgilaydi, join'lar `d.date <= v.valid_to` ishlatadi) — `EXCLUDE` endi
+    `daterange(..., '[]')` bilan ikkala chegarani ham kiritadi:
+
+    1. yangi versiya `valid_from`i oldingisining `valid_to`iga TENG bo'lsa — kesishadi,
+       rad etiladi (ikkalasi ham o'sha kunni "egallaydi");
+    2. `valid_from = oldingi valid_to + 1` bo'lsa — kesishmaydi, qabul qilinadi;
+    3. bir kunlik versiya (`valid_from = valid_to`) — qonuniy, qabul qilinadi (`CHECK`
+       endi `>=`, qattiqroq `>` emas).
+
+    `branch_id=8` vaqtincha yopiladi (boshqa testlar undan foydalanmaydi) va test oxirida
+    aniq asl holatiga (`valid_from='2000-01-01'`, `is_current=true`, `valid_to=NULL`)
+    qaytariladi — `test_dwh_dims.py::test_sixteen_branches_seeded` filiallar 1..16 uchun
+    aynan bitta joriy versiya borligini hisoblaydi."""
+    branch_id = 8
+    with etl_transaction() as conn:
+        conn.execute(
+            text(
+                "UPDATE dwh.dim_branch_version SET is_current = false, "
+                "valid_to = date '2024-06-30' WHERE branch_id = :b AND is_current"
+            ),
+            {"b": branch_id},
+        )
+    try:
+        with etl_transaction() as conn, pytest.raises(IntegrityError), conn.begin_nested():
+            conn.execute(
+                text(
+                    "INSERT INTO dwh.dim_branch_version (branch_id, valid_from, valid_to, "
+                    "is_current) VALUES (:b, date '2024-06-30', date '2024-07-15', false)"
+                ),
+                {"b": branch_id},
+            )
+        with etl_transaction() as conn:
+            conn.execute(
+                text(
+                    "INSERT INTO dwh.dim_branch_version (branch_id, valid_from, valid_to, "
+                    "is_current) VALUES (:b, date '2024-07-01', date '2024-07-31', false)"
+                ),
+                {"b": branch_id},
+            )
+        with etl_transaction() as conn:
+            conn.execute(
+                text(
+                    "INSERT INTO dwh.dim_branch_version (branch_id, valid_from, valid_to, "
+                    "is_current) VALUES (:b, date '2024-08-15', date '2024-08-15', false)"
+                ),
+                {"b": branch_id},
+            )
+        with etl_transaction() as conn:
+            rows = conn.execute(
+                text(
+                    "SELECT valid_from, valid_to FROM dwh.dim_branch_version "
+                    "WHERE branch_id = :b AND valid_from <> date '2000-01-01' ORDER BY valid_from"
+                ),
+                {"b": branch_id},
+            ).all()
+        assert [(r.valid_from.isoformat(), r.valid_to.isoformat()) for r in rows] == [
+            ("2024-07-01", "2024-07-31"),
+            ("2024-08-15", "2024-08-15"),
+        ]
+    finally:
+        with etl_transaction() as conn:
+            conn.execute(
+                text(
+                    "DELETE FROM dwh.dim_branch_version WHERE branch_id = :b "
+                    "AND valid_from <> date '2000-01-01'"
+                ),
+                {"b": branch_id},
+            )
+            conn.execute(
+                text(
+                    "UPDATE dwh.dim_branch_version SET is_current = true, valid_to = NULL "
+                    "WHERE branch_id = :b AND valid_from = date '2000-01-01'"
+                ),
+                {"b": branch_id},
+            )
+
+
 def test_loan_version_overlap_rejected() -> None:
     code = f"LN-O{uuid.uuid4().hex[:8]}"
     with etl_transaction() as conn:

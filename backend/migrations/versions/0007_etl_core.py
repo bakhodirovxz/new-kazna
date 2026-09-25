@@ -3,6 +3,15 @@
 Revision ID: 0007
 Revises: 0006
 Create Date: 2026-09-24
+
+`ugk_etl`ga `TEMPORARY` huquqi shu yerda ham berilgan (pastga qarang): `app/etl/merge.py` har bir
+maqsad uchun qator darajasidagi tekshiruvni bitta o'tishda materiallashtirish uchun
+`CREATE TEMP TABLE ... ON COMMIT DROP` ishlatadi (task-5 fix round 2, R2-4). Standart holatda
+faqat egasi (`ugk_migrator`) bu huquqqa ega — aks holda `InsufficientPrivilege: permission denied
+to create temporary tables` bilan yiqiladi. Vaqtinchalik jadvallar sessiya/tranzaksiya doirasida
+(`pg_temp_*` sxema) — boshqa rollarga umuman ko'rinmaydi, shuning uchun bu RLS yoki ma'lumot
+izolyatsiyasiga ta'sir qilmaydi. (Bu grant dastlab alohida 0008 migratsiyasida edi — migratsiya
+raqami keyingi rejalar uchun band qilinganidan so'ng shu yerga ko'chirildi.)
 """
 
 from alembic import op
@@ -180,6 +189,10 @@ STATEMENTS = [
     "GRANT SELECT ON core.settings, core.alert_rules, core.fin_assumptions TO ugk_etl",
     "GRANT SELECT, INSERT, DELETE ON stg.batch, stg.rows TO ugk_etl",
     "GRANT USAGE ON SEQUENCE stg.rows_seq_seq TO ugk_etl",
+    # Baza nomi qattiq yozilmagan — current_database() orqali (fix r2 keyingi ruling).
+    "DO $$ BEGIN "
+    "EXECUTE format('GRANT TEMPORARY ON DATABASE %I TO ugk_etl', current_database()); "
+    "END $$",
 ]
 
 
@@ -189,6 +202,11 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    op.execute(
+        "DO $$ BEGIN "
+        "EXECUTE format('REVOKE TEMPORARY ON DATABASE %I FROM ugk_etl', current_database()); "
+        "END $$"
+    )
     for table in ("stg.rows", "stg.batch", "core.fin_assumptions", "core.alert_rules",
                   "core.settings", "core.etl_requests", "core.etl_error", "core.etl_step",
                   "core.etl_run", "core.data_version", "core.builds"):

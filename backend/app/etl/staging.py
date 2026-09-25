@@ -71,6 +71,11 @@ class DbStagingSink:
         spec = TARGETS.get(target)
         if spec is None:
             raise ValueError(f"noma'lum staging maqsadi: {target}")
+        # Fix r1, I1: whitelist tashqarisidagi kalit rad etiladi — XABARDA FAQAT KALIT NOMI,
+        # qiymat emas (log/xabarga sezgir ma'lumot chiqib ketmasligi uchun).
+        extra = set(row.keys()) - spec.allowed_keys
+        if extra:
+            raise ValueError(f"{target}: noma'lum maydon(lar): {', '.join(sorted(extra))}")
         payload = protect(spec, dict(row))
         self._buffer.append({
             "l": self.load_id,

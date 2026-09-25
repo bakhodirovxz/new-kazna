@@ -3,7 +3,7 @@ from collections.abc import Iterator
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import text
-from sqlalchemy.exc import ProgrammingError
+from sqlalchemy.exc import DBAPIError, ProgrammingError
 
 from app.core.db import apply_rls, get_engine, new_session
 from app.main import create_app
@@ -69,3 +69,18 @@ def test_readyz_reports_db() -> None:
         response = client.get("/api/v1/readyz")
     assert response.status_code == 200
     assert response.json()["checks"]["db"] is True
+
+
+def test_etl_engine_hides_parameters() -> None:
+    """Fix r1, I1: ETL bog'langan parametrlarida INN/hisob kabi sezgir qiymatlar
+    yuradi — SQLAlchemy istisnolari ularni logga/xabarga chiqarmasligi kerak."""
+    assert get_engine("etl").hide_parameters is True
+    assert get_engine("app").hide_parameters is False
+    assert get_engine("migrator").hide_parameters is False
+
+
+def test_etl_engine_does_not_leak_bound_value_on_error() -> None:
+    secret = "super-secret-inn-value-should-not-leak"
+    with get_engine("etl").connect() as conn, pytest.raises(DBAPIError) as exc:
+        conn.execute(text("SELECT :v::int"), {"v": secret})
+    assert secret not in str(exc.value)

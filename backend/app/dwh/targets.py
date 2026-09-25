@@ -3,6 +3,20 @@ o'lcham kodlarini id'ga aylantirish (lookup), SCD-2 va shifrlanadigan maydonlar.
 
 Barcha SQL identifikatorlari shu fayldan olinadi (whitelist) — tashqi kiritishdan emas.
 Keyingi rejalar yangi fakt qo'shganda faqat shu yerga Target qo'shadi.
+
+Faktlarning tabiiy kaliti — `(src_system, doc_type, src_id)` (partitsiyalangan jadvallarda
+PostgreSQL talabiga ko'ra `date_id` ham qo'shiladi, spec 4.6/Global Constraints #3): bitta
+hujjat (`src_id`) sana bo'yicha BIR MARTA uchraydi — snapshot faktlar (masalan,
+`fact_balance`, `fact_stock`) uchun `src_id` shu sababli sana kesimida emas, HUJJAT
+(o'lchov nuqtasi) kesimida noyob bo'lishi kerak. Hujjat sanasi o'zgarsa (`app/etl/merge.py`
+`_moved_sql`), yangi yuklash o'sha `(doc_type, src_id)` bo'yicha eski partitsiyadagi
+nusxani topib o'chiradi — shuning uchun bitta partiyada bir xil `(doc_type, src_id)` ikki xil
+`date_id` bilan kelsa, oxirgisi (`seq` bo'yicha) g'olib chiqadi (spec 5.2, fix r1 I2).
+
+Lookup kalit nomlanishi — `Lookup.key`: ustun nomidan `_id` olib tashlanadi va `_code`
+qo'shiladi (masalan, `branch_id` → `branch_code`, `item_id` → `item_code`): staging payload'i
+o'lchov SURROGAT id'sini emas, TABIIY kodni beradi — id'ga aylantirish shu modulda,
+`app/etl/merge.py`dagi LEFT JOIN orqali bajariladi (fix r1 M5).
 """
 
 from __future__ import annotations
@@ -71,6 +85,19 @@ class Target:
     windowed: bool = False  # oyna ichida to'liq almashtiriladi
     scd: Scd | None = None
     sensitive: tuple[Sensitive, ...] = ()
+
+    @property
+    def allowed_keys(self) -> frozenset[str]:
+        """`DbStagingSink.add()` whitelist (fix r1, I1): staging payload shu to'plamdan
+        tashqari kalit qabul qilmaydi. `enc_column`/`bidx_column` bu yerda YO'Q — ular
+        faqat `app.etl.staging.protect()` tomonidan hosil qilinadi, chaqiruvchi ularni
+        to'g'ridan-to'g'ri bera olmaydi (shifrlangan qiymatni "soxtalashtirish"dan himoya)."""
+        enc_bidx = {c for s in self.sensitive for c in (s.enc_column, s.bidx_column)}
+        return frozenset(
+            (set(self.columns) - enc_bidx)
+            | {lk.key for lk in self.lookups}
+            | {s.field for s in self.sensitive}
+        )
 
 
 BRANCH = Lookup("branch_id", "dim_branch")

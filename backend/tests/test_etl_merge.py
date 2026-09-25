@@ -10,6 +10,7 @@ from app.core.config import get_settings
 from app.core.crypto import Purpose, blind_index
 from app.dwh.targets import OTHER_OUT_ITEM, TARGETS
 from app.etl.db import etl_transaction
+from app.etl.merge import merge_target
 from app.etl.staging import DbStagingSink, clear_load
 from app.etl.types import Window
 from tests.etl_helpers import (
@@ -203,3 +204,185 @@ def test_unknown_target_rejected_by_sink(source: str) -> None:
     run_id = open_run(source)
     with pytest.raises(ValueError, match="staging"), etl_transaction() as conn:
         DbStagingSink(conn, run_id, source).add("users", {"x": 1})
+
+
+# ── Fix r1, I1: staging kalit whitelist ──
+
+
+def test_extra_field_rejected_without_leaking_value(source: str) -> None:
+    run_id = open_run(source)
+    with etl_transaction() as conn, pytest.raises(ValueError) as exc:
+        DbStagingSink(conn, run_id, source).add(
+            "dim_bank", {"code": "B1", "bank_name": "Bank", "currency": "UZS",
+                        "inn": "123456789"})
+    assert "inn" in str(exc.value)
+    assert "123456789" not in str(exc.value)
+
+
+def test_caller_supplied_enc_column_rejected(source: str) -> None:
+    run_id = open_run(source)
+    with etl_transaction() as conn, pytest.raises(ValueError, match="inn_enc"):
+        DbStagingSink(conn, run_id, source).add(
+            "dim_counterparty", {"code": "C1", "name": "N", "kind": "supplier",
+                                 "inn_enc": "\\x00"})
+
+
+# ── Fix r1, I2: partitsiyalangan faktda bitta partiyada hujjat dublikati ──
+
+
+def test_partitioned_fact_dedupes_by_document_ignoring_date(source: str) -> None:
+    branch = branch_row(new_tag())
+    _, stats = _load(source, {"dim_branch": [branch], "fact_cashflow": [
+        cash_row("mv2", 20260805, branch["code"], 10),
+        cash_row("mv2", 20260910, branch["code"], 20),
+    ]})
+    assert stats["fact_cashflow"].upserted == 1
+    assert _cash(source) == [("mv2", 20260910, 20.0, OTHER_OUT_ITEM)]
+    _, stats = _load(source, {"fact_cashflow": [cash_row("mv2", 20260910, branch["code"], 20)]})
+    assert stats["fact_cashflow"].upserted == 0
+    assert _cash(source) == [("mv2", 20260910, 20.0, OTHER_OUT_ITEM)]
+
+
+# ── Fix r1, M1: ko'chgan hujjatning eski nusxasi yangi qator rad etilganda o'chirilmaydi ──
+
+
+def test_moved_document_with_invalid_new_row_keeps_old_copy(source: str) -> None:
+    branch = branch_row(new_tag())
+    _load(source, {"dim_branch": [branch],
+                   "fact_cashflow": [cash_row("m1", 20260805, branch["code"], 10)]})
+    run_id, stats = _load(source, {"fact_cashflow": [
+        cash_row("m1", 20260910, branch["code"], "not-a-number"),
+    ]})
+    assert stats["fact_cashflow"].upserted == 0
+    assert stats["fact_cashflow"].deleted == 0
+    assert _cash(source) == [("m1", 20260805, 10.0, OTHER_OUT_ITEM)]
+    assert ("error", "invalid_type") in _errors(run_id)
+
+
+# ── Fix r1, I3: qator darajasidagi tekshiruv — run to'xtamaydi, faqat qator etl_error'ga ──
+
+
+def test_malformed_date_id_becomes_etl_error(source: str) -> None:
+    branch = branch_row(new_tag())
+    run_id, stats = _load(source, {"dim_branch": [branch], "fact_cashflow": [
+        cash_row("bad_date", "not-a-date", branch["code"], 5),
+        cash_row("ok1", 20260805, branch["code"], 7),
+    ]})
+    assert stats["fact_cashflow"].upserted == 1
+    assert stats["fact_cashflow"].errors == 1
+    assert [r[0] for r in _cash(source)] == ["ok1"]
+    assert ("error", "invalid_type") in _errors(run_id)
+
+
+def test_non_numeric_amount_becomes_etl_error(source: str) -> None:
+    branch = branch_row(new_tag())
+    run_id, stats = _load(source, {"dim_branch": [branch], "fact_cashflow": [
+        cash_row("bad_amt", 20260805, branch["code"], "abc"),
+        cash_row("ok2", 20260805, branch["code"], 3),
+    ]})
+    assert stats["fact_cashflow"].upserted == 1
+    assert stats["fact_cashflow"].errors == 1
+    assert [r[0] for r in _cash(source)] == ["ok2"]
+    assert ("error", "invalid_type") in _errors(run_id)
+
+
+def test_negative_amount_becomes_etl_error(source: str) -> None:
+    branch = branch_row(new_tag())
+    run_id, stats = _load(source, {"dim_branch": [branch], "fact_cashflow": [
+        cash_row("neg", 20260805, branch["code"], -5),
+        cash_row("ok3", 20260805, branch["code"], 3),
+    ]})
+    assert stats["fact_cashflow"].upserted == 1
+    assert stats["fact_cashflow"].errors == 1
+    assert [r[0] for r in _cash(source)] == ["ok3"]
+    assert ("error", "negative_amount") in _errors(run_id)
+
+
+def test_over_length_src_id_becomes_etl_error(source: str) -> None:
+    branch = branch_row(new_tag())
+    long_id = "x" * 129
+    run_id, stats = _load(source, {"dim_branch": [branch], "fact_cashflow": [
+        cash_row(long_id, 20260805, branch["code"], 5),
+        cash_row("ok4", 20260805, branch["code"], 3),
+    ]})
+    assert stats["fact_cashflow"].upserted == 1
+    assert stats["fact_cashflow"].errors == 1
+    assert [r[0] for r in _cash(source)] == ["ok4"]
+    assert ("error", "invalid_type") in _errors(run_id)
+
+
+def test_missing_defaulted_measure_uses_default(source: str) -> None:
+    branch = branch_row(new_tag())
+    tag = new_tag()
+    run_id = open_run(source)
+    stage(run_id, source, {"dim_branch": [branch], "fact_generation": [
+        {"doc_type": "gen", "src_id": f"g-{tag}", "date_id": 20260805,
+         "branch_code": branch["code"], "generation": 12.5},
+    ]})
+    stats = {s.target: s for s in merge_all(run_id, source)}
+    assert stats["fact_generation"].upserted == 1
+    assert stats["fact_generation"].errors == 0
+    with etl_transaction() as conn:
+        row = conn.execute(
+            text("SELECT generation, own_needs, supply FROM dwh.fact_generation "
+                 "WHERE src_system = :s"), {"s": source}).one()
+    assert (float(row[0]), float(row[1]), float(row[2])) == (12.5, 0.0, 0.0)
+
+
+# ── Fix r1, M6: smoke test — har bir reyestr maqsadi uchun so'rov kompilyatsiya qilinadi ──
+
+
+@pytest.mark.parametrize("name", sorted(TARGETS))
+def test_merge_target_compiles_for_every_registry_target(source: str, name: str) -> None:
+    run_id = open_run(source)
+    with etl_transaction() as conn:
+        stats = merge_target(conn, name, load_id=run_id, source=source, step="dims",
+                             as_of=date(2026, 9, 24))
+    assert stats.target == name
+    assert stats.upserted == 0
+
+
+def test_bank_account_encrypted_with_blind_index(source: str) -> None:
+    code = f"BK-{new_tag()}"
+    run_id = open_run(source)
+    with etl_transaction() as conn:
+        clear_load(conn, run_id)
+        sink = DbStagingSink(conn, run_id, source)
+        sink.add("dim_bank", {"code": code, "bank_name": "Bank LLC", "currency": "UZS",
+                              "account_number": "2020 8000 1234 5678"})
+        sink.close()
+        staged = conn.execute(text("SELECT payload::text FROM stg.rows WHERE load_id = :l"),
+                              {"l": run_id}).scalar_one()
+    assert "2020 8000 1234 5678" not in staged
+    merge_all(run_id, source)
+    with etl_transaction() as conn:
+        enc, bidx = conn.execute(
+            text("SELECT account_enc, account_bidx FROM dwh.dim_bank WHERE code = :c"),
+            {"c": code}).one()
+    aad = f"dwh.dim_bank.account_enc:{code}"
+    assert keystore.decrypt_str(Purpose.BANK, bytes(enc), aad) == "2020 8000 1234 5678"
+    expected = blind_index(get_settings().key_bytes("blind_index_key"), "account",
+                           "2020 8000 1234 5678")
+    assert bytes(bidx) == expected
+
+
+def test_recounterparty_inn_merge_is_noop(source: str) -> None:
+    code = f"CP2-{new_tag()}"
+
+    def _stage_cp() -> int:
+        run_id = open_run(source)
+        with etl_transaction() as conn:
+            clear_load(conn, run_id)
+            sink = DbStagingSink(conn, run_id, source)
+            sink.add("dim_counterparty", {"code": code, "name": "Test", "kind": "supplier",
+                                          "inn": "111222333"})
+            sink.close()
+        return run_id
+
+    run1 = _stage_cp()
+    stats1 = {s.target: s for s in merge_all(run1, source)}
+    assert stats1["dim_counterparty"].upserted == 1
+
+    run2 = _stage_cp()
+    stats2 = {s.target: s for s in merge_all(run2, source)}
+    assert stats2["dim_counterparty"].upserted == 0

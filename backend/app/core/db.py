@@ -38,6 +38,9 @@ def get_engine(role: DbRole = "app") -> Engine:
         pool_recycle=1800,
         pool_pre_ping=True,
         connect_args={"options": options, "application_name": f"ugekazna-{role}"},
+        # ETL staging qatorlari (INN, hisob raqami va h.k.) bog'langan parametrlarda
+        # yuradi — SQLAlchemy istisnolari ularni logga aks ettirmasin (fix r1, I1).
+        hide_parameters=role == "etl",
     )
 
 

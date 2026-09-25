@@ -69,3 +69,21 @@ def test_etl_engine_has_long_statement_timeout() -> None:
 
     with get_engine("etl").connect() as conn:
         assert conn.execute(text("SHOW statement_timeout")).scalar_one() == "30min"
+
+
+def test_smtp_password_without_tls_is_a_problem() -> None:
+    plain = make(smtp_password="x", smtp_starttls=False, smtp_ssl=False)
+    assert any("starttls" in p or "ssl" in p for p in plain.problems())
+    assert make(smtp_password="x", smtp_starttls=True, smtp_ssl=False).problems() == []
+    assert make(smtp_password="x", smtp_starttls=False, smtp_ssl=True).problems() == []
+    assert make(smtp_password="", smtp_starttls=False, smtp_ssl=False).problems() == []
+
+
+def test_smtp_to_with_header_injection_is_a_problem_and_is_dropped() -> None:
+    s = make(smtp_to="a@b.uz\r\nBcc: x@y")
+    assert s.smtp_recipients == []
+    assert any("smtp_to" in p for p in s.problems())
+
+
+def test_smtp_to_with_valid_addresses_has_no_problems() -> None:
+    assert make(smtp_to="a@uge.uz, b@uge.uz").problems() == []

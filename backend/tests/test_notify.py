@@ -16,8 +16,11 @@ from app.etl.notify import (
 class FakeSMTP:
     instances: ClassVar[list["FakeSMTP"]] = []
 
-    def __init__(self, host: str, port: int, timeout: float) -> None:
+    def __init__(
+        self, host: str, port: int, timeout: float, context: Any = None
+    ) -> None:
         self.host, self.port, self.timeout = host, port, timeout
+        self.ssl_context = context
         self.tls = False
         self.login_args: tuple[str, str] | None = None
         self.sent: list[EmailMessage] = []
@@ -108,3 +111,33 @@ def test_build_notifier_adds_email_only_when_configured() -> None:
 def test_smtp_recipients_parsing(raw: str) -> None:
     settings = get_settings().model_copy(update={"smtp_to": raw})
     assert settings.smtp_recipients == ["a@uge.uz", "b@uge.uz"]
+
+
+def test_login_refused_when_connection_is_not_encrypted() -> None:
+    FakeSMTP.instances.clear()
+    _email(starttls=False).notify(Notification("etl_failed", "s", "b"))
+    # No SMTP connection attempted at all — plaintext AUTH is refused before dialing out.
+    assert FakeSMTP.instances == []
+
+
+def test_login_proceeds_over_starttls() -> None:
+    FakeSMTP.instances.clear()
+    _email(starttls=True).notify(Notification("etl_failed", "s", "b"))
+    smtp = FakeSMTP.instances[-1]
+    assert smtp.tls is True
+    assert smtp.login_args == ("ugk@uge.uz", "relay-secret")
+
+
+def test_implicit_ssl_path_is_used_and_login_succeeds() -> None:
+    FakeSMTP.instances.clear()
+    _email(ssl=True, smtp_ssl_factory=FakeSMTP).notify(Notification("etl_failed", "s", "b"))
+    smtp = FakeSMTP.instances[-1]
+    assert smtp.ssl_context is not None
+    assert smtp.tls is False  # STARTTLS is never called on the implicit-TLS path
+    assert smtp.login_args == ("ugk@uge.uz", "relay-secret")
+    assert smtp.sent
+
+
+def test_recipient_with_header_injection_rejected_at_construction() -> None:
+    with pytest.raises(ValueError, match=r"a@b\.uz"):
+        _email(recipients=["a@b.uz\r\nBcc: x@y"])

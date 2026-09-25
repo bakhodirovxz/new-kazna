@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import base64
 import binascii
+import re
 from functools import lru_cache
 from pathlib import Path
 from typing import Literal
@@ -27,6 +28,10 @@ TEST_KEYS = frozenset(
         "QEFCQ0RFRkdISUpLTE1OT1BRUlNUVVZXWFlaW1xdXl8=",
     }
 )
+
+# Oddiy email manzil tekshiruvi: bo'shliq, vergul, <>, @ (ikkinchi marta) — sarlavha
+# in'ektsiyasi (CR/LF) va bir nechta manzilni bitta maydonga yashirishning oldini oladi.
+_SMTP_ADDR_RE = re.compile(r"^[^\s,<>@]+@[^\s,<>@]+\.[^\s,<>@]+$")
 
 
 class ConfigError(RuntimeError):
@@ -77,10 +82,12 @@ class Settings(BaseSettings):
     smtp_user: str = ""
     smtp_password: SecretStr = SecretStr("")
     smtp_starttls: bool = True
+    smtp_ssl: bool = False
 
     @property
     def smtp_recipients(self) -> list[str]:
-        return [a.strip() for a in self.smtp_to.split(",") if a.strip()]
+        raw = [a.strip() for a in self.smtp_to.split(",") if a.strip()]
+        return [a for a in raw if _SMTP_ADDR_RE.match(a)]
 
     def pg_url(self, role: DbRole) -> str:
         user: str = getattr(self, f"db_{role}_user")
@@ -123,6 +130,15 @@ class Settings(BaseSettings):
             out.append("argon2_profile=fast_test faqat test muhitida")
         if self.smtp_host and not self.smtp_recipients:
             out.append("smtp_host berilgan, lekin smtp_to bo'sh")
+        raw_recipients = [a.strip() for a in self.smtp_to.split(",") if a.strip()]
+        invalid_recipients = [a for a in raw_recipients if not _SMTP_ADDR_RE.match(a)]
+        if invalid_recipients:
+            out.append(f"smtp_to: yaroqsiz manzil(lar): {', '.join(invalid_recipients)}")
+        if self.smtp_password.get_secret_value() and not (self.smtp_starttls or self.smtp_ssl):
+            out.append(
+                "smtp_password berilgan, lekin na starttls, na ssl yoqilgan "
+                "(parol ochiq matnda yuborilmaydi)"
+            )
         if self.env == "prod":
             if not self.base_url.startswith("https://"):
                 out.append("base_url https bo'lishi shart")

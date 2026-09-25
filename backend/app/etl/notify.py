@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import re
 import smtplib
 import ssl
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from email.message import EmailMessage
+from email.utils import formataddr
 from typing import Any, Literal, Protocol
 
 from app.core.config import Settings
@@ -14,6 +16,18 @@ from app.core.logging import get_logger
 
 log = get_logger("ugekazna.notify")
 Kind = Literal["etl_failed", "etl_quality", "control_totals", "stale_data"]
+
+# Oddiy email manzil tekshiruvi (app/core/config.py dagi bilan bir xil): bo'shliq,
+# vergul, <>, ikkinchi @ — sarlavha in'ektsiyasi (CR/LF) oldini oladi.
+_ADDR_RE = re.compile(r"^[^\s,<>@]+@[^\s,<>@]+\.[^\s,<>@]+$")
+
+
+def _validate_recipients(recipients: Sequence[str]) -> list[str]:
+    result = list(recipients)
+    invalid = [r for r in result if not _ADDR_RE.match(r)]
+    if invalid:
+        raise ValueError(f"yaroqsiz email manzil(lar): {invalid!r}")
+    return result
 
 
 @dataclass(frozen=True, slots=True)
@@ -53,32 +67,51 @@ class EmailNotifier:
         username: str = "",
         password: str = "",
         starttls: bool = True,
+        ssl: bool = False,
         timeout: float = 10.0,
         smtp_factory: Callable[..., Any] = smtplib.SMTP,
+        smtp_ssl_factory: Callable[..., Any] = smtplib.SMTP_SSL,
     ) -> None:
         self.host = host
         self.port = port
         self.sender = sender
-        self.recipients = list(recipients)
+        self.recipients = _validate_recipients(recipients)
         self.username = username
         self.password = password
         self.starttls = starttls
+        self.ssl = ssl
         self.timeout = timeout
         self._factory = smtp_factory
+        self._ssl_factory = smtp_ssl_factory
 
     def notify(self, notification: Notification) -> None:
+        if self.password and not (self.starttls or self.ssl):
+            # Parolni shifrlanmagan ulanish orqali yubormaymiz (plaintext AUTH).
+            log.warning(
+                "email_notify_refused_plaintext_auth", kind=notification.kind, host=self.host
+            )
+            return
         message = EmailMessage()
         message["Subject"] = f"[UGEKAZNA] {_one_line(notification.subject)}"
         message["From"] = self.sender
-        message["To"] = ", ".join(self.recipients)
+        message["To"] = ", ".join(formataddr(("", r)) for r in self.recipients)
         message.set_content(notification.body)
         try:
-            with self._factory(self.host, self.port, timeout=self.timeout) as smtp:
-                if self.starttls:
-                    smtp.starttls(context=ssl.create_default_context())
-                if self.password:
-                    smtp.login(self.username or self.sender, self.password)
-                smtp.send_message(message)
+            if self.ssl:
+                context = ssl.create_default_context()
+                with self._ssl_factory(
+                    self.host, self.port, context=context, timeout=self.timeout
+                ) as smtp:
+                    if self.password:
+                        smtp.login(self.username or self.sender, self.password)
+                    smtp.send_message(message)
+            else:
+                with self._factory(self.host, self.port, timeout=self.timeout) as smtp:
+                    if self.starttls:
+                        smtp.starttls(context=ssl.create_default_context())
+                    if self.password:
+                        smtp.login(self.username or self.sender, self.password)
+                    smtp.send_message(message)
         except (OSError, smtplib.SMTPException) as exc:
             # Xabarnoma xatosi ETL'ni yiqitmasligi kerak.
             log.error("notify_email_failed", kind=notification.kind, error=type(exc).__name__)
@@ -109,6 +142,7 @@ def build_notifier(settings: Settings) -> Notifier:
                 username=settings.smtp_user,
                 password=settings.smtp_password.get_secret_value(),
                 starttls=settings.smtp_starttls,
+                ssl=settings.smtp_ssl,
             )
         )
     return CompositeNotifier(notifiers)

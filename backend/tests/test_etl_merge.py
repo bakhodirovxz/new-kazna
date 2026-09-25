@@ -523,3 +523,55 @@ def test_large_batch_merges_within_time_budget(source: str) -> None:
     elapsed = time.monotonic() - start
     assert stats["fact_cashflow"].upserted == n
     assert elapsed < 20.0
+
+
+# ── Fix r3, #1 (Important, reproduced): xom-matn dedup'dan keyingi tiplangan dublikat
+# ON CONFLICT'ni ikki marta urmasligi kerak (CardinalityViolation) ──
+
+
+def test_fx_rate_date_id_text_variants_do_not_crash_upsert(source: str) -> None:
+    run_id = open_run(source)
+    stage(run_id, source, {"fx_rate": [
+        {"currency": "USD", "date_id": 20260806, "rate": 1.0},
+        {"currency": "USD", "date_id": " 20260806", "rate": 2.0},  # bo'shliq bilan — bir xil int
+    ]})
+    stats = {s.target: s for s in merge_all(run_id, source)}
+    assert stats["fx_rate"].upserted == 1
+    with etl_transaction() as conn:
+        rows = conn.execute(
+            text("SELECT rate FROM dwh.fx_rate WHERE currency = 'USD' AND date_id = 20260806 "
+                 "AND src_system = :s"), {"s": source}).all()
+    assert [float(r[0]) for r in rows] == [2.0]  # oxirgi (seq bo'yicha) g'olib
+
+
+def test_fx_rate_currency_trailing_space_does_not_crash_upsert(source: str) -> None:
+    run_id = open_run(source)
+    stage(run_id, source, {"fx_rate": [
+        {"currency": "USD", "date_id": 20260807, "rate": 1.0},
+        {"currency": "USD ", "date_id": 20260807, "rate": 3.0},  # char(3) — orqa bo'shliq kesiladi
+    ]})
+    stats = {s.target: s for s in merge_all(run_id, source)}
+    assert stats["fx_rate"].upserted == 1
+    with etl_transaction() as conn:
+        rows = conn.execute(
+            text("SELECT rate FROM dwh.fx_rate WHERE currency = 'USD' AND date_id = 20260807 "
+                 "AND src_system = :s"), {"s": source}).all()
+    assert [float(r[0]) for r in rows] == [3.0]
+
+
+# ── Fix r3, #2 (Minor): NULL dedup kaliti bo'lgan bir necha qator BITTA xatoga
+# yig'ib qo'yilmasligi kerak (kam hisoblash) ──
+
+
+def test_missing_src_id_rows_are_not_undercounted(source: str) -> None:
+    branch = branch_row(new_tag())
+    run_id = open_run(source)
+    rows = [
+        {"doc_type": "bank_entry", "date_id": 20260805, "branch_code": branch["code"],
+         "item_code": OTHER_OUT_ITEM, "direction": "out", "amount": i, "gl_account": "5110"}
+        for i in (1, 2, 3)
+    ]
+    stage(run_id, source, {"dim_branch": [branch], "fact_cashflow": rows})
+    stats = {s.target: s for s in merge_all(run_id, source)}
+    assert stats["fact_cashflow"].upserted == 0
+    assert stats["fact_cashflow"].errors == 3

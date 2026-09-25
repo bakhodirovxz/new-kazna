@@ -177,11 +177,27 @@ def _case(branches: list[tuple[str, str, str]], field: int) -> str:
     return f"(CASE\n    {whens}\n  END)"
 
 
+def _dedupe_order_sql(dedupe_keys: list[str], *, payload_prefix: str = "payload") -> str:
+    """DISTINCT ON / ORDER BY ustunlari ro'yxati, matn (xom) kalitlar uchun.
+
+    Fix r3, Minor 2: agar biror kalit ustuni NULL bo'lsa (masalan `src_id` umuman berilmagan),
+    oddiy `DISTINCT ON (key1, key2)` BARCHA shunday qatorlarni BITTA guruhga yig'ib, faqat
+    bittasini qoldiradi — chunki DISTINCT ON NULL'larni bir-biriga teng deb hisoblaydi (xuddi
+    GROUP BY kabi). Natijada, masalan, `src_id`siz uchta qator faqat BITTA `missing_value`
+    xatosiga aylanadi (kam hisoblash). Tuzatish: qo'shimcha ustun — agar biror kalit NULL bo'lsa,
+    shu qatorning `seq`i (har doim noyob) qo'shiladi, aks holda NULL (o'zgarishsiz guruhlash).
+    Shu bilan faqat HAQIQATAN bir xil kalitli qatorlar birlashtiriladi."""
+    key_exprs = [f"{payload_prefix}->>'{c}'" for c in dedupe_keys]
+    null_guard = " OR ".join(f"{e} IS NULL" for e in key_exprs)
+    key_exprs.append(f"(CASE WHEN {null_guard} THEN seq::text END)")
+    return ", ".join(key_exprs)
+
+
 def _stage_create_sql(conn: Connection, name: str) -> str:
     t = TARGETS[name]
     tmeta = _table_meta(conn, name)
     dedupe_keys = _dedupe_keys(t)
-    dedupe_exprs = ", ".join(f"payload->>'{c}'" for c in dedupe_keys)
+    dedupe_exprs = _dedupe_order_sql(dedupe_keys)
 
     type_cases = [
         f"CASE WHEN payload->>'{c}' IS NOT NULL AND NOT pg_input_is_valid(payload->>'{c}', "
@@ -322,6 +338,33 @@ def _stage_create_sql(conn: Connection, name: str) -> str:
     )
 
 
+@cache
+def _ok_rows_cte(name: str) -> str:
+    """Fix r3 (Important, reproduced): R2-3'ning XOM matn bo'yicha dedup'i (`latest` CTE) turli
+    yozilgan, LEKIN bir xil TIPLANGAN qiymatga aylanadigan kalitlarni (masalan
+    `fx_rate.date_id` "20260806" va "020260806", yoki oxirida bo'shliqli kod) ikkita alohida
+    guruh deb hisoblaydi — ikkalasi ham yaroqli bo'lib chiqsa, ikkalasi ham `ok=true` bo'lib
+    qoladi va upsert'ning bitta SELECT'ida bir xil ON CONFLICT kalitiga ega ikkita qator
+    paydo bo'ladi (`CardinalityViolation: ON CONFLICT DO UPDATE command cannot affect row a
+    second time`). Yechim: xom dedup semantikasi (R2-3 — oxirgi xom qator TEKSHIRILADI)
+    saqlanadi, LEKIN upsert/moved-delete'dan oldin `ok` qatorlar ustida TIPLANGAN ustunlar
+    bo'yicha yana bir DISTINCT ON o'tkaziladi — endi ikkala "nusxa" ham allaqachon xuddi shu
+    tiplangan qiymatlarga ega (`_merge_stage`da), shuning uchun bu bosqich xavfsiz (hech qanday
+    qayta CAST kerak emas) va oxirgi (`seq` bo'yicha) g'olibni tanlaydi. Dedup kaliti ustunlari
+    (`_dedupe_keys`) har doim DEFAULT'siz NOT NULL — `ok=true` qatorda hech qachon NULL bo'lmaydi
+    (aks holda `missing_value` bilan chetlatilgan bo'lardi), shuning uchun bu yerda Minor 2'dagi
+    kabi NULL-himoya kerak emas."""
+    keys = ", ".join(_dedupe_keys(TARGETS[name]))
+    return (
+        "ok_rows AS (\n"
+        f"  SELECT DISTINCT ON ({keys}) *\n"
+        f"  FROM {STAGE_TABLE}\n"
+        "  WHERE ok\n"
+        f"  ORDER BY {keys}, seq DESC\n"
+        ")"
+    )
+
+
 def upsert_sql(conn: Connection, name: str) -> str:
     t = TARGETS[name]
     tmeta = _table_meta(conn, name)
@@ -343,9 +386,10 @@ def upsert_sql(conn: Connection, name: str) -> str:
     old = ", ".join(f"t.{c}" for c in compared)
     new = ", ".join(f"EXCLUDED.{c}" for c in compared)
     return (
+        f"WITH {_ok_rows_cte(name)}\n"
         f"INSERT INTO dwh.{name} AS t ({', '.join(insert_cols)})\n"
         f"SELECT {', '.join(exprs)}\n"
-        f"FROM {STAGE_TABLE} s WHERE s.ok\n"
+        "FROM ok_rows s\n"
         f"ON CONFLICT ({', '.join(t.conflict)}) DO UPDATE SET {', '.join(set_list)}\n"
         f"WHERE ({old}) IS DISTINCT FROM ({new})"
     )
@@ -354,10 +398,12 @@ def upsert_sql(conn: Connection, name: str) -> str:
 @cache
 def _moved_sql(name: str) -> str:
     # Hujjat sanasi o'zgargan bo'lsa, eski partitsiyadagi nusxani o'chiramiz — faqat
-    # `_merge_stage`dagi TASDIQLANGAN (`ok`) qatorlar uchun (fix r1, M1/I2).
+    # `_merge_stage`dagi TASDIQLANGAN (`ok`) va TIPLANGAN kalit bo'yicha deduplikatsiya
+    # qilingan qatorlar uchun (fix r1, M1/I2; fix r3, ok_rows).
     return (
-        f"DELETE FROM dwh.{name} t USING {STAGE_TABLE} s\n"
-        "WHERE s.ok AND t.src_system = :source AND t.doc_type = s.doc_type "
+        f"WITH {_ok_rows_cte(name)}\n"
+        f"DELETE FROM dwh.{name} t USING ok_rows s\n"
+        "WHERE t.src_system = :source AND t.doc_type = s.doc_type "
         "AND t.src_id = s.src_id AND t.date_id <> s.date_id"
     )
 
@@ -421,6 +467,9 @@ def merge_target(conn: Connection, name: str, *, load_id: int, source: str, step
     # yozuvlar shu jadvaldan, stg.rows'ni qayta skanlamay olinadi.
     conn.execute(text(f"DROP TABLE IF EXISTS pg_temp.{STAGE_TABLE}"))
     conn.execute(text(_stage_create_sql(conn, name)), params)
+    # Fix r3 (Cheap): planner pastdagi so'rovlar (DISTINCT ON, WHERE ok, JOIN'lar) uchun
+    # to'g'ri statistikaga ega bo'lishi uchun — vaqtinchalik jadvalda avtomatik ANALYZE yo'q.
+    conn.execute(text(f"ANALYZE {STAGE_TABLE}"))
 
     errors = conn.execute(text(_ERROR_COUNT_SQL)).scalar_one()
     conn.execute(text(_ERROR_INSERT_SQL), params)

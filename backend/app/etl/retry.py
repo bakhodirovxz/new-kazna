@@ -18,6 +18,12 @@ RETRY_DELAYS: tuple[float, ...] = (30.0, 120.0, 480.0)
 RETRYABLE: tuple[type[BaseException], ...] = (
     ConnectionError, TimeoutError, OSError, OperationalError, ConnectorUnavailableError,
 )
+# Findings r1, M8: quyidagilar `OSError`ning KICHIK SINFLARI, lekin doimiy (muhit) xatolar —
+# qayta urinish holatni o'zgartirmaydi (fayl/ruxsat/yo'l bir xil qoladi) — RETRYABLE'da OSError
+# orqali "tasodifan" qayta urinilib qolmasligi uchun aniq chiqarib tashlanadi.
+NON_RETRYABLE: tuple[type[BaseException], ...] = (
+    FileNotFoundError, PermissionError, IsADirectoryError, NotADirectoryError,
+)
 
 
 def call_with_retries[T](
@@ -28,14 +34,17 @@ def call_with_retries[T](
     jitter: float = 0.1,
     rng: Callable[[], float] = random.random,  # kriptografik emas, jitter uchun
     retry_on: tuple[type[BaseException], ...] = RETRYABLE,
+    non_retryable: tuple[type[BaseException], ...] = NON_RETRYABLE,
     on_retry: Callable[[int, BaseException, float], None] | None = None,
 ) -> T:
+    if not 0 <= jitter < 1:
+        raise ValueError("jitter [0, 1) oralig'ida bo'lishi kerak")
     attempt = 0
     while True:
         try:
             return fn()
         except retry_on as exc:
-            if attempt >= len(delays):
+            if isinstance(exc, non_retryable) or attempt >= len(delays):
                 raise
             pause = delays[attempt] * (1 + jitter * (2 * rng() - 1))
             if on_retry is not None:

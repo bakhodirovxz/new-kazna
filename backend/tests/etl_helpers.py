@@ -10,6 +10,8 @@ from typing import Any
 
 from sqlalchemy import text
 
+from app.dwh import builds
+from app.dwh.aggregates import BuildParams, build_all
 from app.dwh.targets import OTHER_OUT_ITEM
 from app.etl.db import etl_transaction
 from app.etl.merge import MergeStats, merge_dims, merge_facts
@@ -105,3 +107,18 @@ def cash_row(
     }
     row.update(extra)
     return row
+
+
+def load_and_build(
+    source: str, rows: Mapping[str, Sequence[Mapping[str, Any]]], *,
+    window: Window = FULL_WINDOW,
+) -> tuple[int, int]:
+    """Staging → merge → yangi build (publish qilinmaydi). (run_id, build_id) qaytaradi."""
+    run_id = open_run(source)
+    stage(run_id, source, rows)
+    merge_all(run_id, source, window)
+    with etl_transaction() as conn:
+        build_id = builds.create_build(conn, run_id)
+        build_all(conn, build_id, BuildParams(as_of=TEST_AS_OF, date_from=window.date_from))
+        builds.mark_ready(conn, build_id)
+    return run_id, build_id

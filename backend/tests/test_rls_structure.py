@@ -302,6 +302,83 @@ def test_loan_version_overlap_rejected() -> None:
         conn.execute(text("DELETE FROM dwh.dim_loan WHERE loan_id = :i"), {"i": loan_id})
 
 
+def test_loan_version_boundary_dates() -> None:
+    """Fix r3: `test_branch_version_boundary_dates`ning `dim_loan_version` uchun analogi —
+    fix r2'da inklyuziv `valid_to`ga o'zgargan EXCLUDE/CHECK `dim_loan_version`da ham xuddi
+    shunday ishlashi kerak:
+
+    1. yangi versiya `valid_from`i oldingisining `valid_to`iga TENG bo'lsa — kesishadi,
+       rad etiladi;
+    2. `valid_from = oldingi valid_to + 1` bo'lsa — kesishmaydi, qabul qilinadi;
+    3. bir kunlik versiya (`valid_from = valid_to`) — qonuniy, qabul qilinadi.
+
+    O'zining alohida test kreditidan (`dim_loan`) foydalanadi — boshqa testlarga
+    ta'sir qilmasligi uchun oxirida hammasi (versiyalar + kredit) o'chiriladi."""
+    code = f"LN-B{uuid.uuid4().hex[:8]}"
+    with etl_transaction() as conn:
+        loan_id = conn.execute(
+            text(
+                "INSERT INTO dwh.dim_loan (code, creditor, project, currency, rate, maturity, "
+                "amount_uzs, branch_id, src_system) VALUES (:c, 'IFI', 'Loyiha', 'USD', 0.05, "
+                "date '2035-01-01', 1000, 7, 'test') RETURNING loan_id"
+            ),
+            {"c": code},
+        ).scalar_one()
+        conn.execute(
+            text(
+                "INSERT INTO dwh.dim_loan_version (loan_id, rate, valid_from, valid_to, "
+                "is_current) VALUES (:l, 0.05, date '2020-01-01', date '2024-06-30', false)"
+            ),
+            {"l": loan_id},
+        )
+    try:
+        with etl_transaction() as conn, pytest.raises(IntegrityError), conn.begin_nested():
+            conn.execute(
+                text(
+                    "INSERT INTO dwh.dim_loan_version (loan_id, rate, valid_from, valid_to, "
+                    "is_current) VALUES (:l, 0.06, date '2024-06-30', date '2024-07-15', "
+                    "false)"
+                ),
+                {"l": loan_id},
+            )
+        with etl_transaction() as conn:
+            conn.execute(
+                text(
+                    "INSERT INTO dwh.dim_loan_version (loan_id, rate, valid_from, valid_to, "
+                    "is_current) VALUES (:l, 0.06, date '2024-07-01', date '2024-07-31', "
+                    "false)"
+                ),
+                {"l": loan_id},
+            )
+        with etl_transaction() as conn:
+            conn.execute(
+                text(
+                    "INSERT INTO dwh.dim_loan_version (loan_id, rate, valid_from, valid_to, "
+                    "is_current) VALUES (:l, 0.07, date '2024-08-15', date '2024-08-15', "
+                    "false)"
+                ),
+                {"l": loan_id},
+            )
+        with etl_transaction() as conn:
+            rows = conn.execute(
+                text(
+                    "SELECT valid_from, valid_to FROM dwh.dim_loan_version "
+                    "WHERE loan_id = :l AND valid_from <> date '2020-01-01' ORDER BY valid_from"
+                ),
+                {"l": loan_id},
+            ).all()
+        assert [(r.valid_from.isoformat(), r.valid_to.isoformat()) for r in rows] == [
+            ("2024-07-01", "2024-07-31"),
+            ("2024-08-15", "2024-08-15"),
+        ]
+    finally:
+        with etl_transaction() as conn:
+            conn.execute(
+                text("DELETE FROM dwh.dim_loan_version WHERE loan_id = :l"), {"l": loan_id}
+            )
+            conn.execute(text("DELETE FROM dwh.dim_loan WHERE loan_id = :l"), {"l": loan_id})
+
+
 def test_counterparty_inn_pairing_check_rejected() -> None:
     """`CHECK ((inn_enc IS NULL) = (inn_bidx IS NULL))` — biri bo'lib, ikkinchisi bo'lmasa
     ma'lumot izlab topib bo'lmaydigan (bidx'siz) yoki shifrlanmagan qoldiqqa aylanadi."""

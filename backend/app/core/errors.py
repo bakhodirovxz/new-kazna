@@ -46,6 +46,7 @@ MESSAGES: dict[str, str] = {
     "rate_limited": "Слишком много запросов, повторите позже",
     "payload_too_large": "Слишком большой запрос",
     "method_not_allowed": "Метод не поддерживается",
+    "build_not_available": "Сборка недоступна",
     "internal_error": "Внутренняя ошибка сервера",
 }
 

@@ -72,6 +72,8 @@ class AuditAction(StrEnum):
     KEY_REWRAPPED = "admin.key.rewrapped"
     AUDIT_EXPORTED = "audit.exported"
     AUDIT_VERIFIED = "audit.verified"
+    ETL_RUN_STARTED = "etl.run.started"
+    ETL_RUN_FINISHED = "etl.run.finished"
     RLS_VIOLATION = "security.rls_violation_attempt"
     ACCESS_DENIED = "security.access_denied"
 

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import calendar
-from datetime import date
+from datetime import UTC, date, datetime, timedelta, timezone
 
 
 def date_id(d: date) -> int:
@@ -31,3 +31,11 @@ def add_months(d: date, n: int) -> date:
     year, month0 = divmod(index, 12)
     last = calendar.monthrange(year, month0 + 1)[1]
     return date(year, month0 + 1, min(d.day, last))
+
+
+# O'zbekiston: UTC+5, yozgi vaqt yo'q (1992-yildan).
+TASHKENT = timezone(timedelta(hours=5), "Asia/Tashkent")
+
+
+def today_tashkent(now: datetime | None = None) -> date:
+    return (now or datetime.now(UTC)).astimezone(TASHKENT).date()

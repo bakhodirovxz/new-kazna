@@ -5,7 +5,9 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Collection, Mapping, Sequence
-from datetime import date
+from dataclasses import dataclass, field
+from datetime import UTC, date, datetime
+from decimal import Decimal
 from typing import Any
 
 from sqlalchemy import text
@@ -15,8 +17,9 @@ from app.dwh.aggregates import BuildParams, build_all
 from app.dwh.targets import OTHER_OUT_ITEM
 from app.etl.db import etl_transaction
 from app.etl.merge import MergeStats, merge_dims, merge_facts
+from app.etl.notify import Notification
 from app.etl.staging import DbStagingSink, clear_load
-from app.etl.types import Window
+from app.etl.types import ControlTotals, ExtractStats, HealthResult, StagingSink, Watermark, Window
 
 TEST_AS_OF = date(2026, 9, 24)
 FULL_WINDOW = Window(date(2024, 1, 1), TEST_AS_OF)
@@ -122,3 +125,55 @@ def load_and_build(
         build_all(conn, build_id, BuildParams(as_of=TEST_AS_OF, date_from=window.date_from))
         builds.mark_ready(conn, build_id)
     return run_id, build_id
+
+
+STEP_NAMES = ("extract", "dims", "facts", "aggregates", "quality", "publish")
+
+
+@dataclass
+class ListConnector:
+    """Oldindan berilgan qatorlarni qaytaruvchi konnektor; nosozliklarni simulyatsiya qiladi."""
+
+    source: str
+    rows: dict[str, list[dict[str, Any]]] = field(default_factory=dict)
+    totals: dict[int, Decimal] | None = None
+    fail_times: int = 0
+    error: type[Exception] = ConnectionError
+    healthy: bool = True
+    mark: datetime = field(default_factory=lambda: datetime(2026, 9, 24, 3, 0, tzinfo=UTC))
+    calls: int = 0
+
+    def healthcheck(self) -> HealthResult:
+        return HealthResult(self.healthy, "test")
+
+    def watermark(self) -> Watermark:
+        return Watermark(self.mark)
+
+    def extract(self, window: Window, sink: StagingSink) -> ExtractStats:
+        self.calls += 1
+        if self.calls <= self.fail_times:
+            raise self.error("источник недоступен")
+        counts: dict[str, int] = {}
+        for target, items in self.rows.items():
+            counts[target] = 0
+            for row in items:
+                if target.startswith("fact_") and not window.contains_id(int(row["date_id"])):
+                    continue
+                sink.add(target, row)
+                counts[target] += 1
+        return ExtractStats(sum(counts.values()), counts)
+
+    def control_totals(self, window: Window) -> ControlTotals | None:
+        return None if self.totals is None else ControlTotals(self.totals)
+
+
+class RecordingNotifier:
+    def __init__(self) -> None:
+        self.items: list[Notification] = []
+
+    def notify(self, notification: Notification) -> None:
+        self.items.append(notification)
+
+    @property
+    def kinds(self) -> list[str]:
+        return [n.kind for n in self.items]

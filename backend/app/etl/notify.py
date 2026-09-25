@@ -15,7 +15,10 @@ from app.core.config import Settings
 from app.core.logging import get_logger
 
 log = get_logger("ugekazna.notify")
-Kind = Literal["etl_failed", "etl_quality", "control_totals", "stale_data"]
+# "etl_row_errors" — task-8 controller ruling: merge tomonidan bloklovchi bo'lmagan kod bilan
+# rad etilgan qatorlar (masalan `negative_amount`, `missing_value`) sifat tekshiruvini
+# to'xtatmaydi, lekin ko'rinmas bo'lib qolmasligi kerak — faqat sonlar bilan xabar qilinadi.
+Kind = Literal["etl_failed", "etl_quality", "control_totals", "stale_data", "etl_row_errors"]
 
 # Oddiy email manzil tekshiruvi (app/core/config.py dagi bilan bir xil): bo'shliq,
 # vergul, <>, ikkinchi @ — sarlavha in'ektsiyasi (CR/LF) oldini oladi.

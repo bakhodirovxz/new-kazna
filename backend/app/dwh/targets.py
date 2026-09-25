@@ -1,0 +1,157 @@
+"""Staging maqsadlari reyestri: har dwh jadvali uchun ustunlar, idempotentlik kaliti,
+o'lcham kodlarini id'ga aylantirish (lookup), SCD-2 va shifrlanadigan maydonlar.
+
+Barcha SQL identifikatorlari shu fayldan olinadi (whitelist) — tashqi kiritishdan emas.
+Keyingi rejalar yangi fakt qo'shganda faqat shu yerga Target qo'shadi.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import Literal
+
+from app.core.crypto import Purpose
+
+# Tizim "Прочие" statyalari (0005 migratsiyasida seed qilingan).
+OTHER_IN_ITEM = "PKM54-I06"
+OTHER_OUT_ITEM = "PKM54-O09"
+_ITEM_BY_DIRECTION = (
+    f"CASE WHEN s.payload->>'direction' = 'in' THEN '{OTHER_IN_ITEM}' "
+    f"ELSE '{OTHER_OUT_ITEM}' END"
+)
+_ITEM_OUT = f"'{OTHER_OUT_ITEM}'"
+
+
+@dataclass(frozen=True, slots=True)
+class Lookup:
+    column: str  # dwh ustuni va o'lcham PK nomi, masalan "item_id"
+    dim: str  # "dim_item"
+    nullable: bool = False
+    fallback_sql: str | None = None  # topilmasa ishlatiladigan KOD ifodasi (statya → «Прочие»)
+
+    @property
+    def key(self) -> str:
+        return self.column.removesuffix("_id") + "_code"
+
+    @property
+    def error_code(self) -> str:
+        if self.column == "branch_id":
+            return "missing_branch"
+        return "missing_item" if self.fallback_sql else "missing_dim"
+
+    @property
+    def severity(self) -> str:
+        return "warning" if self.fallback_sql else "error"
+
+
+@dataclass(frozen=True, slots=True)
+class Scd:
+    table: str
+    key: str
+    column: str
+
+
+@dataclass(frozen=True, slots=True)
+class Sensitive:
+    field: str  # manbadagi ochiq maydon
+    enc_column: str
+    bidx_column: str
+    purpose: Purpose
+    index_label: str
+
+
+@dataclass(frozen=True, slots=True)
+class Target:
+    name: str
+    kind: Literal["dim", "fact"]
+    columns: tuple[str, ...]  # payload'dan to'g'ridan-to'g'ri olinadigan ustunlar
+    conflict: tuple[str, ...]
+    lookups: tuple[Lookup, ...] = ()
+    partition: Literal["month", "year"] | None = None
+    windowed: bool = False  # oyna ichida to'liq almashtiriladi
+    scd: Scd | None = None
+    sensitive: tuple[Sensitive, ...] = ()
+
+
+BRANCH = Lookup("branch_id", "dim_branch")
+_FACT_TECH = ("doc_type", "src_id", "date_id")
+
+
+def _dim(name: str, columns: tuple[str, ...], **kw: object) -> Target:
+    return Target(name, "dim", columns, ("code",), **kw)  # type: ignore[arg-type]
+
+
+def _fact(name: str, measures: tuple[str, ...], lookups: tuple[Lookup, ...],
+          partition: Literal["month", "year"] | None = None) -> Target:
+    conflict = ("src_system", "doc_type", "src_id") + (("date_id",) if partition else ())
+    return Target(name, "fact", _FACT_TECH + measures, conflict, lookups, partition,
+                  windowed=True)
+
+
+_ALL: tuple[Target, ...] = (
+    _dim("dim_branch",
+         ("code", "name", "short_name", "inn", "kind", "capacity_mw", "lat", "lon", "sort_order"),
+         scd=Scd("dim_branch_version", "branch_id", "capacity_mw")),
+    _dim("dim_item", ("code", "name", "activity", "direction", "sort_order")),
+    _dim("dim_counterparty", ("code", "name", "kind", "inn_enc", "inn_bidx"),
+         sensitive=(Sensitive("inn", "inn_enc", "inn_bidx", Purpose.PII, "inn"),)),
+    _dim("dim_bank", ("code", "bank_name", "account_enc", "account_bidx", "currency"),
+         sensitive=(Sensitive("account_number", "account_enc", "account_bidx", Purpose.BANK,
+                              "account"),)),
+    _dim("dim_nomenclature", ("code", "name", "category", "unit", "enbt_code")),
+    _dim("dim_source", ("code", "name", "kind")),
+    _dim("dim_object",
+         ("code", "name", "program_code", "work_type", "commissioning_year", "total_cost"),
+         lookups=(Lookup("source_id", "dim_source", nullable=True),)),
+    _dim("dim_contract", ("code", "number", "contract_date", "amount", "end_date", "kind"),
+         lookups=(BRANCH, Lookup("cp_id", "dim_counterparty"),
+                  Lookup("object_id", "dim_object", nullable=True))),
+    _dim("dim_loan",
+         ("code", "creditor", "project", "currency", "rate", "grace_until", "maturity",
+          "amount_uzs"),
+         lookups=(BRANCH,), scd=Scd("dim_loan_version", "loan_id", "rate")),
+    _dim("dim_position", ("code", "category", "department")),
+    Target("fx_rate", "fact", ("currency", "date_id", "rate"), ("currency", "date_id")),
+    _fact("fact_cashflow", ("direction", "amount", "gl_account"),
+          (BRANCH, Lookup("item_id", "dim_item", fallback_sql=_ITEM_BY_DIRECTION),
+           Lookup("cp_id", "dim_counterparty", nullable=True),
+           Lookup("contract_id", "dim_contract", nullable=True),
+           Lookup("bank_id", "dim_bank", nullable=True)), "month"),
+    _fact("fact_balance", ("balance",), (BRANCH, Lookup("bank_id", "dim_bank")), "year"),
+    _fact("fact_payment_plan", ("amount",),
+          (BRANCH, Lookup("item_id", "dim_item", fallback_sql=_ITEM_OUT))),
+    _fact("fact_payment_order", ("amount", "status", "status_date_id"),
+          (BRANCH, Lookup("item_id", "dim_item", fallback_sql=_ITEM_OUT),
+           Lookup("cp_id", "dim_counterparty", nullable=True),
+           Lookup("bank_id", "dim_bank", nullable=True)), "month"),
+    _fact("fact_debt", ("receivable", "payable", "overdue", "overdue_days"),
+          (BRANCH, Lookup("contract_id", "dim_contract"),
+           Lookup("cp_id", "dim_counterparty", nullable=True)), "year"),
+    _fact("fact_generation", ("generation", "own_needs", "supply", "plan", "work_hours"),
+          (BRANCH,), "year"),
+    _fact("fact_energy_sales", ("accrued", "paid", "volume"),
+          (BRANCH, Lookup("cp_id", "dim_counterparty"))),
+    _fact("fact_procurement",
+          ("lot_no", "method", "status", "start_price", "contract_price", "procedure_days"),
+          (BRANCH, Lookup("nom_id", "dim_nomenclature", nullable=True),
+           Lookup("cp_id", "dim_counterparty", nullable=True))),
+    _fact("fact_stock", ("warehouse", "qty", "value", "min_qty", "last_move_date_id"),
+          (BRANCH, Lookup("nom_id", "dim_nomenclature")), "year"),
+    _fact("fact_stock_move", ("direction", "qty", "value"),
+          (BRANCH, Lookup("nom_id", "dim_nomenclature")), "year"),
+    _fact("fact_investment", ("plan", "fact", "physical_pct", "advance", "advance_date_id"),
+          (BRANCH, Lookup("object_id", "dim_object"),
+           Lookup("source_id", "dim_source", nullable=True))),
+    _fact("fact_loan_schedule", ("principal", "interest", "balance"),
+          (BRANCH, Lookup("loan_id", "dim_loan"))),
+    _fact("fact_hr",
+          ("headcount_plan", "headcount_fact", "payroll", "hired", "fired", "overtime_hours"),
+          (BRANCH, Lookup("pos_id", "dim_position"))),
+    _fact("fact_target_funds", ("allocated", "used"),
+          (BRANCH, Lookup("source_id", "dim_source"),
+           Lookup("object_id", "dim_object", nullable=True))),
+)
+
+TARGETS: dict[str, Target] = {t.name: t for t in _ALL}
+DIM_TARGETS: tuple[str, ...] = tuple(t.name for t in _ALL if t.kind == "dim")
+FACT_TARGETS: tuple[str, ...] = tuple(t.name for t in _ALL if t.kind == "fact")

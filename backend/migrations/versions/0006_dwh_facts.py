@@ -187,6 +187,15 @@ BEGIN
     IF to_regclass('dwh.' || part) IS NULL THEN
       EXECUTE format('CREATE TABLE dwh.%I PARTITION OF dwh.%I FOR VALUES FROM (%s) TO (%s)',
                      part, p_table, to_char(cur, 'YYYYMMDD'), to_char(nxt, 'YYYYMMDD'));
+      -- Fix r1 (I2): mudofaa chuqurligi — partitsiyalar RLS'ni ota-jadvaldan faqat so'rov
+      -- ota orqali yo'naltirilganda meros oladi; to'g'ridan-to'g'ri (partitsiya nomi bilan)
+      -- so'ralganda ham himoyalangan bo'lishi uchun har bir yangi partitsiyada ENABLE/FORCE
+      -- RLS + ota bilan bir xil branch_scope siyosati o'rnatiladi.
+      EXECUTE format('ALTER TABLE dwh.%I ENABLE ROW LEVEL SECURITY', part);
+      EXECUTE format('ALTER TABLE dwh.%I FORCE ROW LEVEL SECURITY', part);
+      EXECUTE format(
+        'CREATE POLICY branch_scope ON dwh.%I USING (core.rls_branch_ok(branch_id)) '
+        'WITH CHECK (core.rls_branch_ok(branch_id))', part);
       created := created + 1;
     END IF;
     cur := nxt;
@@ -200,18 +209,19 @@ DROP_OLD_PARTITIONS = """
 CREATE FUNCTION dwh.drop_old_partitions(p_keep_years integer) RETURNS integer
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp AS $$
 DECLARE
+  -- Fix r1 (I1): saqlash pasti hech qachon 5 yildan kam bo'lmaydi (global-constraints.md
+  -- retention.fact_years = 5) — core.drop_old_audit_partitions'ning 12 oylik pasti bilan
+  -- bir xil naqsh (GREATEST bilan cheklash, RAISE emas).
+  eff_years integer := GREATEST(p_keep_years, 5);
   cutoff integer;
   dropped integer := 0;
   r record;
   suffix text;
   upper_bound integer;
 BEGIN
-  IF p_keep_years < 1 THEN
-    RAISE EXCEPTION 'p_keep_years kamida 1 bo''lishi kerak';
-  END IF;
   PERFORM pg_advisory_xact_lock(hashtext('ugk_partitions'));
   cutoff := to_char(date_trunc('month', now() AT TIME ZONE 'UTC')
-                    - make_interval(years => p_keep_years), 'YYYYMMDD')::integer;
+                    - make_interval(years => eff_years), 'YYYYMMDD')::integer;
   FOR r IN
     SELECT c.relname AS part, p.relname AS parent
     FROM pg_inherits i

@@ -62,6 +62,70 @@ def test_every_branch_id_table_has_rls_enabled_and_forced() -> None:
             assert row.relforcerowsecurity, f"{schema}.{table}: FORCE RLS yo'q"
 
 
+def _fact_partitions() -> list[tuple[str, str]]:
+    """`dwh`/`mart`dagi HAR BIR partitsiya (RANGE partitsiyalangan fakt jadvallarining
+    oylik/yillik bo'limlari) — yuqoridagi `_tables_with_branch_id()` ATAYLAB bularni
+    chiqarib tashlaydi (`NOT c.relispartition`), chunki ular alohida "mantiqiy jadval"
+    emas. Bu yordamchi esa aynan o'sha chetlab o'tilgan partitsiyalarni topadi — mudofaa
+    chuqurligi (fix r1, I2): partitsiyalar RLS'ni ota-jadvaldan faqat so'rov ota orqali
+    yo'naltirilganda meros oladi, to'g'ridan-to'g'ri (partitsiya nomi bilan) so'ralganda
+    ham himoyalangan bo'lishi kerak."""
+    with get_engine("migrator").connect() as conn:
+        rows = conn.execute(
+            text(
+                "SELECT n.nspname, c.relname FROM pg_class c "
+                "JOIN pg_namespace n ON n.oid = c.relnamespace "
+                # relkind = 'r': faqat oddiy jadval partitsiyalari — relispartition
+                # partitsiyalangan INDEKSlarning bo'lim-indekslarida ham true bo'ladi
+                # (relkind = 'i'), ular RLS/GRANT bilan aloqasi yo'q.
+                "WHERE n.nspname = ANY(:schemas) AND c.relispartition AND c.relkind = 'r' "
+                "ORDER BY 1, 2"
+            ),
+            {"schemas": list(_SCHEMAS)},
+        ).all()
+    return [(schema, table) for schema, table in rows]
+
+
+def test_every_fact_partition_has_rls_enabled_and_forced() -> None:
+    """Fix r1 (I2, b): `dwh.ensure_partitions` har bir yangi partitsiyada ENABLE/FORCE RLS
+    o'rnatishi kerak — migratsiyaning o'zi `upgrade()` oxirida joriy oy/yil uchun dastlabki
+    partitsiyalarni shu funksiya orqali yaratadi, shuning uchun bu test alohida fixture'siz
+    ham kamida bir nechta partitsiyani topadi."""
+    partitions_ = _fact_partitions()
+    assert partitions_, "hech qanday fakt partitsiyasi topilmadi — migratsiya ishlamadimi?"
+    with get_engine("migrator").connect() as conn:
+        for schema, table in partitions_:
+            row = conn.execute(
+                text(
+                    "SELECT relrowsecurity, relforcerowsecurity FROM pg_class c "
+                    "JOIN pg_namespace n ON n.oid = c.relnamespace "
+                    "WHERE n.nspname = :s AND c.relname = :t"
+                ),
+                {"s": schema, "t": table},
+            ).one()
+            assert row.relrowsecurity, f"{schema}.{table}: RLS yoqilmagan (partitsiya)"
+            assert row.relforcerowsecurity, f"{schema}.{table}: FORCE RLS yo'q (partitsiya)"
+
+
+def test_no_role_has_direct_privileges_on_fact_partitions() -> None:
+    """Fix r1 (I2, a): `ugk_app`/`ugk_etl`ning HECH bir fakt partitsiyasida to'g'ridan-to'g'ri
+    huquqi yo'q — GRANT faqat ota (partitsiyalangan) jadvalga berilgan (0006), partitsiyalar
+    faqat ota orqali so'ralganda ko'rinadi. Yuqoridagi RLS testi bilan birga: hatto kimdir
+    partitsiya nomini to'g'ridan-to'g'ri bilsa ham, u avval huquq yo'qligiga (bu test), keyin
+    RLS'ga (oldingi test) duch keladi."""
+    partitions_ = _fact_partitions()
+    assert partitions_
+    with get_engine("migrator").connect() as conn:
+        for schema, table in partitions_:
+            for role in ("ugk_app", "ugk_etl"):
+                for priv in ("SELECT", "INSERT", "UPDATE", "DELETE"):
+                    ok = conn.execute(
+                        text("SELECT has_table_privilege(:r, :t, :p)"),
+                        {"r": role, "t": f"{schema}.{table}", "p": priv},
+                    ).scalar_one()
+                    assert not ok, f"{role} {priv} huquqiga ega: {schema}.{table}"
+
+
 def test_ugk_app_denied_select_on_dim_counterparty() -> None:
     """I1: `ugk_app` (internetga qaragan, keyring ushlab turadigan ulanish) `dwh.
     dim_counterparty`ga (hatto shifrlanmagan `name` ustuniga ham) hech qanday huquqqa ega

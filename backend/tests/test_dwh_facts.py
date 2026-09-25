@@ -1,3 +1,4 @@
+import re
 from collections.abc import Iterator
 from datetime import date
 
@@ -6,7 +7,7 @@ from sqlalchemy import text
 from sqlalchemy.engine import Connection
 from sqlalchemy.exc import DBAPIError, IntegrityError, ProgrammingError
 
-from app.core.db import new_session
+from app.core.db import get_engine, new_session
 from app.dwh import partitions
 from app.etl.db import etl_transaction
 
@@ -112,6 +113,45 @@ def test_ensure_ahead_creates_three_months() -> None:
 def test_app_role_cannot_read_facts() -> None:
     with new_session() as s, pytest.raises(ProgrammingError, match="permission denied"):
         s.execute(text("SELECT count(*) FROM dwh.fact_cashflow"))
+
+
+def test_drop_old_partitions_floor_keeps_two_year_old_partition() -> None:
+    """Fix r1 (I1): saqlash pasti hech qachon 5 yildan kam bo'lmaydi
+    (`GREATEST(p_keep_years, 5)`, `core.drop_old_audit_partitions`ning 12 oylik pasti bilan
+    bir xil naqsh) — `keep_years=1` bilan chaqirilsa ham 2 yillik partitsiya o'chirilmaydi
+    (samarali cheklov 5 yil, 2 yil undan yosh)."""
+    with etl_transaction() as conn:
+        today = conn.execute(text("SELECT (now() AT TIME ZONE 'UTC')::date")).scalar_one()
+    year = today.year - 2
+    target = f"fact_balance_p{year}"
+    with etl_transaction() as conn:
+        partitions.ensure_partitions(conn, "fact_balance", date(year, 1, 1), date(year, 12, 31))
+        before = set(partitions.list_partitions(conn, "fact_balance"))
+    assert target in before
+    try:
+        with etl_transaction() as conn:
+            partitions.drop_old(conn, keep_years=1)
+            after = set(partitions.list_partitions(conn, "fact_balance"))
+        assert target in after
+    finally:
+        # DROP TABLE — jadval egasi `ugk_migrator` (SECURITY DEFINER funksiya nomidan
+        # yaratilgan), `ugk_etl`ning DROP huquqi yo'q, shuning uchun tozalash migrator
+        # ulanishi orqali.
+        with get_engine("migrator").begin() as conn:
+            conn.execute(text(f"DROP TABLE IF EXISTS dwh.{target}"))
+
+
+def test_partitioned_whitelist_matches_sql_function() -> None:
+    """Ixtiyoriy paritet tekshiruvi: `app.dwh.partitions.PARTITIONED` (Python) va
+    `dwh.ensure_partitions`ning CASE ro'yxati (SQL) mustaqil qo'lda saqlanadi — bu test
+    ikkalasi sinxron ekanini isbotlaydi (biri o'zgarib, ikkinchisi unutilsa yiqiladi)."""
+    with etl_transaction() as conn:
+        src = conn.execute(
+            text("SELECT pg_get_functiondef("
+                 "'dwh.ensure_partitions(text, date, date)'::regprocedure)")
+        ).scalar_one()
+    found = dict(re.findall(r"WHEN '(fact_\w+)' THEN '(month|year)'", src))
+    assert found == partitions.PARTITIONED
 
 
 def test_mandatory_indexes_exist() -> None:

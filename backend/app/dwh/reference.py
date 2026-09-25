@@ -157,9 +157,15 @@ def fin_assumption_seeds() -> list[tuple[str, int, str, Decimal]]:
 
 
 def ensure_reference(conn: Connection) -> None:
-    """Bootstrap'da chaqiriladi (ugk_app). Faqat yo'q yozuvlarni qo'shadi."""
+    """Bootstrap'da chaqiriladi (ugk_app). Faqat yo'q yozuvlarni qo'shadi.
+
+    `core.data_version`ning yagona qatori (`id = 1`) bu yerda ENDI seed qilinmaydi — fix r1
+    (M1): u 0007 migratsiyasida bir marta yoziladi va `ugk_app`da bu jadvalga endi INSERT
+    huquqi yo'q (faqat `active_build_id`/`published_at` ustunlariga ustun darajasidagi
+    UPDATE) — least privilege. Testlarda qator `_reset_core()` TRUNCATE'idan keyin
+    `ugk_migrator` ulanishi bilan qayta seed qilinadi (`tests/conftest.py`).
+    """
     conn.execute(text("SELECT pg_advisory_xact_lock(hashtext('ugk_reference'))"))
-    conn.execute(text("INSERT INTO core.data_version (id) VALUES (1) ON CONFLICT DO NOTHING"))
     for key, value in DEFAULT_SETTINGS.items():
         conn.execute(
             text(

@@ -40,6 +40,9 @@ STATEMENTS = [
       published_at timestamptz
     )
     """,
+    # Fix r1 (M1): yagona tizim qatori — migratsiya tomonidan bir marta seed qilinadi
+    # (ugk_app'da endi bu jadvalga INSERT huquqi yo'q, faqat ustun darajasidagi UPDATE).
+    "INSERT INTO core.data_version (id) VALUES (1)",
     """
     CREATE TABLE core.etl_run (
       id bigserial PRIMARY KEY,
@@ -172,10 +175,19 @@ STATEMENTS = [
     "CREATE INDEX stg_rows_key_idx ON stg.rows (load_id, target, (payload->>'src_id'))",
     # ── Huquqlar ──
     "GRANT SELECT, INSERT, UPDATE, DELETE ON core.builds TO ugk_etl",
-    "GRANT SELECT, UPDATE ON core.builds TO ugk_app",
+    # Fix r1 (M1): ugk_app faqat status/published_at ustunlarini yangilay oladi (masalan,
+    # kelajakdagi admin rollback so'rovi uchun) — boshqa ustunlar (build_id, created_at,
+    # load_id) faqat ugk_etl orqali yoziladi.
+    "GRANT SELECT ON core.builds TO ugk_app",
+    "GRANT UPDATE (status, published_at) ON core.builds TO ugk_app",
     "GRANT USAGE ON SEQUENCE core.builds_build_id_seq TO ugk_etl",
     "GRANT SELECT, UPDATE ON core.data_version TO ugk_etl",
-    "GRANT SELECT, INSERT, UPDATE ON core.data_version TO ugk_app",
+    # Fix r1 (M1): INSERT yo'q — yagona qator migratsiya tomonidan seed qilingan (yuqorida).
+    # UPDATE faqat active_build_id/published_at ustunlariga — 0008'dagi BEFORE UPDATE
+    # trigger (core.data_version_guard) active_build_id noto'g'ri build'ga ko'rsatishidan
+    # DB darajasida himoya qiladi (ugk_app to'g'ridan-to'g'ri UPDATE qilsa ham).
+    "GRANT SELECT ON core.data_version TO ugk_app",
+    "GRANT UPDATE (active_build_id, published_at) ON core.data_version TO ugk_app",
     "GRANT SELECT, INSERT, UPDATE ON core.etl_run, core.etl_step, core.etl_error TO ugk_etl",
     "GRANT SELECT ON core.etl_run, core.etl_step, core.etl_error TO ugk_app",
     """

@@ -5,8 +5,9 @@ from typing import Any
 
 import pytest
 from sqlalchemy import text
+from sqlalchemy.exc import DBAPIError
 
-from app.core.db import apply_rls, new_session
+from app.core.db import apply_rls, get_engine, new_session
 from app.core.errors import ConflictError
 from app.dwh import builds
 from app.dwh.aggregates import BuildParams, build_all
@@ -227,3 +228,151 @@ def test_pub_query_uses_mart_index_not_facts() -> None:
     mart_nodes = [n for n in nodes if n.get("Relation Name") == "agg_cash_month"]
     index_scans = {"Index Scan", "Index Only Scan", "Bitmap Heap Scan"}
     assert mart_nodes and all(n["Node Type"] in index_scans for n in mart_nodes)
+
+
+# ── Fix round 1 (task-6-findings-r1.md) ──────────────────────────────────────────────────
+
+
+def test_mark_failed_is_noop_for_published_build(source: str) -> None:
+    """I1: `mark_failed` faol/nashr qilingan build'ni "buzib qo'ya olmaydi" — jim no-op."""
+    _, build_id = _scenario(source)
+    with etl_transaction() as conn:
+        builds.publish(conn, build_id, keep=3)
+        ok = builds.mark_failed(conn, build_id)
+        status = conn.execute(
+            text("SELECT status FROM core.builds WHERE build_id = :b"), {"b": build_id}
+        ).scalar_one()
+        count = conn.execute(
+            text("SELECT count(*) FROM mart.agg_cash_month WHERE build_id = :b"),
+            {"b": build_id}).scalar_one()
+    assert ok is False
+    assert status == "published"
+    assert count > 0
+
+
+def test_rollback_to_ready_build_rejected(source: str) -> None:
+    """I2: explicit `rollback` hech qachon nashr qilinmagan `ready` build'ga o'ta olmaydi."""
+    with etl_transaction() as conn:
+        before = builds.active_build(conn)
+        build_id = builds.create_build(conn, None)
+        builds.mark_ready(conn, build_id)
+        with pytest.raises(ConflictError):
+            builds.rollback(conn, build_id)
+        status = conn.execute(
+            text("SELECT status FROM core.builds WHERE build_id = :b"), {"b": build_id}
+        ).scalar_one()
+        after = builds.active_build(conn)
+    assert status == "ready"
+    assert after == before
+
+
+def test_data_version_trigger_rejects_non_publishable_build() -> None:
+    """M1: DB darajasidagi himoya — `ugk_app` `core.data_version`ni to'g'ridan-to'g'ri
+    (ilova kodini chetlab o'tib) `failed` build'ga ko'rsatib UPDATE qila olmaydi."""
+    with etl_transaction() as conn:
+        build_id = builds.create_build(conn, None)
+        assert builds.mark_failed(conn, build_id) is True
+    with new_session() as s, pytest.raises(DBAPIError, match="not publishable"):
+        s.execute(
+            text("UPDATE core.data_version SET active_build_id = :b WHERE id = 1"),
+            {"b": build_id},
+        )
+
+
+def test_prune_removes_stale_unpublished_builds() -> None:
+    """M6: `prune` faol bo'lmagan, 7 kundan eski `ready`/`building`/`failed` buildlarni ham
+    o'chiradi (nashr qilinmagan yoki abadiy "building"da qolib ketgan)."""
+    with etl_transaction() as conn:
+        stale_building = builds.create_build(conn, None)
+        stale_ready = builds.create_build(conn, None)
+        builds.mark_ready(conn, stale_ready)
+        stale_failed = builds.create_build(conn, None)
+        builds.mark_failed(conn, stale_failed)
+        fresh_building = builds.create_build(conn, None)
+        conn.execute(
+            text("UPDATE core.builds SET created_at = now() - interval '8 days' "
+                 "WHERE build_id = ANY(:ids)"),
+            {"ids": [stale_building, stale_ready, stale_failed]},
+        )
+        removed = set(builds.prune(conn, keep=3))
+        remaining = set(conn.execute(
+            text("SELECT build_id FROM core.builds WHERE build_id = ANY(:ids)"),
+            {"ids": [stale_building, stale_ready, stale_failed, fresh_building]},
+        ).scalars())
+        conn.execute(text("DELETE FROM core.builds WHERE build_id = :b"),
+                     {"b": fresh_building})
+    assert {stale_building, stale_ready, stale_failed} <= removed
+    assert remaining == {fresh_building}
+
+
+def test_pub_view_and_mart_hide_other_branches_and_branch_zero_for_scoped_session(
+    source: str,
+) -> None:
+    """M7: filialga cheklangan `ugk_app` sessiyasi boshqa filiallarni va "barcha filiallar
+    jami" (branch_id=0) qatorini na `pub` view, na to'g'ridan-to'g'ri `mart` SELECT orqali
+    ko'ra olmaydi."""
+    branch_id, build_id = _scenario(source)
+    with etl_transaction() as conn:
+        builds.publish(conn, build_id, keep=3)
+    with new_session() as s:
+        apply_rls(s, frozenset({branch_id}))
+        pub_branches = set(s.execute(
+            text("SELECT DISTINCT branch_id FROM pub.agg_cash_month")).scalars())
+        mart_branches = set(s.execute(
+            text("SELECT DISTINCT branch_id FROM mart.agg_cash_month WHERE build_id = :b"),
+            {"b": build_id}).scalars())
+    assert pub_branches == {branch_id}
+    assert mart_branches == {branch_id}
+
+
+def test_pub_view_scoped_session_reads_only_active_build(source: str) -> None:
+    """M7: filialga cheklangan sessiya ham (>= 2 build mavjud bo'lganda) faqat AKTIV
+    build qatorlarini ko'radi."""
+    branch_id, first = _scenario(source)
+    with etl_transaction() as conn:
+        builds.publish(conn, first, keep=3)
+        second = builds.create_build(conn, None)
+        build_all(conn, second, PARAMS)
+        builds.mark_ready(conn, second)
+        builds.publish(conn, second, keep=3)
+        expected = conn.execute(
+            text("SELECT count(*) FROM mart.agg_cash_month WHERE build_id = :b "
+                 "AND branch_id = :br"), {"b": second, "br": branch_id}).scalar_one()
+    with new_session() as s:
+        apply_rls(s, frozenset({branch_id}))
+        seen = s.execute(
+            text("SELECT count(*) FROM pub.agg_cash_month WHERE branch_id = :br"),
+            {"br": branch_id}).scalar_one()
+    assert expected > 0
+    assert seen == expected
+
+
+def test_branch_zero_totals_equal_sum_of_branches(source: str) -> None:
+    """M7: `branch_id = 0` ("barcha filiallar jami") qatori aynan boshqa filiallar
+    yig'indisiga teng (aniq, taqriban emas)."""
+    _, build_id = _scenario(source)
+    with etl_transaction() as conn:
+        total = conn.execute(
+            text("SELECT inflow, outflow, inflow_cmp, outflow_cmp FROM mart.agg_cash_month "
+                 "WHERE build_id = :b AND branch_id = 0 AND month_id = 202608 AND item_id = 0"),
+            {"b": build_id}).one()
+        summed = conn.execute(
+            text("SELECT sum(inflow), sum(outflow), sum(inflow_cmp), sum(outflow_cmp) "
+                 "FROM mart.agg_cash_month WHERE build_id = :b AND branch_id <> 0 "
+                 "AND month_id = 202608 AND item_id = 0"), {"b": build_id}).one()
+    assert tuple(float(v) for v in total) == tuple(float(v) for v in summed)
+
+
+def test_all_pub_views_are_security_invoker() -> None:
+    """M7: strukturaviy tekshiruv — `pub` sxemasidagi HAR BIR view `security_invoker=true`
+    bilan yaratilgan (keyingi vazifalar yangi `pub` view qo'shganda ham unutib qo'yilmasin)."""
+    with get_engine("migrator").connect() as conn:
+        rows = conn.execute(
+            text("SELECT c.relname, c.reloptions FROM pg_class c "
+                 "JOIN pg_namespace n ON n.oid = c.relnamespace "
+                 "WHERE n.nspname = 'pub' AND c.relkind = 'v'")
+        ).all()
+    assert rows, "pub sxemasida view topilmadi"
+    for name, options in rows:
+        opts = list(options or ())
+        assert "security_invoker=true" in opts, f"pub.{name}: security_invoker=true emas"

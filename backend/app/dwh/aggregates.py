@@ -17,7 +17,7 @@ from typing import Any
 from sqlalchemy import text
 from sqlalchemy.engine import Connection
 
-from app.dwh.dates import date_id, month_id
+from app.dwh.dates import date_id, month_id, month_start
 
 
 @dataclass(frozen=True, slots=True)
@@ -37,7 +37,11 @@ class BuildParams:
             "build_id": build_id,
             "as_of": self.as_of,
             "date_from": self.date_from,
-            "from_id": date_id(self.date_from),
+            # Fix r1 (M5): oy boshiga normallashtirilgan — aks holda `date_from` oyning
+            # o'rtasida bo'lsa, o'sha OYNING boshidan `date_from`gacha bo'lgan kunlar
+            # faktlardan (`WHERE f.date_id BETWEEN :from_id AND :as_of_id`) chiqarib
+            # tashlanib, birinchi oy kesilib qolardi.
+            "from_id": date_id(month_start(self.date_from)),
             "as_of_id": date_id(self.as_of),
             "cmp_day": self.as_of.day,
             "from_month": month_id(self.date_from),

@@ -33,10 +33,15 @@ class SeedUser:
     _step: int = field(default=0)
 
     def next_code(self) -> str:
-        """Har chaqiruvda keyingi TOTP qadami — replay himoyasi testlarni yiqitmasligi uchun."""
+        """Har chaqiruvda keyingi TOTP qadami — replay himoyasi testlarni yiqitmasligi uchun.
+
+        Fix r1 (M11): pastki chegara `now_step - 1` emas, `now_step` — aks holda 30-soniyalik
+        chegara kod hisoblangandan keyin, server tekshirgunga qadar kesib o'tilsa (flake), kod
+        server oynasidan (odatda ±1 qadam) tashqariga chiqib ketishi mumkin edi.
+        """
         assert self.totp_secret is not None
         now_step = int(time.time()) // 30
-        self._step = max(self._step + 1, now_step - 1)
+        self._step = max(self._step + 1, now_step)
         if self._step > now_step + 1:
             time.sleep(30 - time.time() % 30 + 0.1)
             return self.next_code()

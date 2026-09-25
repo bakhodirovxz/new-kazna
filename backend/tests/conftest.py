@@ -31,6 +31,13 @@ def _reset_core() -> None:
         )
         if tables:
             conn.execute(text(f"TRUNCATE {', '.join(tables)} RESTART IDENTITY CASCADE"))
+        # Fix r1 (M1): `core.data_version`ning yagona tizim qatori endi faqat migratsiya
+        # (0007) yoki shu (`ugk_migrator`) ulanish tomonidan seed qilinadi — `ugk_app`da
+        # INSERT huquqi yo'q, shuning uchun `ensure_reference()` buni endi qilmaydi.
+        if conn.execute(text("SELECT to_regclass('core.data_version')")).scalar() is not None:
+            conn.execute(
+                text("INSERT INTO core.data_version (id) VALUES (1) ON CONFLICT DO NOTHING")
+            )
         if conn.execute(text("SELECT to_regclass('core.audit_head')")).scalar() is not None:
             conn.execute(
                 text(

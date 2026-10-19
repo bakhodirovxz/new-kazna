@@ -24,3 +24,7 @@ Thumbs.db
 .vscode/
 # local agent tooling state
 .superpowers/
+
+frontend/coverage/
+frontend/e2e/test-results/
+frontend/e2e/playwright-report/

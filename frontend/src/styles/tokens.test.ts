@@ -21,6 +21,7 @@ const PAIRS: Array<[string, string, number]> = [
   ['--muted', '--neg-bg', 4.5],
   ['--brand', '--card', 4.5],
   ['--brand', '--soft', 4.5],
+  ['--brand', '--bg', 4.5],
   ['--brand2', '--card', 4.5],
   ['--neg', '--card', 4.5],
   ['--neg', '--bg', 4.5],

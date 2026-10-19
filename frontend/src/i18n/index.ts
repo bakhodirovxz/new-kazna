@@ -9,6 +9,6 @@ export function t(key: MessageKey, params?: Record<string, string | number>): st
   const template = dictionary[key];
   if (!params) return template;
   return template.replace(/\{(\w+)\}/g, (placeholder, name: string) =>
-    name in params ? String(params[name]) : placeholder,
+    Object.hasOwn(params, name) ? String(params[name]) : placeholder,
   );
 }

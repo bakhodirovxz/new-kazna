@@ -49,6 +49,7 @@ source" bor — style qidiruvi o'rniga screens/flows). Tokenlar ma'nosi o'zgarti
 | yuqori panel gradienti | `#0b4fa8→#1668d6→#2b8ae6` | `--top → --top-end #1668d6` | `#d5e7ff` matn `#2b8ae6` ustida 2.83 |
 | yuqori panel matni | `#d5e7ff`/`#cfe6ff` | `--top-ink #eaf3ff`, asboblar `#fff` | `--top-end` ustida 4.71 |
 | `.badge.blue` | `--brand2` `--soft` ustida (4.23) | `--brand` | 7.09 |
+| `a` (havola) rangi | `--brand2` (`--bg` ustida 4.37, `--soft` ustida 4.23) | `--brand` | 7.09 (`--bg`/`--soft` ustida ham ≥4.5, testda). `--brand2` faqat katta matn va matn bo'lmagan elementlar uchun |
 | yangi: `--warn`/`--warn-bg` | — | `#8a5a00`/`#fff4dc` | 5.4 |
 | yangi: `--ok`/`--ok-bg` | — | `#0a6b73`/`#e2f7f9` | 5.6 |
 

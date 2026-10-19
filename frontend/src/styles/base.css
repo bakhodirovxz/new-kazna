@@ -35,7 +35,7 @@ textarea {
 }
 
 a {
-  color: var(--brand2);
+  color: var(--brand);
 }
 
 :focus-visible {

@@ -1,3 +1,4 @@
+import AxeBuilder from '@axe-core/playwright';
 import { expect, type Page } from '@playwright/test';
 import { totp } from './totp';
 
@@ -64,4 +65,9 @@ export async function expectVisibleFocusRing(page: Page, clipSelector?: string):
   expect(ring?.style).not.toBe('none');
   expect(ring?.width).toBeGreaterThanOrEqual(2);
   expect(ring?.clipped).toBe(false);
+}
+
+/** Axe: ochiq Drawer/BottomSheet kabi holatlarda ham — har kenglikda 0 buzilish. */
+export async function expectNoAxeViolations(page: Page): Promise<void> {
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
 }

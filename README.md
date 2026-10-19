@@ -49,6 +49,7 @@ docker compose -f deploy/compose.yml up -d --build
 ./scripts/e2e.sh                       # seed-e2e (faqat dev/test) + Playwright
 ```
 Hisobot: `frontend/e2e/playwright-report/index.html`.
+Limit: to'liq yugurish 6 login (10/min) va ~7 MFA (20/min) ishlatadi — ~60 s ichida qayta yugurtirsangiz 429 chiqishi mumkin; bir daqiqa kuting.
 
 ## Operator CLI (`python -m app.cli <buyruq>`)
 

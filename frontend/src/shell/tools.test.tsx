@@ -116,6 +116,15 @@ describe('user menu', () => {
     expect(server.calls.some((c) => c.method === 'POST' && c.path === '/auth/logout')).toBe(true);
   });
 
+  it('renders the avatar initials via data-initials (CSS ::before), not as text', async () => {
+    mockApi(shellRoutes());
+    renderWithProviders(<Harness />, { hash: '#obzor/svod' });
+    const button = await screen.findByRole('button', { name: 'Меню пользователя: Азимов Бахтиёр' });
+    const avatar = button.querySelector('.avatar');
+    expect(avatar).toHaveAttribute('data-initials', 'АБ');
+    expect(avatar).toBeEmptyDOMElement();
+  });
+
   it('has no admin entry without admin permissions', async () => {
     mockApi(shellRoutes(ME_BRANCH, MENU_BRANCH));
     const { user } = renderWithProviders(<Harness me={ME_BRANCH} menu={MENU_BRANCH} />, { hash: '#obzor/svod' });

@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 # E2E: dev stack ishlab turgan bo'lishi kerak (docker compose -f deploy/compose.yml up -d --build).
+# Limit: login 10/min va MFA 20/min (IP bo'yicha) — to'liq yugurish 6 login ishlatadi; ~60 s ichida qayta
+# yugurtirsangiz 429 chiqishi mumkin: bir daqiqa kuting, testni zaiflashtirmang.
 # Foydalanish: scripts/e2e.sh [playwright argumentlari], masalan: scripts/e2e.sh --project=desktop-1440
 set -euo pipefail
 cd "$(dirname "$0")/.."

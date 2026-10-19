@@ -35,6 +35,7 @@ services:
       - ../frontend/certs:/certs:ro
       - e2e_node_modules:/e2e/node_modules
     ipc: host
+    security_opt: ["no-new-privileges:true"]
     networks: [edge]
 
 networks:

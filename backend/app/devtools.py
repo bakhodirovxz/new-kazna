@@ -10,6 +10,7 @@ bo'lmasa hech narsa qilmaydi va 2 kodi bilan chiqadi — prod'da bu hisoblar pay
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -22,7 +23,6 @@ from app.auth.models import BackupCode, Position, PositionBranch, Role, User, Us
 from app.auth.service import totp_aad
 from app.bootstrap import bootstrap_runtime
 from app.core import keystore
-from app.core.config import get_settings
 from app.core.crypto import Purpose
 from app.core.db import new_session
 
@@ -121,9 +121,11 @@ def _upsert(db: Session, spec: E2eUser, password_hash: str, now: datetime) -> Us
 
 
 def seed_e2e() -> int:
-    env = get_settings().env
+    # Settings.env standarti "dev" — fail-open bo'lmasin: ENV aniq berilgan bo'lishi shart.
+    env = os.environ.get("ENV", "")
     if env not in ALLOWED_ENVS:
-        _out(f"Rad etildi: seed-e2e faqat dev/test muhitida ishlaydi (ENV={env})")
+        shown = env or "belgilanmagan"
+        _out(f"Rad etildi: seed-e2e faqat aniq ENV=dev/test muhitida ishlaydi (ENV={shown})")
         return 2
     bootstrap_runtime()
     now = datetime.now(UTC)

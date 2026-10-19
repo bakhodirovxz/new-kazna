@@ -7,16 +7,29 @@ from app import devtools
 from app.auth.models import PositionBranch, User
 from app.auth.service import totp_aad
 from app.core import keystore
-from app.core.config import Settings
 from app.core.crypto import Purpose
 from app.core.db import new_session
 from app.main import create_app
 
 
+@pytest.mark.parametrize("env", ["prod", "staging", ""])
 def test_refuses_outside_dev_and_test(
+    env: str, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setenv("ENV", env)
+    assert devtools.main(["seed-e2e"]) == 2
+    assert "Rad etildi" in capsys.readouterr().out
+
+
+def test_refuses_when_env_is_unset(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    monkeypatch.setattr(devtools, "get_settings", lambda: Settings(env="prod"))
+    # Settings.env standart qiymati "dev": aniq ENV bo'lmasa fail-open bo'lmasligi kerak.
+    monkeypatch.delenv("ENV", raising=False)
+    def boom() -> None:
+        raise AssertionError("bootstrap_runtime chaqirilmasligi kerak")
+
+    monkeypatch.setattr(devtools, "bootstrap_runtime", boom)
     assert devtools.main(["seed-e2e"]) == 2
     assert "Rad etildi" in capsys.readouterr().out
 

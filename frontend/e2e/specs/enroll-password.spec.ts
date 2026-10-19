@@ -1,6 +1,5 @@
-import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from '@playwright/test';
-import { E2E_PASSWORD, NEW_PASSWORD } from '../fixtures';
+import { E2E_PASSWORD, expectNoAxeViolations, NEW_PASSWORD } from '../fixtures';
 import { totp } from '../totp';
 
 test('yangi xodim: 2FA ulash → zaxira kodlar → majburiy parol almashtirish', async ({ page }, info) => {
@@ -18,7 +17,7 @@ test('yangi xodim: 2FA ulash → zaxira kodlar → majburiy parol almashtirish',
   // R-C2: login'dan keyin darhol enroll/start ishlaydi (backend javobdan oldin commit qiladi).
   await expect(page.getByRole('img', { name: /QR-код/ })).toBeVisible();
   await expect(page.getByText('Время подтверждения истекло')).toHaveCount(0);
-  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+  await expectNoAxeViolations(page);
   const secret = (await page.getByTestId('totp-secret').innerText()).replace(/\s+/g, '');
   await page.getByLabel('Код из приложения', { exact: true }).fill(totp(secret));
   await page.getByRole('button', { name: 'Подтвердить' }).click();
@@ -37,7 +36,7 @@ test('yangi xodim: 2FA ulash → zaxira kodlar → majburiy parol almashtirish',
 
   await expect(page.getByRole('heading', { name: 'Необходимо сменить пароль' })).toBeVisible();
   // V2: yashirin readonly username maydoni axe'da xato bermaydi.
-  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+  await expectNoAxeViolations(page);
   await page.getByLabel('Текущий пароль', { exact: true }).fill(E2E_PASSWORD);
   await page.getByLabel('Новый пароль', { exact: true }).fill(NEW_PASSWORD);
   await page.getByLabel('Повторите новый пароль', { exact: true }).fill(NEW_PASSWORD);

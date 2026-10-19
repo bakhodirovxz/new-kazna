@@ -56,7 +56,11 @@ export function MfaEnrollPage() {
         <BackupCodes
           codes={result.backup_codes}
           username={result.user.username}
-          onContinue={() => navigate(destinationAfterSignIn(result.user, flow.returnTo), { replace: true })}
+          onContinue={() => {
+            const target = destinationAfterSignIn(result.user, flow.returnTo);
+            flow.finish();
+            navigate(target, { replace: true });
+          }}
         />
       </AuthLayout>
     );
@@ -83,10 +87,10 @@ export function MfaEnrollPage() {
       { mfa_token: challenge.mfaToken, code },
       {
         onSuccess: (data) => {
+          leaving.current = true; // guard-effect kodlar ko'rsatilguncha login'ga qaytarmasin
           setResult(data);
           start.reset(); // TOTP kaliti xotiradan ketsin
-          confirm.reset(); // zaxira kodlar faqat komponent holatida
-          flow.finish();
+          confirm.reset(); // zaxira kodlar faqat komponent holatida; oqim 'Продолжить'da tugaydi (store sinxron)
         },
         onError: (err) => {
           setCode('');

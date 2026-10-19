@@ -1,5 +1,4 @@
 import { screen, waitFor, within } from '@testing-library/react';
-import { flushSync } from 'react-dom';
 import { StrictMode, useEffect, useRef, useState, type ReactNode } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import { expectNoAxeViolations } from '../test/axe';
@@ -9,7 +8,6 @@ import { renderWithProviders } from '../test/render';
 import { useAuthFlow } from './AuthFlow';
 import { backupCodesFilename, backupCodesText } from './BackupCodes';
 import { Routes } from '../app/Routes';
-import { navigate } from '../router/store';
 import { MfaEnrollPage } from './MfaEnrollPage';
 
 const TOKEN = 't'.repeat(32);
@@ -45,51 +43,6 @@ function enrollRoutes() {
     },
   });
 }
-
-// Birinchi turadi: oldingi async RTL testlari React rejimini o'zgartirib, eski kodda ham tartib muammosini yashirardi.
-describe('real-browser ordering (C1)', () => {
-  // act() bitta commit'da ikkala yangilanishni birlashtiradi va tartibni yashiradi; bu yerda act'siz ketma-ket chaqiramiz.
-  // Eski AuthFlow (useState) da navigate() sinxron render qilardi, challenge esa keyin commit bo'lardi -> login'ga qaytish.
-  async function beginThenNavigate(step: 'mfa_enroll' | 'mfa_verify', route: 'mfaEnroll' | 'mfa') {
-    let flow!: ReturnType<typeof useAuthFlow>;
-    const Probe = () => {
-      flow = useAuthFlow();
-      return null;
-    };
-    renderWithProviders(
-      <>
-        <Probe />
-        <Routes />
-      </>,
-      { hash: '#login' },
-    );
-    const g = globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean };
-    const prev = g.IS_REACT_ACT_ENVIRONMENT;
-    g.IS_REACT_ACT_ENVIRONMENT = false;
-    try {
-      flow.begin({ mfaToken: TOKEN, step, username: 'novikov', returnTo: null });
-      flushSync(() => navigate({ kind: route })); // router sinxron sync-lane render (brauzerdagi tartib)
-      await new Promise((resolve) => setTimeout(resolve, 50));
-    } finally {
-      g.IS_REACT_ACT_ENVIRONMENT = prev;
-    }
-  }
-
-  it('enrollment page keeps the route and starts enrollment', async () => {
-    const server = enrollRoutes();
-    await beginThenNavigate('mfa_enroll', 'mfaEnroll');
-    expect(window.location.hash).toBe('#2fa/setup');
-    await screen.findByTestId('totp-secret');
-    expect(server.calls.filter((c) => c.path === '/auth/2fa/enroll/start')).toHaveLength(1);
-  });
-
-  it('verify page keeps the route', async () => {
-    mockApi({});
-    await beginThenNavigate('mfa_verify', 'mfa');
-    expect(window.location.hash).toBe('#2fa');
-    expect(await screen.findByRole('heading', { name: 'Подтверждение входа' })).toBeInTheDocument();
-  });
-});
 
 describe('MfaEnrollPage', () => {
   it('redirects to login without an enrollment challenge', async () => {

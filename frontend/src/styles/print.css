@@ -4,6 +4,11 @@
     background: #fff !important;
     background-image: none !important;
   }
+  .topbar,
+  .sections-nav,
+  .side,
+  .filters,
+  .tools,
   button,
   .btn,
   .iconbtn {

@@ -27,6 +27,7 @@ from app.core.middleware import (
     SecurityHeadersMiddleware,
 )
 from app.health.router import router as health_router
+from app.meta.router import router as meta_router
 
 API_PREFIX = "/api/v1"
 
@@ -62,6 +63,7 @@ def create_app() -> FastAPI:
     app.include_router(admin_router, prefix=API_PREFIX)
     app.include_router(audit_router, prefix=API_PREFIX)
     app.include_router(keys_router, prefix=API_PREFIX)
+    app.include_router(meta_router, prefix=API_PREFIX)
     _mount_openapi(app, protected=settings.env == "prod")
     return app
 

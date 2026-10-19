@@ -24,6 +24,11 @@ export const ru = {
   'error.lastSuccess': 'Последняя успешная загрузка: {time}',
   'error.requestId': 'Код запроса: {id}',
   'error.loadFailed': 'Не удалось загрузить данные',
+  'field.showPassword': 'Показать пароль',
+  'field.required': 'Обязательное поле',
+  'combo.empty': 'Ничего не найдено',
+  'combo.placeholder': 'Начните вводить',
+  'otp.backupHint': 'Формат: XXXX-XXXX-XXXX',
 } as const satisfies Record<string, string>;
 
 export type RuKey = keyof typeof ru;

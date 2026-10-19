@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
@@ -113,5 +114,61 @@ describe('Table extras', () => {
     (btn as HTMLElement).focus();
     await userEvent.keyboard('{Enter}');
     expect(onRowClick).not.toHaveBeenCalled();
+  });
+});
+
+describe('Table fix round 1', () => {
+  it('sorts via the card-mode select', async () => {
+    render(<Table caption="Филиалы" columns={COLUMNS} rows={ROWS} rowKey={(r) => r.id} />);
+    await userEvent.selectOptions(screen.getByLabelText('Сортировать по'), 'amount:desc');
+    expect(names()).toEqual(['Бозсу', 'Чарвакская ГЭС', 'Андижанская ГЭС']);
+    expect(screen.getByRole('columnheader', { name: 'Сумма' })).toHaveAttribute('aria-sort', 'descending');
+  });
+
+  it('has no card select in scroll mode', () => {
+    render(<Table caption="Ф" columns={COLUMNS} rows={ROWS} rowKey={(r) => r.id} mobile="scroll" />);
+    expect(screen.queryByLabelText('Сортировать по')).not.toBeInTheDocument();
+  });
+
+  it('sorts names naturally and non-finite numbers last', async () => {
+    const rows: Row[] = [
+      { id: 1, name: 'ГЭС-10', amount: Infinity },
+      { id: 2, name: 'ГЭС-2', amount: 1 },
+      { id: 3, name: 'ГЭС-1', amount: NaN },
+    ];
+    render(<Table caption="Ф" columns={COLUMNS} rows={rows} rowKey={(r) => r.id} />);
+    await userEvent.click(screen.getByRole('button', { name: 'Филиал' }));
+    expect(names()).toEqual(['ГЭС-1', 'ГЭС-2', 'ГЭС-10']);
+    await userEvent.click(screen.getByRole('button', { name: 'Сумма' }));
+    expect(names()[0]).toBe('ГЭС-2');
+  });
+
+  it('ignores role=button inside the row but not the row itself', async () => {
+    const onRowClick = vi.fn();
+    const cols: Column<Row>[] = [{ key: 'n', header: 'N', cell: () => <span role="button" tabIndex={-1}>x</span> }];
+    render(<Table caption="Ф" columns={cols} rows={ROWS} rowKey={(r) => r.id} onRowClick={onRowClick} />);
+    await userEvent.click(screen.getAllByRole('button', { name: 'x' })[0] as HTMLElement);
+    expect(onRowClick).not.toHaveBeenCalled();
+  });
+});
+
+describe('Pagination fix round 1', () => {
+  it('formats page numbers, clamps inputs and handles empty totals', () => {
+    const { rerender } = render(<Pagination page={1} pageSize={1} total={2500} onPage={vi.fn()} />);
+    expect(screen.getByRole('navigation').textContent).toContain('Стр. 1 из 2' + NBSP + '500');
+    rerender(<Pagination page={99} pageSize={0} total={3} onPage={vi.fn()} />);
+    expect(screen.getByRole('navigation').textContent).toContain('3–3 из 3');
+    rerender(<Pagination page={0} pageSize={50} total={0} onPage={vi.fn()} />);
+    expect(screen.getByRole('navigation').textContent).toContain('0–0 из 0');
+  });
+
+  it('keeps focus on an enabled button when the clicked one becomes disabled', async () => {
+    function Harness() {
+      const [page, setPage] = useState(1);
+      return <Pagination page={page} pageSize={10} total={20} onPage={setPage} />;
+    }
+    render(<Harness />);
+    await userEvent.click(screen.getByRole('button', { name: 'Следующая страница' }));
+    expect(screen.getByRole('button', { name: 'Предыдущая страница' })).toHaveFocus();
   });
 });

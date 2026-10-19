@@ -5,6 +5,7 @@
   border: 1px solid var(--line);
   border-radius: 0.5rem;
 }
+.tw .tw__sort { display: none; }
 .tw--free { max-height: none; }
 .table { width: 100%; border-collapse: collapse; font-size: 0.98rem; }
 .table th, .table td { padding: 0.65rem 0.85rem; text-align: right; white-space: nowrap; }
@@ -55,7 +56,8 @@
   .tw--cards .table tbody,
   .tw--cards .table tr,
   .tw--cards .table td { display: block; width: 100%; }
-  .tw--cards .table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  .tw--cards .tw__sort { display: flex; margin-bottom: 0.7rem; }
+  .tw--cards .table thead { visibility: hidden; position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
   .tw--cards .table tbody { display: grid; gap: 0.7rem; }
   .tw--cards .table tbody tr {
     padding: 0.4rem 0.9rem;

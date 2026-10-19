@@ -1,6 +1,7 @@
 import { useMemo, useState, type KeyboardEvent, type MouseEvent, type ReactNode } from 'react';
 import { t } from '../i18n';
 import { cx } from './cx';
+import { Select } from './Select';
 import './table.css';
 
 export interface Column<T> {
@@ -34,12 +35,20 @@ export interface TableProps<T> {
   className?: string;
 }
 
+const collator = new Intl.Collator('ru', { numeric: true });
+const INTERACTIVE = 'button, a, input, select, textarea, label, [role="button"], [role="link"]';
+
+/** Cheksiz/NaN son qiymatlar null kabi — oxirida. */
+function norm(v: string | number | null): string | number | null {
+  return typeof v === 'number' && !Number.isFinite(v) ? null : v;
+}
+
 function compare(a: string | number | null, b: string | number | null): number {
   if (a === null && b === null) return 0;
   if (a === null) return 1;
   if (b === null) return -1;
   if (typeof a === 'number' && typeof b === 'number') return a - b;
-  return String(a).localeCompare(String(b), 'ru');
+  return collator.compare(String(a), String(b));
 }
 
 export function Table<T>({
@@ -65,8 +74,8 @@ export function Table<T>({
     const value = column.sortValue;
     const sign = sort.dir === 'asc' ? 1 : -1;
     return [...rows].sort((x, y) => {
-      const a = value(x);
-      const b = value(y);
+      const a = norm(value(x));
+      const b = norm(value(y));
       if (a === null || b === null) return compare(a, b);
       return sign * compare(a, b);
     });
@@ -79,7 +88,8 @@ export function Table<T>({
   };
 
   const onRowClickEvent = (event: MouseEvent<HTMLTableRowElement>, row: T) => {
-    if ((event.target as HTMLElement).closest('button, a, input, select, textarea, label')) return;
+    const match = (event.target as HTMLElement).closest(INTERACTIVE);
+    if (match && match !== event.currentTarget && event.currentTarget.contains(match)) return;
     onRowClick?.(row);
   };
 
@@ -93,8 +103,30 @@ export function Table<T>({
 
   const sortColumn = sort ? columns.find((c) => c.key === sort.key) : undefined;
 
+  const sortable = columns.filter((c) => c.sortValue);
+  const sortOptions = [
+    { value: '', label: t('table.sortNone') },
+    ...sortable.flatMap((c) => [
+      { value: `${c.key}:asc`, label: `${c.header} ↑` },
+      { value: `${c.key}:desc`, label: `${c.header} ↓` },
+    ]),
+  ];
+  const onSortSelect = (v: string) => {
+    const i = v.lastIndexOf(':');
+    setSort(i < 0 ? null : { key: v.slice(0, i), dir: v.slice(i + 1) === 'desc' ? 'desc' : 'asc' });
+  };
+
   return (
     <div className={cx('tw', mobile === 'cards' && 'tw--cards', free && 'tw--free', className)}>
+      {mobile === 'cards' && sortable.length > 0 ? (
+        <Select
+          className="tw__sort"
+          label={t('table.sortBy')}
+          value={sort ? `${sort.key}:${sort.dir}` : ''}
+          options={sortOptions}
+          onChange={onSortSelect}
+        />
+      ) : null}
       <table className="table">
         <caption className={captionHidden ? 'visually-hidden' : undefined}>{caption}</caption>
         <thead>

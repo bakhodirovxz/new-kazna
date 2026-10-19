@@ -41,6 +41,8 @@ export const ru = {
   'table.next': 'Следующая страница',
   'table.sortAsc': 'Сортировка: {column}, по возрастанию',
   'table.sortDesc': 'Сортировка: {column}, по убыванию',
+  'table.sortBy': 'Сортировать по',
+  'table.sortNone': 'Без сортировки',
 } as const satisfies Record<string, string>;
 
 export type RuKey = keyof typeof ru;

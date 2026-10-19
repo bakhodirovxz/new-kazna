@@ -103,7 +103,8 @@ def list_fin_assumptions(db: Session, scenario: str | None) -> list[FinAssumptio
 def update_fin_assumptions(db: Session, actor: AuthContext, data: FinAssumptionsUpdate,
                            meta: ClientMeta) -> list[FinAssumptionOut]:
     changes: list[dict[str, Any]] = []
-    for item in data.items:
+    # Deterministik tartib: parallel PUT'lar qulfni bir xil tartibda oladi (deadlock yo'q).
+    for item in sorted(data.items, key=lambda i: (i.scenario, i.year, i.key)):
         key = {"s": item.scenario, "y": item.year, "k": item.key}
         row = db.execute(text(
             "SELECT version, value FROM core.fin_assumptions WHERE scenario = :s AND year = :y "
@@ -169,8 +170,10 @@ def update_setting(db: Session, actor: AuthContext, key: str, value: Any,
                         "VALUES (:k, :v, CAST(:val AS jsonb), :u)"),
                    {"k": key, "v": version, "val": json.dumps(normalized), "u": actor.user_id})
         db.commit()  # commit-then-audit
-    except IntegrityError as exc:  # parallel yozuv shu versiyani oldin band qildi
+    except IntegrityError as exc:
         db.rollback()
+        if getattr(exc.orig, "sqlstate", None) != "23505":  # faqat unique buzilishi — poyga
+            raise
         raise ConflictError("conflict_modified") from exc
     log_event(meta, AuditAction.SETTING_UPDATED, user_id=actor.user_id, object_type="setting",
               object_id=key, details={"version": version,

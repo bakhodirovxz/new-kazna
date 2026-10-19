@@ -176,7 +176,13 @@ class ResponseCache:
             return Response(status_code=304, headers=headers)
         body, version = cached_body(self.db, endpoint=endpoint, scope=scope, filters=filters,
                                     loader=loader)
-        headers["ETag"] = etag_for(version, endpoint, scope, fhash)
+        if current_version(self.db) != version:
+            # Publish so'rov paytida o'tdi: javob qaysi versiyaga tegishli ekani noaniq —
+            # ETag bermaymiz (keyin rollback'da eski ETag noto'g'ri 304 bermasin).
+            del headers["ETag"]
+            headers["Cache-Control"] = "no-store"
+        else:
+            headers["ETag"] = etag_for(version, endpoint, scope, fhash)
         return Response(content=body, media_type="application/json", headers=headers)
 
 

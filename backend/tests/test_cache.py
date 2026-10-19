@@ -14,6 +14,7 @@ from app.core.cache import (
     cache_key,
     cached_body,
     current_version,
+    etag_for,
     filters_hash,
     scope_hash,
 )
@@ -45,6 +46,11 @@ def _counting(result: Any = None, delay: float = 0.0) -> tuple[Callable[[], Any]
         return result if result is not None else {"value": 42}
 
     return loader, calls
+
+
+def current_version_now() -> int:
+    with new_session() as db:
+        return current_version(db)
 
 
 def _publish_new_build() -> int:
@@ -165,3 +171,25 @@ def test_etag_304_and_headers(make_user: Callable[..., SeedUser]) -> None:
     with TestClient(_app(), base_url="https://testserver") as other:
         login(other, make_user("economist_filiala", branch_ids=(3,)))
         assert other.get("/api/v1/_t/cached").headers["ETag"] != etag
+
+
+def test_publish_during_request_sends_no_etag(make_user: Callable[..., SeedUser]) -> None:
+    app = create_app()
+
+    @app.get("/api/v1/_t/racy")
+    def racy(cache_dep: Cache) -> Response:
+        def loader() -> dict[str, int]:
+            _publish_new_build()
+            return {"v": 2}
+
+        return cache_dep.respond("t.racy", {}, loader)
+
+    with TestClient(app, base_url="https://testserver") as client:
+        login(client, make_user("admin"))
+        r = client.get("/api/v1/_t/racy")
+        assert r.status_code == 200 and r.json() == {"v": 2}
+        assert "ETag" not in r.headers
+        assert r.headers["Cache-Control"] == "no-store"
+        stale = etag_for(current_version_now() - 1, "t.racy", scope_hash(None), filters_hash({}))
+        again = client.get("/api/v1/_t/racy", headers={"If-None-Match": stale})
+        assert again.status_code == 200

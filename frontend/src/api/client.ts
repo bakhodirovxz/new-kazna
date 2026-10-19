@@ -67,7 +67,7 @@ function isEnvelope(payload: unknown): payload is ErrorEnvelope {
   return typeof error === 'object' && error !== null && 'code' in error && 'message' in error;
 }
 
-function toApiError(response: Response, payload: unknown): ApiError {
+export function toApiError(response: Response, payload: unknown): ApiError {
   const body = isEnvelope(payload) ? payload.error : null;
   const header = response.headers.get('Retry-After');
   const fromParams = body?.params?.retry_after;

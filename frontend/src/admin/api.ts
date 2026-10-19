@@ -1,7 +1,18 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { api, isApiError } from '../api/client';
+import { api, ApiError, apiUrl, isApiError, toApiError, type Query } from '../api/client';
+import { t } from '../i18n';
+import { dayStartIso } from '../i18n/format';
 import type {
   AlertRuleOut,
+  AuditOut,
+  BuildOut,
+  EtlRequestOut,
+  EtlRunDetail,
+  EtlRunOut,
+  EtlRunRequest,
+  KeyOut,
+  RotateOut,
+  VerifyOut,
   AlertRuleUpdate,
   FinAssumptionItem,
   FinAssumptionOut,
@@ -223,6 +234,139 @@ export function useUpdateFinAssumptions() {
       api<FinAssumptionOut[]>('/admin/fin-assumptions', { method: 'PUT', body: { items } }),
     onSuccess: invalidate,
     onError,
+    meta: { inline: true },
+  });
+}
+
+export const ETL_PAGE_SIZE = 50;
+export const AUDIT_PAGE_SIZE = 100;
+export const AUDIT_EXPORT_LIMIT = 50_000; // backend EXPORT_LIMIT
+
+/** poll — so'rov navbatga qo'yilgandan keyin (run qatori hali yo'q) tarixni vaqti-vaqti bilan yangilaydi. */
+export function useEtlRuns(page: number, poll = false) {
+  return useQuery({
+    queryKey: [...adminKeys.etlRuns, page],
+    queryFn: ({ signal }) => api<Page<EtlRunOut>>('/admin/etl/runs', { signal, query: { page, page_size: ETL_PAGE_SIZE } }),
+    placeholderData: keepPreviousData,
+    staleTime: 0,
+    refetchInterval: (query) => (poll || query.state.data?.items.some((run) => run.status === 'running') ? 15_000 : false),
+  });
+}
+
+export function useEtlRun(id: number | null) {
+  return useQuery({
+    queryKey: [...adminKeys.etlRuns, 'detail', id],
+    queryFn: ({ signal }) => api<EtlRunDetail>(`/admin/etl/runs/${id ?? 0}`, { signal }),
+    enabled: id !== null,
+    staleTime: 0,
+  });
+}
+
+export function useRequestEtlRun() {
+  const invalidate = useInvalidate(adminKeys.etlRuns);
+  return useMutation({
+    mutationFn: (body: EtlRunRequest) => api<EtlRequestOut>('/admin/etl/run', { method: 'POST', body }),
+    onSuccess: invalidate,
+    meta: { inline: true },
+  });
+}
+
+export function useBuilds() {
+  return useQuery({
+    queryKey: adminKeys.builds,
+    queryFn: ({ signal }) => api<BuildOut[]>('/admin/builds', { signal }),
+    staleTime: 0,
+  });
+}
+
+export function useRollbackBuild() {
+  const client = useQueryClient();
+  const onError = useRefetchOnConflict(adminKeys.builds);
+  return useMutation({
+    mutationFn: (buildId: number | null) => api<BuildOut>('/admin/builds/rollback', { method: 'POST', body: { build_id: buildId } }),
+    // Aktiv build o'zgardi: yuqori panel/.srcbar yangilanish vaqti eski build'ni 5 daqiqagacha ko'rsatmasin (A16.4).
+    onSuccess: () =>
+      Promise.all([
+        client.invalidateQueries({ queryKey: adminKeys.builds }),
+        client.invalidateQueries({ queryKey: ['meta', 'freshness'] }),
+      ]),
+    onError,
+    meta: { inline: true },
+  });
+}
+
+export interface AuditFilters {
+  from: string;
+  to: string;
+  userId: string;
+  action: string;
+  result: '' | 'ok' | 'fail' | 'denied';
+}
+
+export const EMPTY_AUDIT_FILTERS: AuditFilters = { from: '', to: '', userId: '', action: '', result: '' };
+
+/** Sana — Toshkent kuni; "По" kuni ham kiradi (to_ts — keyingi kun boshi, qat'iy "<"). */
+export function auditQuery(filters: AuditFilters): Query {
+  return {
+    from_ts: filters.from ? dayStartIso(filters.from) : undefined,
+    to_ts: filters.to ? dayStartIso(filters.to, 1) : undefined,
+    user_id: filters.userId || undefined,
+    action: filters.action || undefined,
+    result: filters.result || undefined,
+  };
+}
+
+export function useAudit(filters: AuditFilters, page: number) {
+  return useQuery({
+    queryKey: [...adminKeys.audit, filters, page],
+    queryFn: ({ signal }) =>
+      api<Page<AuditOut>>('/audit', { signal, query: { ...auditQuery(filters), page, page_size: AUDIT_PAGE_SIZE } }),
+    placeholderData: keepPreviousData,
+    staleTime: 0,
+  });
+}
+
+export function useVerifyAudit() {
+  return useMutation({
+    mutationFn: () => api<VerifyOut>('/audit/verify', { method: 'POST' }),
+    meta: { inline: true }, // 429 formada qayta urinish vaqti bilan
+  });
+}
+
+/** CSV: fetch -> Blob (URL'da ma'lumot yo'q, uchinchi tomon yo'q). `page` yuborilmaydi — server butun tanlovni beradi. */
+export function useExportAudit() {
+  return useMutation({
+    mutationFn: async (filters: AuditFilters) => {
+      let response: Response;
+      try {
+        response = await fetch(apiUrl('/audit/export.csv', auditQuery(filters)), {
+          credentials: 'same-origin',
+          headers: { Accept: 'text/csv' },
+        });
+      } catch {
+        throw new ApiError(0, 'network', t('error.network'));
+      }
+      if (!response.ok) throw toApiError(response, await response.json().catch(() => null));
+      return { blob: await response.blob(), truncated: response.headers.get('X-Export-Truncated') === 'true' };
+    },
+    meta: { inline: true },
+  });
+}
+
+export function useKeys() {
+  return useQuery({
+    queryKey: adminKeys.keys,
+    queryFn: ({ signal }) => api<KeyOut[]>('/admin/keys', { signal }),
+    staleTime: 0,
+  });
+}
+
+export function useRotateKey() {
+  const invalidate = useInvalidate(adminKeys.keys);
+  return useMutation({
+    mutationFn: (purpose: string) => api<RotateOut>(`/admin/keys/${encodeURIComponent(purpose)}/rotate`, { method: 'POST' }),
+    onSuccess: invalidate,
+    onError: invalidate, // muvaffaqiyatsiz rotatsiyadan keyin ham holat serverdan qayta o'qiladi
     meta: { inline: true },
   });
 }

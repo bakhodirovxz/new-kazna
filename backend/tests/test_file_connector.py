@@ -130,3 +130,45 @@ def test_make_connector_rules(tmp_path: Path) -> None:
     dev = get_settings().model_copy(update={"env": "dev", "etl_file_dir": str(tmp_path)})
     assert isinstance(make_connector("file", dev), FileConnector)
     assert make_connector("synthetic", dev).source == "synthetic"
+
+
+@pytest.mark.parametrize("bad", ["NaN", "Infinity", "-Infinity", "1e5", "1e400", "0x10"])
+def test_non_plain_numbers_rejected_without_retry(tmp_path: Path, source: str, bad: str) -> None:
+    code = _branch(tmp_path, new_tag())
+    _write(tmp_path / "fact_cashflow.csv",
+           [HEADER, f"bank_entry;f1;2026-08-05;{code};PKM54-O09;out;{bad}"])
+    sleeps: list[float] = []
+    result = _run(tmp_path, source, sleeps)
+    assert result.status == "failed" and sleeps == []
+    assert "неверное число" in (result.error or "")
+
+
+def test_raw_values_do_not_leak_via_cause_chain(tmp_path: Path) -> None:
+    import traceback
+
+    from app.etl.types import Window
+    from tests.etl_helpers import FULL_WINDOW
+
+    class Sink:
+        def add(self, target: str, row: object) -> None: ...
+
+    cases = {
+        "fact_cashflow.csv": ([HEADER, "bank_entry;f1;05.08.2026;X;PKM54-O09;out;1"], "05.08.2026"),
+        "dim_branch.csv": (["code;name;short_name;kind;capacity_mw", "X;a;b;ges;SECRET9"],
+                           "SECRET9"),
+    }
+    window: Window = FULL_WINDOW
+    for name, (lines, secret) in cases.items():
+        directory = tmp_path / name
+        directory.mkdir()
+        _write(directory / name, lines)
+        with pytest.raises(ValueError) as info:
+            FileConnector(directory).extract(window, Sink())  # type: ignore[arg-type]
+        assert secret not in "".join(traceback.format_exception(info.value))
+    (tmp_path / "enc").mkdir()
+    (tmp_path / "enc" / "dim_branch.csv").write_bytes(
+        "code;name\nT;Тест\n".encode("cp1251"))
+    with pytest.raises(ValueError) as info:
+        FileConnector(tmp_path / "enc").extract(window, Sink())  # type: ignore[arg-type]
+    assert "xd2" not in "".join(traceback.format_exception(info.value))
+    assert info.value.__cause__ is None

@@ -15,7 +15,7 @@ import os
 import re
 from collections.abc import Iterator
 from datetime import UTC, date, datetime
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
@@ -39,26 +39,25 @@ NUMERIC_COLUMNS = frozenset({
     "headcount_fact", "payroll", "overtime_hours", "allocated", "used",
 })
 _THOUSANDS = re.compile(r"^-?\d{1,3}([ \u00a0\u2009\u202f']\d{3})+([.,]\d+)?$")
-_DECIMAL_COMMA = re.compile(r"^-?\d+,\d+$")
+_STRICT_NUMBER = re.compile(r"^-?[0-9]+([.,][0-9]+)?$")  # NaN/Infinity/1e5 -- rad etiladi
 
 
 def _number(value: str, where: str) -> str:
     if _THOUSANDS.match(value):
         raise FileFormatError(f"{where}: разделитель разрядов в числе не допускается")
-    if _DECIMAL_COMMA.match(value):
-        value = value.replace(",", ".")
-    try:
-        Decimal(value)
-    except InvalidOperation as exc:
-        raise FileFormatError(f"{where}: неверное число") from exc
+    if not _STRICT_NUMBER.match(value):
+        raise FileFormatError(f"{where}: неверное число")
+    value = value.replace(",", ".")
+    if not Decimal(value).is_finite():
+        raise FileFormatError(f"{where}: неверное число")
     return value
 
 
 def _iso_date(value: str, where: str) -> int:
     try:
         return date_id(date.fromisoformat(value))
-    except ValueError as exc:
-        raise FileFormatError(f"{where}: неверная дата (ожидается ГГГГ-ММ-ДД)") from exc
+    except ValueError:
+        raise FileFormatError(f"{where}: неверная дата (ожидается ГГГГ-ММ-ДД)") from None
 
 
 class FileConnector:
@@ -87,8 +86,8 @@ class FileConnector:
                     if None in raw:
                         raise FileFormatError(f"{path.name}:{line}: лишние поля в строке")
                     yield line, {k.strip(): (v or "").strip() for k, v in raw.items()}
-        except UnicodeDecodeError as exc:
-            raise FileFormatError(f"{path.name}: файл не в кодировке UTF-8") from exc
+        except UnicodeDecodeError:
+            raise FileFormatError(f"{path.name}: файл не в кодировке UTF-8") from None
 
     def _convert(self, target: Target, raw: dict[str, str], where: str) -> dict[str, Any]:
         row: dict[str, Any] = {}
@@ -128,7 +127,10 @@ class FileConnector:
         months = set(window.month_ids())
         totals: dict[int, Decimal] = {}
         for line, raw in self._rows(path):
-            month = int(raw["month"])
+            try:
+                month = int(raw["month"])
+            except ValueError:
+                raise FileFormatError(f"{path.name}:{line}: неверный месяц") from None
             if month in months:
                 totals[month] = Decimal(_number(raw["amount"], f"{path.name}:{line}"))
         return ControlTotals(totals)

@@ -74,6 +74,11 @@ class AuditAction(StrEnum):
     AUDIT_VERIFIED = "audit.verified"
     ETL_RUN_STARTED = "etl.run.started"
     ETL_RUN_FINISHED = "etl.run.finished"
+    ETL_RUN_REQUESTED = "admin.etl.run_requested"
+    BUILD_ROLLED_BACK = "admin.build.rolled_back"
+    ALERT_RULE_UPDATED = "admin.alert_rule.updated"
+    FIN_ASSUMPTIONS_UPDATED = "admin.fin_assumptions.updated"
+    SETTING_UPDATED = "admin.setting.updated"
     RLS_VIOLATION = "security.rls_violation_attempt"
     ACCESS_DENIED = "security.access_denied"
 

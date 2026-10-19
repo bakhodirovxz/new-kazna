@@ -47,6 +47,9 @@ MESSAGES: dict[str, str] = {
     "payload_too_large": "Слишком большой запрос",
     "method_not_allowed": "Метод не поддерживается",
     "build_not_available": "Сборка недоступна",
+    "unknown_source": "Неизвестный источник данных",
+    "source_forbidden": "Источник недоступен в этой среде",
+    "invalid_setting": "Недопустимое значение настройки",
     "internal_error": "Внутренняя ошибка сервера",
 }
 

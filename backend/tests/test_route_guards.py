@@ -71,6 +71,18 @@ EXPECTED_ROUTES = frozenset({
     ("GET", "/api/v1/meta/periods"),
     ("GET", "/api/v1/meta/menu"),
     ("GET", "/api/v1/meta/freshness"),
+    ("GET", "/api/v1/admin/etl/runs"),
+    ("GET", "/api/v1/admin/etl/runs/{run_id}"),
+    ("POST", "/api/v1/admin/etl/run"),
+    ("GET", "/api/v1/admin/builds"),
+    ("POST", "/api/v1/admin/builds/rollback"),
+    ("GET", "/api/v1/admin/alert-rules"),
+    ("GET", "/api/v1/admin/alert-rules/{code}/history"),
+    ("PATCH", "/api/v1/admin/alert-rules/{code}"),
+    ("GET", "/api/v1/admin/fin-assumptions"),
+    ("PUT", "/api/v1/admin/fin-assumptions"),
+    ("GET", "/api/v1/admin/settings"),
+    ("PUT", "/api/v1/admin/settings/{key}"),
     ("PATCH", "/api/v1/admin/positions/{position_id}"),
     ("PATCH", "/api/v1/admin/roles/{role_id}"),
     ("PATCH", "/api/v1/admin/users/{user_id}"),
@@ -191,8 +203,12 @@ def test_all_protected_routes_return_401_without_session() -> None:
         for method, path, _dependant in _routes():
             if (method, path) in PUBLIC:
                 continue
-            req_path = path.replace("{user_id}", "1").replace("{role_id}", "1").replace(
-                "{position_id}", "1").replace("{session_id}", "00000000-0000-0000-0000-000000000000"
-            ).replace("{purpose}", "mfa")
+            req_path = (
+                path.replace("{user_id}", "1").replace("{role_id}", "1")
+                .replace("{position_id}", "1")
+                .replace("{session_id}", "00000000-0000-0000-0000-000000000000")
+                .replace("{purpose}", "mfa").replace("{run_id}", "1")
+                .replace("{code}", "turnover").replace("{key}", "builds.keep")
+            )
             response = client.request(method, req_path, json={})
             assert response.status_code == 401, f"{method} {req_path}: {response.status_code}"

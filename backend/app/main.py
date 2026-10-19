@@ -10,6 +10,8 @@ from fastapi import Depends, FastAPI
 from fastapi.concurrency import run_in_threadpool
 
 from app import __version__
+from app.admin.config_router import router as config_router
+from app.admin.etl_router import router as etl_router
 from app.admin.keys_router import router as keys_router
 from app.admin.router import router as admin_router
 from app.audit.router import router as audit_router
@@ -64,6 +66,8 @@ def create_app() -> FastAPI:
     app.include_router(audit_router, prefix=API_PREFIX)
     app.include_router(keys_router, prefix=API_PREFIX)
     app.include_router(meta_router, prefix=API_PREFIX)
+    app.include_router(etl_router, prefix=API_PREFIX)
+    app.include_router(config_router, prefix=API_PREFIX)
     _mount_openapi(app, protected=settings.env == "prod")
     return app
 

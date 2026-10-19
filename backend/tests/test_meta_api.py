@@ -8,10 +8,11 @@ from sqlalchemy import text
 
 from app.core.config import get_settings
 from app.core.db import apply_rls, get_engine, new_session
+from app.core.errors import ValidationFailed
 from app.dwh.freshness import freshness
 from app.main import create_app
 from app.meta.menu import build_menu
-from app.meta.periods import build_periods
+from app.meta.periods import build_periods, resolve_period
 from tests.helpers import SeedUser, login
 
 
@@ -141,3 +142,12 @@ def test_freshness(client: TestClient, make_user: Callable[..., SeedUser],
     body = client.get("/api/v1/meta/freshness").json()
     assert body["last_success_at"] is not None and body["max_age_hours"] == 6
     assert body["active_build_id"] == published_synthetic
+
+
+def test_resolve_period() -> None:
+    q3 = resolve_period("q3", date(2026, 9, 24))
+    assert (q3.date_from, q3.date_to) == (date(2026, 7, 1), date(2026, 9, 24))
+    assert resolve_period("ytd", date(2026, 9, 24)).date_to != resolve_period(
+        "ytd", date(2026, 10, 1)).date_to  # oy almashganda kesh kaliti o'zgaradi
+    with pytest.raises(ValidationFailed):
+        resolve_period("m12", date(2026, 9, 24))  # hali kelmagan oy

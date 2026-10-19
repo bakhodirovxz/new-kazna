@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date
 
+from app.core.errors import ValidationFailed
 from app.dwh.dates import month_end
 
 MONTHS = ("Январь", "Февраль", "Март", "Апрель", "Май", "Июнь", "Июль", "Август",
@@ -37,3 +38,11 @@ def build_periods(today: date) -> list[Period]:
         out.append(Period(f"m{m:02d}", "month", f"{MONTHS[m - 1]} {year}", start,
                           min(month_end(start), today)))
     return out
+
+
+def resolve_period(code: str, today: date) -> Period:
+    """Davr kodini sanalarga aylantiradi; noma'lum kod — 422. Kesh `filters`iga sanalar yoziladi."""
+    for p in build_periods(today):
+        if p.code == code:
+            return p
+    raise ValidationFailed(field="per")

@@ -22,14 +22,14 @@ from collections.abc import Iterator
 
 import fastapi.routing as fastapi_routing
 import pytest
-from fastapi import APIRouter, FastAPI
+from fastapi import APIRouter, Depends, FastAPI
 from fastapi.dependencies.models import Dependant
 from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
 from starlette.routing import BaseRoute
 from starlette.routing import Route as StarletteRoute
 
-from app.auth.context import get_ctx
+from app.auth.context import get_ctx, require_perm
 from app.core.db import get_db
 from app.main import create_app
 
@@ -188,15 +188,36 @@ def test_every_non_public_route_requires_session() -> None:
         assert get_ctx in set(_calls(dependant)), f"{method} {path} himoyasiz"
 
 
+def _guard_satisfies(dependant: Dependant, needed: str) -> bool:
+    """Prefiks ruxsati: all-of — kamida bittasi `needed` bilan boshlansa yetarli; any-of —
+    HAR BIR ruxsat mos bo'lishi shart (aks holda any-of boshqa prefiksli ruxsat bilan
+    admin route'ni ochib qo'yardi)."""
+    for call in _calls(dependant):
+        perms = set(getattr(call, "required_perms", ()))
+        if not perms:
+            continue
+        check = all if getattr(call, "any_of", False) else any
+        if check(p.startswith(needed) for p in perms):
+            return True
+    return False
+
+
+def test_prefix_guard_rejects_any_of_with_foreign_permission() -> None:
+    probe = FastAPI(openapi_url=None, docs_url=None, redoc_url=None)
+    mixed = Depends(require_perm("admin:users", "export:csv", any_of=True))
+    strict = Depends(require_perm("admin:users", "admin:roles", any_of=True))
+    probe.get("/mixed", dependencies=[mixed])(_probe_endpoint)
+    probe.get("/strict", dependencies=[strict])(_probe_endpoint)
+    by_path = {path: dep for _, path, dep in _routes(probe)}
+    assert not _guard_satisfies(by_path["/mixed"], "admin:")
+    assert _guard_satisfies(by_path["/strict"], "admin:")
+
+
 def test_admin_and_audit_routes_require_matching_permission() -> None:
     for method, path, dependant in _routes():
         for prefix, needed in PREFIX_PERMS.items():
-            if not _matches_prefix(path, prefix):
-                continue
-            perms: set[str] = set()
-            for call in _calls(dependant):
-                perms |= set(getattr(call, "required_perms", ()))
-            assert any(p.startswith(needed) for p in perms), f"{method} {path}: {perms}"
+            if _matches_prefix(path, prefix):
+                assert _guard_satisfies(dependant, needed), f"{method} {path}"
 
 
 def test_positions_read_is_any_of_users_or_roles_while_writes_need_roles() -> None:

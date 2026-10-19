@@ -173,4 +173,5 @@ def require_perm(*perms: str, any_of: bool = False) -> Callable[..., AuthContext
         return ctx
 
     dependency.required_perms = frozenset(perms)  # type: ignore[attr-defined]
+    dependency.any_of = any_of  # type: ignore[attr-defined]  # route-guard testi ko'radi
     return dependency

@@ -218,4 +218,39 @@ describe('enrollment errors', () => {
     await screen.findByTestId('totp-secret');
     expect(server.calls.filter((c) => c.path === '/auth/2fa/enroll/start')).toHaveLength(2);
   });
+
+  it('clears the consumed challenge when unmounted on the backup codes step without continuing', async () => {
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
+    const server = mockApi({
+      'POST /auth/2fa/enroll/start': json({ otpauth_uri: 'otpauth://totp/x?secret=' + SECRET, qr_svg_data_uri: 'data:image/svg+xml;base64,PHN2Zy8+', secret: SECRET }),
+      'POST /auth/2fa/enroll/confirm': json({ user: { ...ME_ADMIN, username: 'novikov' }, backup_codes: CODES }),
+    });
+    void server;
+    function Harness() {
+      const flow = useAuthFlow();
+      const [show, setShow] = useState(true);
+      return (
+        <>
+          <output data-testid="challenge">{flow.challenge ? 'set' : 'none'}</output>
+          <button type="button" onClick={() => setShow(false)}>
+            hide
+          </button>
+          {show ? <MfaEnrollPage /> : null}
+        </>
+      );
+    }
+    const { user } = renderWithProviders(
+      <WithEnrollChallenge>
+        <Harness />
+      </WithEnrollChallenge>,
+      { hash: '#2fa/setup' },
+    );
+    await screen.findByTestId('totp-secret');
+    await user.type(screen.getByLabelText('Код из приложения'), '123456');
+    await user.keyboard('{Enter}');
+    await screen.findByTestId('backup-codes');
+    expect(screen.getByTestId('challenge')).toHaveTextContent('set');
+    await user.click(screen.getByRole('button', { name: 'hide' }));
+    expect(screen.getByTestId('challenge')).toHaveTextContent('none');
+  });
 });

@@ -169,6 +169,10 @@
 .shell-skel .side--skel { display: flex; flex-direction: column; gap: 0.6rem; }
 .shell-skel .main { gap: 1.2rem; }
 
+/* D1: keng bazaviy kenglik — asboblar sig'masa 2-qatorga tushadi, bo'limlar torayib 5 qatorga cho'zilmaydi */
+@media (min-width: 1280px) {
+  .sections-nav { flex: 1 1 56rem; }
+}
 @media (max-width: 2100px) {
   .sec { padding: 0 0.85rem; font-size: 1.1rem; }
 }

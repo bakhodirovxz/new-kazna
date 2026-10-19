@@ -31,6 +31,8 @@ export function MfaEnrollPage() {
   const inFlight = useRef(false);
   const formRef = useRef<HTMLFormElement>(null);
   const leaving = useRef(false);
+  const shown = useRef(false); // kodlar ko'rsatilgan va 'Продолжить' bosilmagan
+  const clear = flow.clear; // store.actions barqaror (flow obyekti esa holat bilan almashadi)
   const challenge = flow.challenge;
   const valid = challenge !== null && challenge.step === 'mfa_enroll';
   useDocumentTitle(t('enroll.docTitle'));
@@ -45,6 +47,16 @@ export function MfaEnrollPage() {
     start.mutate({ mfa_token: challenge.mfaToken });
   }, [challenge, valid, start]);
 
+  useEffect(() => {
+    shown.current = result !== null;
+  }, [result]);
+  useEffect(
+    () => () => {
+      if (shown.current) clear(); // 'Продолжить'siz ketilsa ishlatilgan mfa challenge xotirada qolmasin
+    },
+    [clear],
+  );
+
   const enrollment = start.data;
   useEffect(() => {
     if (enrollment) formRef.current?.querySelector('input')?.focus(); // 1-qadam: kod maydoniga
@@ -58,6 +70,7 @@ export function MfaEnrollPage() {
           username={result.user.username}
           onContinue={() => {
             const target = destinationAfterSignIn(result.user, flow.returnTo);
+            shown.current = false; // finish() returnTo'ni saqlaydi (parol bosqichi uchun)
             flow.finish();
             navigate(target, { replace: true });
           }}

@@ -8,6 +8,7 @@ import redis as redis_lib
 from alembic import command
 from alembic.config import Config
 from sqlalchemy import text
+from sqlalchemy.engine import Connection
 from sqlalchemy.orm import Session
 
 from app.bootstrap import bootstrap_runtime
@@ -19,6 +20,30 @@ from app.dwh.aggregates import BuildParams, build_all
 from app.etl.db import etl_transaction
 from app.etl.runner import RunResult
 from tests.helpers import SeedUser, create_user
+
+
+def _reset_dwh(conn: Connection) -> None:
+    """dwh/mart/stg test holatini tozalaydi (migratsiya seed'lari qoladi).
+
+    Sabab (task-9 C1): `ugk_etl` yuklagan fakt/o'lchovlar sessiyalar orasida DB'da qoladi
+    (core tozalanadi, dwh yo'q) — qayta ishga tushirishda eski sintetik fakt'lar yangi
+    testlarning build'iga aralashib, cheklarni buzardi. `ugk_etl`da TRUNCATE huquqi yo'q,
+    shuning uchun migrator ulanishi. Seed: dim_branch 1..16 (+versiyalari), tizim
+    statyalari PKM54-I06/O09, dim_date."""
+    tables = conn.execute(text(
+        "SELECT format('%I.%I', n.nspname, c.relname) FROM pg_class c "
+        "JOIN pg_namespace n ON n.oid = c.relnamespace "
+        "WHERE c.relkind IN ('r', 'p') AND NOT c.relispartition AND ("
+        "  (n.nspname = 'dwh' AND (c.relname ~ '^fact_' OR c.relname IN ('fx_rate', "
+        "   'dim_contract', 'dim_loan_version', 'dim_loan', 'dim_object', 'dim_counterparty', "
+        "   'dim_bank', 'dim_nomenclature', 'dim_source', 'dim_position'))) "
+        "  OR n.nspname = 'mart')")).scalars().all()
+    conn.execute(text(f"TRUNCATE {', '.join(tables)}"))
+    conn.execute(text("DELETE FROM dwh.dim_branch_version WHERE branch_id > 16"))
+    conn.execute(text("DELETE FROM dwh.dim_branch WHERE branch_id > 16"))
+    conn.execute(text("DELETE FROM dwh.dim_item WHERE code NOT IN ('PKM54-I06', 'PKM54-O09')"))
+    conn.execute(text("UPDATE dwh.dim_branch SET src_system = 'seed'"))
+    conn.execute(text("UPDATE dwh.dim_item SET src_system = 'seed'"))
 
 
 def _reset_core() -> None:
@@ -63,6 +88,7 @@ def _reset_core() -> None:
         if conn.execute(text("SELECT to_regclass('dwh.dim_counterparty')")).scalar() is not None:
             conn.execute(text("UPDATE dwh.dim_counterparty SET inn_enc = NULL, inn_bidx = NULL"))
             conn.execute(text("UPDATE dwh.dim_bank SET account_enc = NULL, account_bidx = NULL"))
+        _reset_dwh(conn)
         # core.etl_run RESTART IDENTITY bilan tozalandi — run id'lar qayta ishlatiladi,
         # eski staging qatorlari yangi yuklashga "yopishib" qolmasin.
         for table in ("stg.rows", "stg.batch"):

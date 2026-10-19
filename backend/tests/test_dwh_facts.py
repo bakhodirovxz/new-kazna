@@ -125,6 +125,7 @@ def test_drop_old_partitions_floor_keeps_two_year_old_partition() -> None:
     year = today.year - 2
     target = f"fact_balance_p{year}"
     with etl_transaction() as conn:
+        existed = target in partitions.list_partitions(conn, "fact_balance")
         partitions.ensure_partitions(conn, "fact_balance", date(year, 1, 1), date(year, 12, 31))
         before = set(partitions.list_partitions(conn, "fact_balance"))
     assert target in before
@@ -137,8 +138,12 @@ def test_drop_old_partitions_floor_keeps_two_year_old_partition() -> None:
         # DROP TABLE — jadval egasi `ugk_migrator` (SECURITY DEFINER funksiya nomidan
         # yaratilgan), `ugk_etl`ning DROP huquqi yo'q, shuning uchun tozalash migrator
         # ulanishi orqali.
-        with get_engine("migrator").begin() as conn:
-            conn.execute(text(f"DROP TABLE IF EXISTS dwh.{target}"))
+        # Faqat o'zi yaratgan partitsiyani o'chiradi: oldin mavjud bo'lsa (sintetik yuklash
+        # `fact_balance_p2024`ni to'ldirgan) o'chirish boshqa testlar ma'lumotini yo'qotadi
+        # (task-9 C1 ildizi).
+        if not existed:
+            with get_engine("migrator").begin() as conn:
+                conn.execute(text(f"DROP TABLE IF EXISTS dwh.{target}"))
 
 
 def test_partitioned_whitelist_matches_sql_function() -> None:

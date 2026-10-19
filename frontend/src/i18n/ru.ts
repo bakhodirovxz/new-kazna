@@ -29,6 +29,8 @@ export const ru = {
   'combo.empty': 'Ничего не найдено',
   'combo.placeholder': 'Начните вводить',
   'otp.backupHint': 'Формат: XXXX-XXXX-XXXX',
+  'chip.remove': 'Сбросить: {name}',
+  'kpi.hint': 'Как считается: {label}',
 } as const satisfies Record<string, string>;
 
 export type RuKey = keyof typeof ru;

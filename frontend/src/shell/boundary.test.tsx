@@ -12,6 +12,8 @@ vi.mock('../sections/registry', async () => {
   const actual = await vi.importActual<typeof Registry>('../sections/registry');
   return {
     resolveSectionPage: actual.createRegistry({
+      './kazna/platezhi.tsx': () => Promise.reject(new Error('chunk')),
+      './kazna/calendar.tsx': () => Promise.resolve({ default: () => <p>calendar page</p> }),
       './kazna/svod.tsx': () => {
         state.attempts += 1;
         return state.attempts === 1 ? Promise.reject(new Error('chunk')) : Promise.resolve({ default: () => <p>loaded page</p> });
@@ -34,4 +36,14 @@ it('keeps the shell and retries when a lazy page chunk fails', async () => {
   expect(screen.getByRole('navigation', { name: 'Разделы' })).toBeInTheDocument();
   await user.click(screen.getByRole('button', { name: 'Повторить' }));
   expect(await screen.findByText('loaded page')).toBeInTheDocument();
+});
+
+it('clears the error banner when navigating to another page', async () => {
+  vi.spyOn(console, 'error').mockImplementation(() => undefined);
+  mockApi(shellRoutes());
+  const { user } = renderWithProviders(<Harness />, { hash: '#kazna/platezhi' });
+  await screen.findByText('Не удалось загрузить страницу');
+  await user.click(screen.getByRole('link', { name: 'Платёжный календарь' }));
+  expect(await screen.findByText('calendar page')).toBeInTheDocument();
+  expect(screen.queryByText('Не удалось загрузить страницу')).not.toBeInTheDocument();
 });

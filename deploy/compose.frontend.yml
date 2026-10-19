@@ -20,5 +20,28 @@ services:
     cap_add: [CHOWN, DAC_OVERRIDE, FOWNER]
     security_opt: ["no-new-privileges:true"]
 
+  e2e:
+    image: mcr.microsoft.com/playwright:v1.49.1-noble
+    working_dir: /e2e
+    environment:
+      E2E_BASE_URL: https://caddy
+      NODE_EXTRA_CA_CERTS: /certs/organization-ca-3.crt
+      npm_config_update_notifier: "false"
+      npm_config_fund: "false"
+      npm_config_audit: "false"
+      CI: "1"
+    volumes:
+      - ../frontend/e2e:/e2e
+      - ../frontend/certs:/certs:ro
+      - e2e_node_modules:/e2e/node_modules
+    ipc: host
+    networks: [edge]
+
+networks:
+  edge:
+    external: true
+    name: ugekazna_edge
+
 volumes:
   fe_node_modules:
+  e2e_node_modules:

@@ -87,9 +87,8 @@ export function UserMenu({ me }: { me: MeOut }) {
           }
         }}
       >
-        <span className="avatar" aria-hidden="true">
-          {initials(me.full_name)}
-        </span>
+        {/* Bosh harflar CSS orqali (::before): axe label-content-name-mismatch ularni ko'rinadigan matn deb hisoblamasin */}
+        <span className="avatar" aria-hidden="true" data-initials={initials(me.full_name)} />
         <span className="usermenu__name" aria-hidden="true">
           {me.full_name}
         </span>

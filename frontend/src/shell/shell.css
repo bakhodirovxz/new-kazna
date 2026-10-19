@@ -246,6 +246,7 @@
   font-size: 0.8rem;
   font-weight: 700;
 }
+.avatar::before { content: attr(data-initials); }
 .usermenu__list {
   position: absolute;
   top: calc(100% + 0.4rem);

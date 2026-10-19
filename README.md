@@ -43,6 +43,13 @@ docker compose -f deploy/compose.test.yml run --rm test mypy app
 docker compose -f deploy/compose.test.yml down
 ```
 
+E2E (Playwright, 390/1024/1440 kenglik, haqiqiy dev stack):
+```bash
+docker compose -f deploy/compose.yml up -d --build
+./scripts/e2e.sh                       # seed-e2e (faqat dev/test) + Playwright
+```
+Hisobot: `frontend/e2e/playwright-report/index.html`.
+
 ## Operator CLI (`python -m app.cli <buyruq>`)
 
 | Buyruq | Nima qiladi | Qayerda ishga tushiriladi |

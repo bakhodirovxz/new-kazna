@@ -20,6 +20,7 @@ secrets:
   master_kek: {file: ./secrets/master_kek}
   blind_index_key: {file: ./secrets/blind_index_key}
   session_pepper: {file: ./secrets/session_pepper}
+  smtp_password: {file: ./secrets/smtp_password}
 
 services:
   db:
@@ -114,6 +115,36 @@ services:
       migrate: {condition: service_completed_successfully}
       redis: {condition: service_healthy}
 
+  worker:
+    <<: *hardening
+    image: ugekazna-backend:dev
+    user: "10001:10001"
+    pids_limit: 100
+    mem_limit: 512m
+    environment:
+      ENV: dev
+      ETL_FILE_DIR: /data/inbox
+      # SMTP_HOST / SMTP_TO / SMTP_FROM — ichki relay bo'lsa shu yerda beriladi.
+      # `backend` tarmog'i `internal: true` — tashqi relay kerak bo'lsa alohida
+      # egress tarmog'i talab qilinadi (4-reja).
+    secrets: [db_app_password, db_etl_password, redis_password, master_kek, blind_index_key,
+              session_pepper, smtp_password]
+    volumes:
+      - ../backend/app:/app/app:ro
+      - etl_inbox:/data/inbox:ro
+    tmpfs: [/tmp]
+    command: ["python", "-m", "app.worker"]
+    networks: [backend]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import os, time, sys; sys.exit(0 if time.time() - os.stat('/tmp/worker-heartbeat').st_mtime < 180 else 1)"]
+      interval: 60s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+      redis: {condition: service_healthy}
+
   caddy:
     <<: *hardening
     image: caddy:2-alpine
@@ -143,3 +174,4 @@ volumes:
   db_data:
   caddy_data:
   caddy_config:
+  etl_inbox:

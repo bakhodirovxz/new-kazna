@@ -29,7 +29,7 @@ huquq yo'q, crypto-shredding'dan himoya) `api` konteynerida EMAS, balki:
 docker compose -f deploy/compose.yml run --rm migrate python -m app.cli retire-keys
 ```
 
-kabi `migrate` konteynerida ishga tushiriladi. `rewrap-keys` uchun yangi KEK (base64, 32 bayt)
+kabi `migrate` konteynerida ishga tushiriladi. `worker` konteyneri `db_app_password` + `db_etl_password` (+ `smtp_password`) oladi va hech qachon `db_migrator_password`ni olmaydi, shuning uchun retire-keys va rewrap-keys `migrate`da qoladi. `rewrap-keys` uchun yangi KEK (base64, 32 bayt)
 alohida faylga yozilib, konteynerga bind-mount qilinadi — yo'l **absolyut** bo'lishi va fayl
 konteyner foydalanuvchisi (`10001:10001`) o'qiy olishi SHART (masalan `-v $(pwd)/new_kek:/tmp/new_kek:ro`,
 `chmod 644` yoki uid 10001'ga tegishli qilib), so'ng `--new-kek-file /tmp/new_kek` beriladi;

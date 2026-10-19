@@ -189,7 +189,7 @@ host hardening qo'llanmasi; SBOM.
 | Sxema | Mazmun |
 |---|---|
 | `core` | users, positions, roles, permissions, sessions, audit_log, crypto_keys, settings, alert_rules, fin_assumptions, etl_run, etl_step, etl_error, data_version, integration_credentials |
-| `stg` | manbadan xom yuklangan ma'lumot (har yuklash `load_id` bilan) |
+| `stg` | manbadan xom yuklangan ma'lumot: umumiy `stg.rows` (jsonb, UNLOGGED) + `stg.batch`, har yuklash `load_id` bilan; sezgir maydonlar staging'dan oldin shifrlanadi |
 | `dwh` | yulduz sxema: `dim_*`, `fact_*`, `fx_rate` |
 | `mart` | oylik agregatlar (`build_id` bilan) |
 | `pub` | UI o'qiydigan view'lar (faqat aktiv build) |
@@ -198,8 +198,8 @@ host hardening qo'llanmasi; SBOM.
 - Summalar `numeric(20,2)`, **mln so'm**. Hajmlar: kVt·soat uchun `numeric(20,3)` mln kVt·soat.
 - Sana kaliti `date_id int` (YYYYMMDD) → `dim_date`.
 - Texnik ustunlar: `load_id bigint`, `src_system text`, `doc_type text`, `src_id text`, `updated_at timestamptz`;
-  `UNIQUE (src_system, doc_type, src_id)` — idempotentlik.
-- Tarixiy o'lchovlar SCD-2 (`valid_from`, `valid_to`, `is_current`): `dim_branch` (quvvat), `dim_loan` (stavka).
+  `UNIQUE (src_system, doc_type, src_id)` — idempotentlik (partitsiyalangan faktlarda `+ date_id`, PostgreSQL talabi; sana o'zgarsa loader eski nusxani o'chiradi). O'lchovlarda — `code UNIQUE`.
+- Tarixiy o'lchovlar SCD-2 alohida versiya jadvallarida (`valid_from`, `valid_to`, `is_current`): `dim_branch_version` (quvvat), `dim_loan_version` (stavka); `dim_branch`/`dim_loan` — FK nishoni (joriy qiymat).
   Qolganlari SCD-1.
 
 ### 4.3 O'lchovlar (`dwh`)
@@ -243,7 +243,7 @@ Ustunlar TZ 3-bo'limidagi o'lchov va mezonlarga mos.
 
 ### 4.6 Partitsiyalarni boshqarish
 Worker har kuni: kelgusi 3 oy partitsiyalarini oldindan yaratadi; 5 yildan eski fakt partitsiyalarini
-`DETACH` + arxiv (pg_dump, shifrlangan) + `DROP`; audit partitsiyalari 1 yil. Har amal jurnalga yoziladi.
+`DETACH` + `DROP` (arxiv — pgBackRest zaxiralari); audit partitsiyalari 1 yil. Har amal jurnalga yoziladi.
 
 ### 4.7 Agregatlar va publish
 - `mart.agg_<soha>_month` — TZ 4-bo'limidagi har bir ko'rsatkich oilasi uchun (cash, payments, debt,
@@ -271,7 +271,7 @@ Har o'zgarish yangi `version` qatori + audit.
   inkremental (10:00, 13:00, 16:00, har biri ≤10 daqiqa); banklar 4 marta (keyingi spec).
 - Pipeline qadamlari: `dims → facts → aggregates → quality → publish`. Istalgan qadam xatosi → publish yo'q,
   oldingi build aktiv qoladi.
-- Qo'lda ishga tushirish: admin UI yoki `make etl-run SOURCE=… MODE=full|incremental`.
+- Qo'lda ishga tushirish: admin UI (`core.etl_requests` navbati, worker bajaradi) yoki `make etl-run SOURCE=… MODE=full|incremental`.
 
 ### 5.2 Konnektor interfeysi
 ```python
@@ -282,7 +282,7 @@ class SourceConnector(Protocol):
     def extract(self, window: Window, sink: StagingSink) -> ExtractStats: ...
     def control_totals(self, window: Window) -> ControlTotals | None: ...
 ```
-- Inkremental oyna: `max(watermark − 45 kun, joriy oyning 1-kuni)` dan hozirgacha; yopilmagan davr to'liq qayta.
+- Inkremental oyna: `min(watermark − 45 kun, joriy oyning 1-kuni)` dan hozirgacha (eski watermark bo'lsa oraliq ham qamraladi); yopilmagan davr to'liq qayta.
 - `stg → dwh`: `INSERT … ON CONFLICT (src_system, doc_type, src_id) DO UPDATE` (faqat o'zgargan bo'lsa).
 - Qayta urinishlar: 3 ta, pauza 30 s → 2 min → 8 min (+jitter); keyin `failed` + notifier.
 - Poydevordagi konnektorlar:

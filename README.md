@@ -10,6 +10,9 @@ python scripts/gen_secrets.py
 docker compose -f deploy/compose.yml up -d --build
 docker compose -f deploy/compose.yml exec api python -m app.cli create-admin --username admin --full-name "Администратор"
 ```
+Sintetik ma'lumot (dev): `docker compose -f deploy/compose.yml exec worker python -m app.cli etl-run --source synthetic --mode full`
+(worker dev'da buni har kecha 02:00 da o'zi bajaradi). Aktiv build'ni qaytarish: `python -m app.cli rollback-build`.
+CSV yuklash: fayllarni `etl_inbox` volume'iga (`<maqsad>.csv`, UTF-8, `;`, ISO sanalar) qo'yib, `etl-run --source file`.
 API: https://localhost:8443/api/v1/ (sertifikat Caddy'ning ichki CA'si — brauzer ogohlantiradi).
 
 ## Testlar
@@ -30,7 +33,9 @@ docker compose -f deploy/compose.test.yml down
 | `retire-keys [--grace-minutes N]` | ishlatilmayotgan eski DEK'larni yo'q qilish | **faqat `migrate` konteyneri** |
 | `rewrap-keys --new-kek-file F` | KEK rotatsiyasi (barcha DEK'larni yangi KEK bilan qayta o'raydi) | **faqat `migrate` konteyneri** |
 | `audit-verify` | audit zanjirini tekshirish (buzilgan bo'lsa chiqish kodi 2) | `api` konteyneri |
-| `cleanup` | eskirgan sessiya va 2FA challenge'larni o'chirish | `api` konteyneri |
+| `cleanup` | eskirgan sessiya, 2FA challenge va staging qatorlarini o'chirish | `worker` konteyneri |
+| `etl-run --source S --mode full\|incremental [--no-retry]` | ETL yuklash | `worker` konteyneri |
+| `rollback-build [--build ID]` | aktiv build'ni qaytarish | `worker` konteyneri |
 
 `retire-keys` va `rewrap-keys` `core.crypto_keys.wrapped_key` ustunini bo'shatadi/qayta yozadi —
 bu ustunga `ugk_app`(API)ning yozish huquqi yo'q (crypto-shredding'dan himoya, spec 3.5), shuning

@@ -2,7 +2,7 @@
 COMPOSE := docker compose -f deploy/compose.yml
 TEST    := docker compose -f deploy/compose.test.yml run --rm test
 
-.PHONY: secrets lock build up down logs create-admin retire-keys rewrap-keys test lint typecheck
+.PHONY: secrets lock build up down logs create-admin retire-keys rewrap-keys test lint typecheck etl-run seed-synthetic rollback-build
 
 secrets: ## Sirlarni yaratish (mavjudlariga tegmaydi)
 	python3 scripts/gen_secrets.py
@@ -42,3 +42,12 @@ lint:
 
 typecheck:
 	$(TEST) mypy app
+
+etl-run: ## make etl-run SOURCE=synthetic MODE=full
+	$(COMPOSE) exec worker python -m app.cli etl-run --source "$(SOURCE)" --mode "$(MODE)"
+
+seed-synthetic: ## dev: 2024-01-01 dan bugungacha sintetik ma'lumot
+	$(COMPOSE) exec worker python -m app.cli etl-run --source synthetic --mode full
+
+rollback-build: ## make rollback-build [BUILD=id]
+	$(COMPOSE) exec worker python -m app.cli rollback-build $(if $(BUILD),--build $(BUILD),)

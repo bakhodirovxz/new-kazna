@@ -1,0 +1,228 @@
+"""ETL worker (spec 5.1): APScheduler BlockingScheduler. `python -m app.worker`.
+
+Joblar (Toshkent vaqti): dev'da kechasi to'liq sintetik yuklash (prod'da haqiqiy konnektorlar
+keyingi rejalarda), admin navbatidagi so'rovlar (30 s), partitsiyalar (03:30), sessiya/staging
+tozalash (04:00), freshness (30 daqiqa), heartbeat. Kalit boshqaruvi (retire/rewrap) bu yerda
+YO'Q: worker'da migrator siri yo'q (faqat `migrate` konteyneri).
+Har xizmat jobi o'z advisory lock'i ostida; ETL runner'ning o'z global lock'i bor.
+Istisnolar faqat `safe_error`/`sqlstate_of` orqali loglanadi (exc_info/str(exc) yo'q — A14.8).
+"""
+
+from __future__ import annotations
+
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
+from datetime import UTC, date, datetime
+from pathlib import Path
+from typing import Any
+
+from apscheduler.schedulers.blocking import BlockingScheduler
+from apscheduler.triggers.cron import CronTrigger
+from sqlalchemy import text
+
+from app.audit.service import AuditAction, AuditEvent, record
+from app.bootstrap import bootstrap_runtime
+from app.core.config import ConfigError, Settings, get_settings
+from app.core.db import get_engine
+from app.core.logging import configure_logging, get_logger
+from app.dwh import partitions
+from app.dwh.dates import TASHKENT, today_tashkent
+from app.dwh.freshness import freshness
+from app.dwh.reference import current_setting
+from app.etl.connectors import make_connector
+from app.etl.db import etl_transaction
+from app.etl.errors import EtlBusyError, safe_error, sqlstate_of
+from app.etl.notify import Notification, Notifier, build_notifier
+from app.etl.runner import Runner, RunResult
+from app.etl.types import Mode, SourceConnector
+from app.maintenance import cleanup_sessions, cleanup_staging
+
+log = get_logger("ugekazna.worker")
+HEARTBEAT = Path("/tmp/worker-heartbeat")  # noqa: S108 — tmpfs, faqat healthcheck uchun
+_NEVER: Any = object()
+_alerted_for: Any = _NEVER
+
+
+def _log_error(event: str, exc: BaseException, **fields: Any) -> None:
+    log.error(event, error=safe_error(exc), sqlstate=sqlstate_of(exc), **fields)
+
+
+@contextmanager
+def job_lock(name: str) -> Iterator[bool]:
+    key = f"ugk_job:{name}"
+    with get_engine("etl").connect() as raw:
+        conn = raw.execution_options(isolation_level="AUTOCOMMIT")
+        got = bool(conn.execute(text("SELECT pg_try_advisory_lock(hashtext(:k))"),
+                                {"k": key}).scalar_one())
+        try:
+            yield got
+        finally:
+            if got:
+                conn.execute(text("SELECT pg_advisory_unlock(hashtext(:k))"), {"k": key})
+
+
+def _guarded(name: str, fn: Callable[[], object]) -> Callable[[], None]:
+    def job() -> None:
+        with job_lock(name) as got:
+            if not got:
+                log.info("job_skipped_locked", job=name)
+                return
+            try:
+                fn()
+            except Exception as exc:  # job xatosi scheduler'ni to'xtatmasin
+                _log_error("job_failed", exc, job=name)
+
+    return job
+
+
+def run_etl_job(source: str, mode: Mode, notifier: Notifier) -> RunResult | None:
+    try:
+        return Runner(make_connector(source), mode=mode, notifier=notifier).run()
+    except EtlBusyError:
+        log.info("etl_skipped_busy", source=source)
+    except Exception as exc:  # A14.8
+        _log_error("etl_job_failed", exc, source=source)
+    return None
+
+
+def _set_request(request_id: int, status: str, run_id: int | None = None,
+                 error: str | None = None) -> None:
+    with etl_transaction() as conn:
+        conn.execute(text("UPDATE core.etl_requests SET status = :s, run_id = :r, error = :e "
+                          "WHERE id = :i"),
+                     {"s": status, "r": run_id, "e": None if error is None else error[:500],
+                      "i": request_id})
+
+
+def _connector_error(exc: Exception) -> str:
+    # Admin kiritgan manba nomi xom matnga kirmasin: qat'iy matnlar.
+    if isinstance(exc, ConfigError):
+        return "ConfigError: manba bu muhitda taqiqlangan"
+    if isinstance(exc, ValueError):
+        return "ValueError: noma'lum manba"
+    return safe_error(exc)
+
+
+def process_requests(
+    notifier: Notifier,
+    *,
+    factory: Callable[[str], SourceConnector] = make_connector,
+    today: date | None = None,
+) -> int:
+    """Admin navbatidagi so'rovlarni ketma-ket bajaradi; bajarilganlar sonini qaytaradi."""
+    done = 0
+    while True:
+        with etl_transaction() as conn:
+            row = conn.execute(text(
+                "SELECT id, source, mode, requested_by FROM core.etl_requests "
+                "WHERE status = 'pending' ORDER BY id LIMIT 1 FOR UPDATE SKIP LOCKED")).first()
+            if row is None:
+                return done
+            conn.execute(text("UPDATE core.etl_requests SET status = 'running' WHERE id = :i"),
+                         {"i": row.id})
+        try:
+            connector = factory(row.source)
+        except Exception as exc:
+            _set_request(row.id, "failed", error=_connector_error(exc))
+            done += 1
+            continue
+        try:
+            result = Runner(connector, mode=Mode(row.mode), notifier=notifier,
+                            triggered_by=row.requested_by, today=today).run()
+        except EtlBusyError:
+            _set_request(row.id, "pending")  # keyingi tekshiruvda qayta urinamiz
+            return done
+        except Exception as exc:
+            _log_error("etl_request_failed", exc, request_id=row.id)
+            _set_request(row.id, "failed", error=safe_error(exc))
+            done += 1
+            continue
+        _set_request(row.id, "done" if result.status == "success" else "failed",
+                     result.run_id, result.error)
+        done += 1
+
+
+def maintain_partitions(today: date) -> dict[str, int]:
+    with etl_transaction() as conn:
+        months_ahead = int(current_setting(conn, "partitions.months_ahead"))
+        keep_years = int(current_setting(conn, "retention.fact_years"))
+        audit_months = int(current_setting(conn, "retention.audit_months"))
+        created = partitions.ensure_ahead(conn, today, months_ahead)
+        dropped = partitions.drop_old(conn, keep_years)
+        conn.execute(text("SELECT core.ensure_audit_partitions(3)"))
+        audit_dropped = int(conn.execute(text("SELECT core.drop_old_audit_partitions(:m)"),
+                                         {"m": audit_months}).scalar_one())
+    result = {"created": created, "dropped": dropped, "audit_dropped": audit_dropped}
+    log.info("partitions_maintained", **result)
+    if dropped or audit_dropped:
+        record(AuditEvent(action=AuditAction.PARTITIONS_DROPPED, object_type="partitions",
+                          details={**result, "keep_years": keep_years,
+                                   "audit_months": audit_months}), role="etl")
+    return result
+
+
+def cleanup_job() -> None:
+    challenges, stale = cleanup_sessions()
+    staged = cleanup_staging()
+    log.info("cleanup_done", challenges=challenges, sessions=stale, staging=staged)
+
+
+def check_freshness(notifier: Notifier, now: datetime | None = None) -> bool:
+    """>6 soat yangilanmagan bo'lsa xabar; bitta eskirish holati uchun bitta xabar."""
+    global _alerted_for
+    with get_engine("app").connect() as conn:
+        state = freshness(conn, now or datetime.now(UTC))
+    if not state.stale:
+        _alerted_for = _NEVER
+        return False
+    if _alerted_for is _NEVER or _alerted_for != state.last_success_at:
+        last = "никогда" if state.last_success_at is None else \
+            state.last_success_at.astimezone(TASHKENT).strftime("%d.%m.%Y %H:%M")
+        notifier.notify(Notification(
+            "stale_data", "Данные витрины устарели",
+            f"Последняя успешная загрузка: {last}. Порог: {state.max_age_hours} ч."))
+        _alerted_for = state.last_success_at
+    return True
+
+
+def heartbeat(path: Path = HEARTBEAT) -> None:
+    path.touch()
+
+
+def build_scheduler(settings: Settings, notifier: Notifier, *,
+                    scheduler: BlockingScheduler | None = None) -> BlockingScheduler:
+    scheduler = scheduler or BlockingScheduler(timezone=TASHKENT)
+    opts: dict[str, Any] = {"max_instances": 1, "coalesce": True, "misfire_grace_time": 3600}
+    if settings.env == "dev":
+        with get_engine("app").connect() as conn:
+            cron = str(current_setting(conn, "etl.synthetic_cron"))
+        scheduler.add_job(run_etl_job, CronTrigger.from_crontab(cron, timezone=TASHKENT),
+                          args=("synthetic", Mode.FULL, notifier), id="etl_synthetic_full",
+                          **opts)
+    scheduler.add_job(process_requests, "interval", seconds=30, args=(notifier,),
+                      id="etl_requests", **opts)
+    scheduler.add_job(_guarded("partitions", lambda: maintain_partitions(today_tashkent())),
+                      CronTrigger(hour=3, minute=30, timezone=TASHKENT), id="partitions", **opts)
+    scheduler.add_job(_guarded("cleanup", cleanup_job),
+                      CronTrigger(hour=4, minute=0, timezone=TASHKENT), id="cleanup", **opts)
+    scheduler.add_job(check_freshness, "interval", minutes=30, args=(notifier,),
+                      id="freshness", **opts)
+    scheduler.add_job(heartbeat, "interval", seconds=60, id="heartbeat", **opts)
+    return scheduler
+
+
+def main() -> None:
+    configure_logging()
+    settings = get_settings()
+    problems = settings.problems()
+    if problems:
+        raise ConfigError("; ".join(problems))
+    bootstrap_runtime()
+    heartbeat()
+    scheduler = build_scheduler(settings, build_notifier(settings))
+    log.info("worker_started", env=settings.env, jobs=sorted(j.id for j in scheduler.get_jobs()))
+    scheduler.start()
+
+
+if __name__ == "__main__":
+    main()

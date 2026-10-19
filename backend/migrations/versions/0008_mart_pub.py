@@ -90,7 +90,9 @@ DECLARE
 BEGIN
   IF NEW.active_build_id IS NOT NULL THEN
     SELECT status INTO st FROM core.builds WHERE build_id = NEW.active_build_id;
-    IF st IS NULL OR st NOT IN ('published', 'superseded', 'ready') THEN
+    -- Final review (I1): 'ready' (hali nashr qilinmagan) faqat ugk_etl uchun.
+    IF st IS NULL OR NOT (st IN ('published', 'superseded')
+                          OR (st = 'ready' AND current_user = 'ugk_etl')) THEN
       RAISE EXCEPTION 'core.data_version.active_build_id: build % is not publishable (status %)',
         NEW.active_build_id, st;
     END IF;

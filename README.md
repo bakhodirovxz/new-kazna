@@ -13,6 +13,14 @@ docker compose -f deploy/compose.yml exec api python -m app.cli create-admin --u
 Sintetik ma'lumot (dev): `docker compose -f deploy/compose.yml exec worker python -m app.cli etl-run --source synthetic --mode full`
 (worker dev'da buni har kecha 02:00 da o'zi bajaradi). Aktiv build'ni qaytarish: `python -m app.cli rollback-build`.
 CSV yuklash: fayllarni `etl_inbox` volume'iga (`<maqsad>.csv`, UTF-8, `;`, ISO sanalar) qo'yib, `etl-run --source file`.
+**Diqqat (operator):** har `<maqsad>.csv` yuklash oynasi uchun BARCHA qatorlarni o'z ichiga olishi shart
+(`--mode full` — `etl.history_start`dan beri butun tarix); to'liq bo'lmagan CSV'da yo'q qatorlar bazadan
+O'CHIRILADI. Sanasi bo'sh qatorlar `missing_value` sifatida rad etiladi. Shu sababli `--mode full --source file`
+faqat `--allow-full-replace` bilan ishlaydi (admin navbati orqali file+full so'rovlar rad etiladi).
+
+**Eslatma (dev):** bu branch'da migratsiyalar joyida o'zgartirilgan — oldingi dev bazalarini qayta yarating
+(`docker compose -f deploy/compose.yml down -v`) va `python scripts/gen_secrets.py` ni qayta ishga tushiring
+(`smtp_password` siri qo'shilgan).
 API: https://localhost:8443/api/v1/ (sertifikat Caddy'ning ichki CA'si — brauzer ogohlantiradi).
 
 ## Testlar

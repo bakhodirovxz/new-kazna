@@ -14,6 +14,7 @@ from app.dwh import builds, partitions
 from app.dwh.freshness import freshness
 from app.etl.connectors import make_connector
 from app.etl.db import etl_transaction
+from app.etl.errors import FILE_FULL_REFUSED
 from app.etl.runner import RunResult
 from app.maintenance import cleanup_staging
 from tests.etl_helpers import (
@@ -202,10 +203,33 @@ def test_heartbeat(tmp_path: Path) -> None:
     assert path.exists()
 
 
+def test_cli_refuses_file_full_without_flag(capsys: pytest.CaptureFixture[str]) -> None:
+    """I2: file + full — aniq bayroqsiz rad etiladi (yuklash boshlanmaydi)."""
+    assert cli.main(["etl-run", "--source", "file", "--mode", "full"]) == 2
+    out = capsys.readouterr().out
+    assert "allow-full-replace" in out and "run=" not in out
+
+
+def test_process_requests_refuses_file_full(source: str) -> None:
+    """I2: navbatdagi file+full so'rov belgilangan matn bilan 'failed' bo'ladi."""
+    request_id = _request("file")  # _request mode='full' yozadi
+    called: list[str] = []
+
+    def factory(name: str) -> ListConnector:
+        called.append(name)
+        return ListConnector(name, _rows())
+
+    assert worker.process_requests(RecordingNotifier(), factory=factory, today=TEST_AS_OF) == 1
+    status, run_id, error = _request_row(request_id)
+    assert (status, run_id, error) == ("failed", None, FILE_FULL_REFUSED[:500])
+    assert called == []
+
+
 def test_cli_etl_run_exit_codes(capsys: pytest.CaptureFixture[str]) -> None:
     assert cli.main(["etl-run", "--source", "oracle", "--mode", "full"]) == 2
     # etl_file_dir (/data/inbox) test konteynerida yo'q → manba mavjud emas, qayta urinishsiz.
-    assert cli.main(["etl-run", "--source", "file", "--mode", "full", "--no-retry"]) == 1
+    assert cli.main(["etl-run", "--source", "file", "--mode", "full", "--no-retry",
+                     "--allow-full-replace"]) == 1
     assert "status=failed" in capsys.readouterr().out
 
 

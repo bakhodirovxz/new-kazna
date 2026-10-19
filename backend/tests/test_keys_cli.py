@@ -380,3 +380,30 @@ def test_cli_rewrap_roundtrip(tmp_path: Path) -> None:
         keystore.rewrap_all(conn, new_kek, get_settings().key_bytes("master_kek"))
     keystore.invalidate_keyring()
     assert keystore.decrypt(Purpose.PII, keystore.encrypt(Purpose.PII, b"x", "a"), "a") == b"x"
+
+
+def test_retire_and_rotate_refuse_while_etl_lock_held() -> None:
+    """I3: ETL global lock ushlangan paytda retire-keys/rotate-key rad etiladi (chiqish kodi
+    3, "fail" audit), kalitlar o'zgarmaydi."""
+    def _snapshot() -> list[tuple[object, ...]]:
+        with get_engine("migrator").connect() as conn:
+            return [tuple(r) for r in conn.execute(text(
+                "SELECT purpose, version, status FROM core.crypto_keys ORDER BY 1, 2"))]
+
+    def _fails() -> int:
+        with get_engine("app").connect() as conn:
+            return int(conn.execute(text(
+                "SELECT count(*) FROM core.audit_log WHERE result = 'fail' AND action IN "
+                "('admin.key.retired', 'admin.key.rotated')")).scalar_one())
+
+    before, fails = _snapshot(), _fails()
+    with get_engine("etl").connect() as raw:
+        other = raw.execution_options(isolation_level="AUTOCOMMIT")
+        other.execute(text("SELECT pg_advisory_lock(hashtext('ugk_etl'))"))
+        try:
+            assert cli.main(["retire-keys", "--grace-minutes", "10"]) == 3
+            assert cli.main(["rotate-key", "--purpose", "pii"]) == 3
+        finally:
+            other.execute(text("SELECT pg_advisory_unlock(hashtext('ugk_etl'))"))
+    assert _snapshot() == before
+    assert _fails() == fails + 2

@@ -7,6 +7,7 @@ rewrap-keys    — KEK rotatsiyasi (keyin master_kek sirini almashtirib, qayta i
 audit-verify   — audit zanjirini tekshirish (buzilgan bo'lsa chiqish kodi 2)
 cleanup        — eskirgan sessiya, 2FA challenge va staging qatorlarini o'chirish
 etl-run        — ETL yuklash: --source synthetic|file --mode full|incremental [--no-retry]
+               [--allow-full-replace] (file + full uchun majburiy)
 rollback-build — aktiv build'ni oldingisiga (yoki --build ID ga) qaytarish
 
 `retire-keys` va `rewrap-keys` `wrapped_key` ustunini bo'shatadi/qayta yozadi — bu ustunga
@@ -32,10 +33,12 @@ import argparse
 import base64
 import hmac
 import sys
+from collections.abc import Iterator
+from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.exc import IntegrityError
 
 from app.audit.service import AuditAction, AuditEvent, record, verify_chain_snapshot
@@ -53,10 +56,10 @@ from app.core.reencrypt import reencrypt, retire_unused
 from app.dwh import builds
 from app.etl.connectors import make_connector
 from app.etl.db import etl_transaction
-from app.etl.errors import EtlBusyError, safe_error
+from app.etl.errors import FILE_FULL_REFUSED, EtlBusyError, safe_error
 from app.etl.notify import build_notifier
 from app.etl.retry import RETRY_DELAYS
-from app.etl.runner import Runner
+from app.etl.runner import ETL_LOCK, Runner
 from app.etl.types import Mode
 from app.maintenance import cleanup_sessions, cleanup_staging
 
@@ -107,6 +110,25 @@ def _create_admin(username: str, full_name: str) -> int:
     return 0
 
 
+ETL_BUSY_KEYS = ("Xato: ETL yuklash bajarilmoqda — kalitlarni o'zgartirish rad etildi "
+                 "(keyinroq urinib ko'ring)")
+
+
+@contextmanager
+def _etl_lock() -> Iterator[None]:
+    """I3: ETL runner'ning global advisory lock'i (`ETL_LOCK`) ushlab turiladi — aks holda
+    retire/rotate bosqichma-bosqich yuklanayotgan staging'ni crypto-shred qilishi mumkin."""
+    with get_engine("migrator").connect() as raw:
+        conn = raw.execution_options(isolation_level="AUTOCOMMIT")
+        if not conn.execute(text("SELECT pg_try_advisory_lock(hashtext(:k))"),
+                            {"k": ETL_LOCK}).scalar_one():
+            raise EtlBusyError
+        try:
+            yield
+        finally:
+            conn.execute(text("SELECT pg_advisory_unlock(hashtext(:k))"), {"k": ETL_LOCK})
+
+
 def _rotate(purpose: Purpose) -> int:
     """DEK rotatsiyasi + qayta shifrlash.
 
@@ -119,17 +141,22 @@ def _rotate(purpose: Purpose) -> int:
     """
     kek = get_settings().key_bytes("master_kek")
     try:
-        with get_engine("app").begin() as conn:
-            version = keystore.rotate(conn, kek, purpose)
-            count = reencrypt(conn, keystore.load_keyring(conn, kek), purpose, role="app")
-        with get_engine("migrator").begin() as conn:
-            count += reencrypt(conn, keystore.load_keyring(conn, kek), purpose, role="migrator")
+        with _etl_lock():
+            with get_engine("app").begin() as conn:
+                version = keystore.rotate(conn, kek, purpose)
+                count = reencrypt(conn, keystore.load_keyring(conn, kek), purpose, role="app")
+            with get_engine("migrator").begin() as conn:
+                count += reencrypt(conn, keystore.load_keyring(conn, kek), purpose,
+                                   role="migrator")
     except Exception as exc:
         record(AuditEvent(
             action=AuditAction.KEY_ROTATED, user_id=None, result="fail", object_type="key",
             object_id=purpose.value,
             details={"purpose": purpose.value, "error": type(exc).__name__, "via": "cli"},
         ))
+        if isinstance(exc, EtlBusyError):
+            _out(ETL_BUSY_KEYS)
+            return 3
         raise
     keystore.invalidate_keyring()
     record(AuditEvent(
@@ -143,13 +170,16 @@ def _rotate(purpose: Purpose) -> int:
 def _retire(grace_minutes: int) -> int:
     grace = timedelta(minutes=grace_minutes)
     try:
-        with get_engine("migrator").begin() as conn:
+        with _etl_lock(), get_engine("migrator").begin() as conn:
             retired_by_purpose = {p: retire_unused(conn, p, grace) for p in Purpose}
     except Exception as exc:
         record(AuditEvent(
             action=AuditAction.KEY_RETIRED, user_id=None, result="fail",
             details={"grace_minutes": grace_minutes, "error": type(exc).__name__, "via": "cli"},
         ))
+        if isinstance(exc, EtlBusyError):
+            _out(ETL_BUSY_KEYS)
+            return 3
         raise
     for purpose, retired in retired_by_purpose.items():
         if retired:
@@ -211,7 +241,10 @@ def _cleanup() -> int:
     return 0
 
 
-def _etl_run(source: str, mode: str, no_retry: bool) -> int:
+def _etl_run(source: str, mode: str, no_retry: bool, allow_full_replace: bool = False) -> int:
+    if source == "file" and mode == "full" and not allow_full_replace:
+        _out(f"Xato: {FILE_FULL_REFUSED}")
+        return 2
     try:
         connector = make_connector(source)
     except (ValueError, ConfigError) as exc:
@@ -266,6 +299,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--source", required=True)
     p.add_argument("--mode", choices=["full", "incremental"], default="incremental")
     p.add_argument("--no-retry", action="store_true")
+    p.add_argument("--allow-full-replace", action="store_true")
     p = sub.add_parser("rollback-build")
     p.add_argument("--build", type=int, default=None)
     args = parser.parse_args(argv)
@@ -282,7 +316,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "audit-verify":
         return _audit_verify()
     if args.command == "etl-run":
-        return _etl_run(args.source, args.mode, args.no_retry)
+        return _etl_run(args.source, args.mode, args.no_retry, args.allow_full_replace)
     if args.command == "rollback-build":
         return _rollback(args.build)
     return _cleanup()

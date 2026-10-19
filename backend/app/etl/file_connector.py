@@ -4,6 +4,12 @@ summalarda razryad ajratkichi yo'q.
 Katalogda har staging maqsadi uchun `<maqsad>.csv` (sarlavha — payload kalitlari: `code`,
 `branch_code`, `item_code`, ...). `date` → `date_id`, `status_date` → `status_date_id`.
 Ixtiyoriy `control_totals.csv` (`month;amount`) — 1C oborotlari (5110/5210/5530).
+MUHIM (operator): har `<maqsad>.csv` yuklash oynasi uchun BARCHA qatorlarni o'z ichiga olishi
+shart (`full` rejimida — `etl.history_start`dan beri butun tarix). Yuklash "oyna ichida
+almashtirish" (replace within window) bo'lgani uchun to'liq bo'lmagan CSV'da yo'q qatorlar
+bazadan O'CHIRILADI. Shuning uchun `--mode full` file manbasi uchun faqat `--allow-full-replace`
+bilan ruxsat etiladi (worker navbatidagi file+full so'rovlar rad etiladi). Sanasi bo'sh qatorlar
+`missing_value` sifatida rad etiladi.
 Format xatosi — FileFormatError/ValueError (qayta urinilmaydi), fayl/katalog yo'qligi —
 vaqtinchalik xato.
 """

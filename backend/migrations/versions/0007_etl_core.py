@@ -181,6 +181,28 @@ STATEMENTS = [
     "GRANT SELECT ON core.builds TO ugk_app",
     "GRANT UPDATE (status, published_at) ON core.builds TO ugk_app",
     "GRANT USAGE ON SEQUENCE core.builds_build_id_seq TO ugk_etl",
+    # Final review (I1): ugk_app faqat published<->superseded o'tishlarini qila oladi (API
+    # rollback); building/ready/failed holatlarini faqat ugk_etl o'zgartiradi. Aks holda
+    # ugk_app failed build'ni 'superseded'ga aylantirib, uni faol qila olardi.
+    """
+    CREATE FUNCTION core.builds_guard() RETURNS trigger
+    LANGUAGE plpgsql SECURITY INVOKER SET search_path = pg_catalog, pg_temp AS $$
+    BEGIN
+      IF current_user = 'ugk_etl' THEN
+        RETURN NEW;
+      END IF;
+      IF OLD.status IN ('published', 'superseded') AND NEW.status IN ('published', 'superseded')
+         AND (NEW.status = 'published' OR NEW.published_at IS NOT DISTINCT FROM OLD.published_at)
+      THEN
+        RETURN NEW;
+      END IF;
+      RAISE EXCEPTION 'core.builds: status % -> % is allowed only for ugk_etl',
+        OLD.status, NEW.status USING ERRCODE = 'check_violation';
+    END
+    $$
+    """,
+    "CREATE TRIGGER builds_guard BEFORE UPDATE ON core.builds "
+    "FOR EACH ROW EXECUTE FUNCTION core.builds_guard()",
     "GRANT SELECT, UPDATE ON core.data_version TO ugk_etl",
     # Fix r1 (M1): INSERT yo'q — yagona qator migratsiya tomonidan seed qilingan (yuqorida).
     # UPDATE faqat active_build_id/published_at ustunlariga — 0008'dagi BEFORE UPDATE
@@ -247,3 +269,4 @@ def downgrade() -> None:
                   "core.etl_run", "core.data_version", "core.builds"):
         op.execute(f"DROP TABLE {table}")
     op.execute("DROP FUNCTION core.versioned_guard()")
+    op.execute("DROP FUNCTION core.builds_guard()")

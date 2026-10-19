@@ -376,3 +376,37 @@ def test_all_pub_views_are_security_invoker() -> None:
     for name, options in rows:
         opts = list(options or ())
         assert "security_invoker=true" in opts, f"pub.{name}: security_invoker=true emas"
+
+
+# ── Final review (I1): builds status guard ───────────────────────────────────────────────
+
+
+def test_ugk_app_cannot_supersede_failed_build_then_activate_it() -> None:
+    """I1: ikki bosqichli hujum — failed build'ni 'superseded'ga aylantirish — rad etiladi."""
+    with etl_transaction() as conn:
+        build_id = builds.create_build(conn, None)
+        assert builds.mark_failed(conn, build_id) is True
+    with new_session() as s, pytest.raises(DBAPIError, match="allowed only for ugk_etl"):
+        s.execute(text("UPDATE core.builds SET status = 'superseded' WHERE build_id = :b"),
+                  {"b": build_id})
+
+
+def test_ugk_app_cannot_activate_ready_build() -> None:
+    """I1: sifat tekshiruvidan o'tmagan `ready` build'ni ugk_app faol qila olmaydi."""
+    with etl_transaction() as conn:
+        build_id = builds.create_build(conn, None)
+        builds.mark_ready(conn, build_id)
+    with new_session() as s, pytest.raises(DBAPIError, match="not publishable"):
+        s.execute(text("UPDATE core.data_version SET active_build_id = :b WHERE id = 1"),
+                  {"b": build_id})
+
+
+def test_rollback_as_ugk_app_and_publish_as_etl_still_work(source: str) -> None:
+    _, first = _scenario(source)
+    with etl_transaction() as conn:
+        builds.publish(conn, first, keep=None)
+    _, second = _scenario(source)
+    with etl_transaction() as conn:
+        builds.publish(conn, second, keep=None)
+    with new_session() as s:  # API yo'li (ugk_app); commit qilinmaydi
+        assert builds.rollback(s.connection(), None) == first

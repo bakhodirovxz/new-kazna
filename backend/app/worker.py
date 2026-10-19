@@ -33,7 +33,7 @@ from app.dwh.freshness import freshness
 from app.dwh.reference import current_setting
 from app.etl.connectors import make_connector
 from app.etl.db import etl_transaction
-from app.etl.errors import EtlBusyError, safe_error, sqlstate_of
+from app.etl.errors import FILE_FULL_REFUSED, EtlBusyError, safe_error, sqlstate_of
 from app.etl.notify import Notification, Notifier, build_notifier
 from app.etl.runner import Runner, RunResult
 from app.etl.types import Mode, SourceConnector
@@ -149,6 +149,10 @@ def process_requests(
                 return done
             conn.execute(text("UPDATE core.etl_requests SET status = 'running' WHERE id = :i"),
                          {"i": row.id})
+        if row.source == "file" and row.mode == "full":  # I2: CSV to'liq bo'lmasa qatorlar o'chadi
+            _set_request(row.id, "failed", error=FILE_FULL_REFUSED)
+            done += 1
+            continue
         try:
             connector = factory(row.source)
         except Exception as exc:

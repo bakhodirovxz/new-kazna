@@ -70,3 +70,11 @@ def safe_error(exc: BaseException) -> str:
         return f"{name}: {text}" if text else name
     state = sqlstate_of(exc)
     return f"{name} (SQLSTATE {state})" if state else name
+
+
+# I2: FileConnector "full" rejimi oynadagi CSV'da yo'q qatorlarni o'chiradi (replace-within-window).
+FILE_FULL_REFUSED = (
+    "Полная загрузка из файлов отклонена: каждый <цель>.csv должен содержать ВСЕ строки "
+    "за всю историю, иначе отсутствующие строки будут удалены. "
+    "CLI: etl-run --source file --mode full --allow-full-replace"
+)

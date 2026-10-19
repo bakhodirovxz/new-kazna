@@ -2,7 +2,7 @@ import { screen, waitFor, within } from '@testing-library/react';
 import { expect, it } from 'vitest';
 import { expectNoAxeViolations } from '../test/axe';
 import { ME_ADMIN, MENU_FULL, shellRoutes } from '../test/fixtures';
-import { json, mockApi } from '../test/mockApi';
+import { apiError, json, mockApi } from '../test/mockApi';
 import { renderWithProviders } from '../test/render';
 import { Routes } from '../app/Routes';
 import { SessionsScreen } from './SessionsScreen';
@@ -46,4 +46,23 @@ it('never offers to end the current session and routes #account/sessions', async
   renderWithProviders(<Routes />, { hash: '#account/sessions' });
   const table = await screen.findByRole('table', { name: 'Мои сеансы' });
   expect(within(table).getAllByRole('button', { name: 'Завершить' })).toHaveLength(1);
+});
+
+it('treats 404 on revoke as already ended: closes the dialog and refreshes the list', async () => {
+  let list = SESSIONS;
+  mockApi({
+    ...shellRoutes(),
+    'GET /auth/sessions': () => json(list),
+    'DELETE /auth/sessions/b2': () => {
+      list = SESSIONS.slice(0, 1);
+      return apiError(404, 'not_found', 'Сеанс не найден');
+    },
+  });
+  const { user } = renderWithProviders(<SessionsScreen me={ME_ADMIN} menu={MENU_FULL} />, { hash: '#account/sessions' });
+  const table = await screen.findByRole('table', { name: 'Мои сеансы' });
+  await user.click(within(within(table).getAllByRole('row')[2] as HTMLElement).getByRole('button', { name: 'Завершить' }));
+  await user.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: 'Завершить' }));
+  expect(await screen.findByText('Сеанс уже завершён')).toBeInTheDocument();
+  await waitFor(() => expect(within(table).getAllByRole('row')).toHaveLength(2));
+  expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
 });

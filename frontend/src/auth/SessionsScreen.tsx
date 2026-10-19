@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from 'react';
+import { isApiError } from '../api/client';
 import type { MeOut, MenuOut, SessionOut } from '../api/types';
 import { useDocumentTitle } from '../app/useDocumentTitle';
 import { t } from '../i18n';
@@ -104,6 +105,11 @@ export function SessionsScreen({ me, menu, tools }: { me: MeOut; menu: MenuOut; 
           revoke.mutate(target.id, {
             onSuccess: () => {
               toast.show(t('sessions.ended'), 'success');
+              close();
+            },
+            onError: (err) => {
+              if (!isApiError(err, 404)) return;
+              toast.show(t('sessions.gone'), 'info');
               close();
             },
           });

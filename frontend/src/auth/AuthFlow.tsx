@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react';
+import { createContext, useContext, useMemo, useState, useSyncExternalStore, type ReactNode } from 'react';
 
 /** Login → 2FA oralig'idagi holat. mfa_token faqat xotirada: sahifa yangilansa — login qaytadan. */
 export interface Challenge {
@@ -19,29 +19,54 @@ interface AuthFlowValue {
   clear(): void;
 }
 
-const AuthFlowContext = createContext<AuthFlowValue | null>(null);
+interface FlowState {
+  challenge: Challenge | null;
+  returnTo: string | null;
+}
+
+interface FlowStore {
+  subscribe(listener: () => void): () => void;
+  getState(): FlowState;
+  actions: Pick<AuthFlowValue, 'begin' | 'remember' | 'finish' | 'clear'>;
+}
+
+/** Tashqi store: begin/clear router `navigate` bilan bir tikda sinxron ko'rinadi (React setState emas —
+ *  u router'dan keyin commit bo'lib, 2FA sahifasi challenge'siz render bo'lardi). */
+function createFlowStore(): FlowStore {
+  let state: FlowState = { challenge: null, returnTo: null };
+  const listeners = new Set<() => void>();
+  const set = (next: FlowState) => {
+    if (next.challenge === state.challenge && next.returnTo === state.returnTo) return;
+    state = next;
+    listeners.forEach((listener) => listener());
+  };
+  return {
+    subscribe(listener) {
+      listeners.add(listener);
+      return () => {
+        listeners.delete(listener);
+      };
+    },
+    getState: () => state,
+    actions: {
+      begin: (challenge) => set({ challenge, returnTo: challenge.returnTo }),
+      remember: (path) => set({ ...state, returnTo: state.returnTo ?? path }),
+      finish: () => set({ ...state, challenge: null }),
+      clear: () => set({ challenge: null, returnTo: null }),
+    },
+  };
+}
+
+const AuthFlowContext = createContext<FlowStore | null>(null);
 
 export function AuthFlowProvider({ children }: { children: ReactNode }) {
-  const [challenge, setChallenge] = useState<Challenge | null>(null);
-  const [returnTo, setReturnTo] = useState<string | null>(null);
-
-  const begin = useCallback((next: Challenge) => {
-    setChallenge(next);
-    setReturnTo(next.returnTo);
-  }, []);
-  const remember = useCallback((path: string | null) => setReturnTo((prev) => prev ?? path), []);
-  const finish = useCallback(() => setChallenge(null), []);
-  const clear = useCallback(() => {
-    setChallenge(null);
-    setReturnTo(null);
-  }, []);
-
-  const value = useMemo(() => ({ challenge, returnTo, begin, remember, finish, clear }), [challenge, returnTo, begin, remember, finish, clear]);
-  return <AuthFlowContext.Provider value={value}>{children}</AuthFlowContext.Provider>;
+  const [store] = useState(createFlowStore);
+  return <AuthFlowContext.Provider value={store}>{children}</AuthFlowContext.Provider>;
 }
 
 export function useAuthFlow(): AuthFlowValue {
-  const context = useContext(AuthFlowContext);
-  if (!context) throw new Error('useAuthFlow: AuthFlowProvider topilmadi');
-  return context;
+  const store = useContext(AuthFlowContext);
+  if (!store) throw new Error('useAuthFlow: AuthFlowProvider topilmadi');
+  const state = useSyncExternalStore(store.subscribe, store.getState, store.getState);
+  return useMemo(() => ({ ...state, ...store.actions }), [state, store]);
 }

@@ -1,4 +1,5 @@
 import { screen, waitFor, within } from '@testing-library/react';
+import { flushSync } from 'react-dom';
 import { StrictMode, useEffect, useRef, useState, type ReactNode } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import { expectNoAxeViolations } from '../test/axe';
@@ -8,6 +9,7 @@ import { renderWithProviders } from '../test/render';
 import { useAuthFlow } from './AuthFlow';
 import { backupCodesFilename, backupCodesText } from './BackupCodes';
 import { Routes } from '../app/Routes';
+import { navigate } from '../router/store';
 import { MfaEnrollPage } from './MfaEnrollPage';
 
 const TOKEN = 't'.repeat(32);
@@ -43,6 +45,51 @@ function enrollRoutes() {
     },
   });
 }
+
+// Birinchi turadi: oldingi async RTL testlari React rejimini o'zgartirib, eski kodda ham tartib muammosini yashirardi.
+describe('real-browser ordering (C1)', () => {
+  // act() bitta commit'da ikkala yangilanishni birlashtiradi va tartibni yashiradi; bu yerda act'siz ketma-ket chaqiramiz.
+  // Eski AuthFlow (useState) da navigate() sinxron render qilardi, challenge esa keyin commit bo'lardi -> login'ga qaytish.
+  async function beginThenNavigate(step: 'mfa_enroll' | 'mfa_verify', route: 'mfaEnroll' | 'mfa') {
+    let flow!: ReturnType<typeof useAuthFlow>;
+    const Probe = () => {
+      flow = useAuthFlow();
+      return null;
+    };
+    renderWithProviders(
+      <>
+        <Probe />
+        <Routes />
+      </>,
+      { hash: '#login' },
+    );
+    const g = globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean };
+    const prev = g.IS_REACT_ACT_ENVIRONMENT;
+    g.IS_REACT_ACT_ENVIRONMENT = false;
+    try {
+      flow.begin({ mfaToken: TOKEN, step, username: 'novikov', returnTo: null });
+      flushSync(() => navigate({ kind: route })); // router sinxron sync-lane render (brauzerdagi tartib)
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    } finally {
+      g.IS_REACT_ACT_ENVIRONMENT = prev;
+    }
+  }
+
+  it('enrollment page keeps the route and starts enrollment', async () => {
+    const server = enrollRoutes();
+    await beginThenNavigate('mfa_enroll', 'mfaEnroll');
+    expect(window.location.hash).toBe('#2fa/setup');
+    await screen.findByTestId('totp-secret');
+    expect(server.calls.filter((c) => c.path === '/auth/2fa/enroll/start')).toHaveLength(1);
+  });
+
+  it('verify page keeps the route', async () => {
+    mockApi({});
+    await beginThenNavigate('mfa_verify', 'mfa');
+    expect(window.location.hash).toBe('#2fa');
+    expect(await screen.findByRole('heading', { name: 'Подтверждение входа' })).toBeInTheDocument();
+  });
+});
 
 describe('MfaEnrollPage', () => {
   it('redirects to login without an enrollment challenge', async () => {
@@ -144,8 +191,9 @@ describe('routing and secret hygiene', () => {
   });
 
   it('drops the secret and the backup codes from the DOM after continuing', async () => {
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
     enrollRoutes();
-    const { user } = renderWithProviders(
+    const { user, client } = renderWithProviders(
       <WithEnrollChallenge>
         <MfaEnrollPage />
       </WithEnrollChallenge>,
@@ -164,10 +212,57 @@ describe('routing and secret hygiene', () => {
     expect(screen.queryByTestId('totp-secret')).not.toBeInTheDocument();
     expect(document.title).not.toContain(SECRET);
     expect(document.body.textContent).not.toContain(SECRET);
+    await user.click(screen.getByRole('button', { name: 'Скачать' }));
+    await vi.waitFor(() => expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:ugk-test'), { timeout: 3000 });
     await user.click(screen.getByLabelText('Я сохранил резервные коды в надёжном месте'));
     await user.click(screen.getByRole('button', { name: 'Продолжить' }));
     await waitFor(() => expect(window.location.hash).toBe('#password'));
-    expect(JSON.stringify({ ...sessionStorage })).not.toContain(CODES[0]);
-    expect(JSON.stringify({ ...localStorage })).not.toContain(SECRET);
+    const stored = JSON.stringify({ ...sessionStorage }) + JSON.stringify({ ...localStorage });
+    for (const needle of [SECRET, CODES[0], 'otpauth']) expect(stored).not.toContain(needle);
+    expect(client.getMutationCache().getAll()).toHaveLength(0);
+  });
+});
+
+describe('enrollment errors', () => {
+  it('locks the form when the challenge expired and offers to sign in again', async () => {
+    mockApi({
+      'POST /auth/2fa/enroll/start': json({ otpauth_uri: 'otpauth://x', qr_svg_data_uri: 'data:image/svg+xml;base64,PHN2Zy8+', secret: SECRET }),
+      'POST /auth/2fa/enroll/confirm': apiError(401, 'mfa_expired', 'Время подтверждения истекло'),
+    });
+    const { user } = renderWithProviders(
+      <WithEnrollChallenge>
+        <MfaEnrollPage />
+      </WithEnrollChallenge>,
+      { hash: '#2fa/setup' },
+    );
+    await screen.findByTestId('totp-secret');
+    expect(screen.getByLabelText('Код из приложения')).toHaveFocus();
+    await user.type(screen.getByLabelText('Код из приложения'), '000000');
+    await user.click(screen.getByRole('button', { name: 'Подтвердить' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Время подтверждения истекло');
+    expect(screen.getByLabelText('Код из приложения')).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Подтвердить' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Войти заново' })).toBeEnabled();
+  });
+
+  it('retries a failed enroll/start', async () => {
+    let n = 0;
+    const server = mockApi({
+      'POST /auth/2fa/enroll/start': () => {
+        n += 1;
+        return n === 1
+          ? apiError(500, 'internal', 'Ошибка сервера')
+          : json({ otpauth_uri: 'otpauth://x', qr_svg_data_uri: 'data:image/svg+xml;base64,PHN2Zy8+', secret: SECRET });
+      },
+    });
+    const { user } = renderWithProviders(
+      <WithEnrollChallenge>
+        <MfaEnrollPage />
+      </WithEnrollChallenge>,
+      { hash: '#2fa/setup' },
+    );
+    await user.click(await screen.findByRole('button', { name: 'Повторить' }));
+    await screen.findByTestId('totp-secret');
+    expect(server.calls.filter((c) => c.path === '/auth/2fa/enroll/start')).toHaveLength(2);
   });
 });

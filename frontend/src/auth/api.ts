@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { api } from '../api/client';
+import { api, isApiError } from '../api/client';
 import type {
   EnrollConfirmOut,
   EnrollStartOut,
@@ -110,6 +110,10 @@ export function useRevokeSession() {
   const client = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => api<undefined>(`/auth/sessions/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+    meta: { inline: true }, // 429 ConfirmDialog ichida ko'rsatiladi (ikki marta toast emas)
     onSuccess: () => client.invalidateQueries({ queryKey: sessionsKey }),
+    onError: (err) => {
+      if (isApiError(err, 404)) void client.invalidateQueries({ queryKey: sessionsKey }); // sessiya allaqachon yo'q
+    },
   });
 }

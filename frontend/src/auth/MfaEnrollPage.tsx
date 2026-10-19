@@ -25,6 +25,7 @@ export function MfaEnrollPage() {
   const [code, setCode] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [expired, setExpired] = useState(false);
   const [result, setResult] = useState<EnrollConfirmOut | null>(null);
   const started = useRef(false);
   const inFlight = useRef(false);
@@ -43,6 +44,11 @@ export function MfaEnrollPage() {
     started.current = true;
     start.mutate({ mfa_token: challenge.mfaToken });
   }, [challenge, valid, start]);
+
+  const enrollment = start.data;
+  useEffect(() => {
+    if (enrollment) formRef.current?.querySelector('input')?.focus(); // 1-qadam: kod maydoniga
+  }, [enrollment]);
 
   if (result) {
     return (
@@ -85,9 +91,11 @@ export function MfaEnrollPage() {
         onError: (err) => {
           setCode('');
           setError(authErrorText(err));
+          const dead = isApiError(err, 401, 'mfa_expired');
+          setExpired(dead);
           inFlight.current = false; // reset() onSettled'ni o'tkazib yuborishi mumkin
           confirm.reset(); // kod/token kuzatuvchida qolmasin
-          formRef.current?.querySelector('input')?.focus();
+          if (!dead) formRef.current?.querySelector('input')?.focus();
         },
         onSettled: () => {
           inFlight.current = false;
@@ -105,8 +113,12 @@ export function MfaEnrollPage() {
     }
   };
 
-  const expired = isApiError(confirm.error, 401, 'mfa_expired') || isApiError(start.error, 401, 'mfa_expired');
-  const enrollment = start.data;
+  const dead = expired || isApiError(start.error, 401, 'mfa_expired');
+  const retryStart = () => {
+    if (start.isPending) return;
+    start.reset();
+    start.mutate({ mfa_token: challenge.mfaToken });
+  };
 
   return (
     <AuthLayout wide>
@@ -115,6 +127,11 @@ export function MfaEnrollPage() {
       <p className="auth__lead">{t('enroll.lead')}</p>
       {start.isPending ? <Skeleton variant="card" /> : null}
       {start.error ? <AuthAlert message={authErrorText(start.error)} /> : null}
+      {start.error && !dead ? (
+        <Button variant="secondary" onClick={retryStart}>
+          {t('common.retry')}
+        </Button>
+      ) : null}
       {enrollment ? (
         <div className="enroll">
           <img className="enroll__qr" src={enrollment.qr_svg_data_uri} alt={t('enroll.qrAlt')} width={176} height={176} />
@@ -136,8 +153,8 @@ export function MfaEnrollPage() {
       ) : null}
       <form ref={formRef} className="auth__form" noValidate onSubmit={onSubmit}>
         {error ? <AuthAlert message={error} /> : null}
-        <OtpInput label={t('mfa.codeLabel')} value={code} onChange={setCode} disabled={!enrollment || expired} />
-        <Button type="submit" block loading={confirm.isPending} disabled={!enrollment || expired}>
+        <OtpInput label={t('mfa.codeLabel')} value={code} onChange={setCode} disabled={!enrollment || dead} />
+        <Button type="submit" block loading={confirm.isPending} disabled={!enrollment || dead}>
           {t('enroll.confirm')}
         </Button>
       </form>

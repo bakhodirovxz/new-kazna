@@ -213,6 +213,7 @@ export const ru = {
   'sessions.confirmTitle': 'Завершить сеанс?',
   'sessions.confirmText': 'Сеанс «{device}» будет завершён, на этом устройстве потребуется новый вход.',
   'sessions.ended': 'Сеанс завершён',
+  'sessions.gone': 'Сеанс уже завершён',
   'sessions.unknownDevice': 'Неизвестное устройство',
 } as const satisfies Record<string, string>;
 

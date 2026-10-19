@@ -33,6 +33,14 @@ export const ru = {
   'kpi.hint': 'Как считается: {label}',
   'overlay.close': 'Закрыть',
   'toast.region': 'Уведомления',
+  'table.empty': 'Нет данных',
+  'table.pagination': 'Страницы',
+  'table.range': '{from}–{to} из {total}',
+  'table.pageOf': 'Стр. {page} из {pages}',
+  'table.prev': 'Предыдущая страница',
+  'table.next': 'Следующая страница',
+  'table.sortAsc': 'Сортировка: {column}, по возрастанию',
+  'table.sortDesc': 'Сортировка: {column}, по убыванию',
 } as const satisfies Record<string, string>;
 
 export type RuKey = keyof typeof ru;

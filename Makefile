@@ -2,7 +2,7 @@
 COMPOSE := docker compose -f deploy/compose.yml
 TEST    := docker compose -f deploy/compose.test.yml run --rm test
 
-.PHONY: secrets lock build up down logs create-admin retire-keys rewrap-keys test lint typecheck etl-run seed-synthetic rollback-build fe-install fe-check
+.PHONY: secrets lock build up down logs create-admin retire-keys rewrap-keys test lint typecheck etl-run seed-synthetic rollback-build fe-install fe-check web
 
 secrets: ## Sirlarni yaratish (mavjudlariga tegmaydi)
 	python3 scripts/gen_secrets.py
@@ -61,3 +61,6 @@ fe-install: ## frontend bog'liqliklari (package-lock.json bo'yicha)
 
 fe-check: ## tsc + eslint + vitest
 	$(NODE) npm run check
+
+web: ## frontend'ni qayta qurish va Caddy'ni yangilash
+	$(COMPOSE) up -d --build caddy

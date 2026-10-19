@@ -2,7 +2,8 @@
 	admin off
 }
 
-localhost {
+# "caddy" — ichki tarmoqdagi E2E konteyneri uchun (https://caddy).
+localhost, caddy {
 	tls internal
 	encode zstd gzip
 
@@ -22,6 +23,11 @@ localhost {
 		-Server
 	}
 
+	# '//evil.com/' kabi yo'llar SPA'ning location.pathname asosidagi navigatsiyasini
+	# cross-origin URL'ga aylantirishi mumkin — bosh slash'lar ko'p bo'lsa '/' ga yo'naltiramiz.
+	@dupslash expression {http.request.uri.path}.startsWith('//')
+	redir @dupslash / 308
+
 	# Probe'lar faqat ichki tarmoq uchun. `handle`lar birinchi mos kelgan direktivada
 	# to'xtaydi (Caddy'da tartib muhim) — shu sabab bu blok `handle /api/*`dan OLDIN va
 	# o'zi ham `handle @probes { ... }` ichida bo'lishi kerak (yalang'och `respond @probes 404`
@@ -37,7 +43,25 @@ localhost {
 		reverse_proxy api:8000
 	}
 
+	# Frontend: frontend/Dockerfile `web` bosqichi -> /srv. Hash-routing, HTML faqat "/".
 	handle {
-		respond "UGEKAZNA API ishlayapti. Frontend 3-rejada qo'shiladi." 200
+		root * /srv
+
+		@assets path /assets/*
+		header @assets Cache-Control "public, max-age=31536000, immutable"
+
+		@notAssets not path /assets/*
+		header @notAssets Cache-Control "no-cache"
+
+		# SPA fallback: /assets/ dan tashqari yo'q yo'l -> index.html; yo'q asset -> 404.
+		@spa {
+			not path /assets/*
+			file {
+				try_files {path} /index.html
+			}
+		}
+		rewrite @spa {file_match.relative}
+
+		file_server
 	}
 }

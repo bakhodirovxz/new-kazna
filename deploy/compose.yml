@@ -147,7 +147,8 @@ services:
 
   caddy:
     <<: *hardening
-    image: caddy:2-alpine
+    build: {context: ../frontend, target: web}
+    image: ugekazna-web:dev
     cap_add: [NET_BIND_SERVICE]
     pids_limit: 50
     mem_limit: 128m

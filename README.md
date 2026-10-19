@@ -23,6 +23,17 @@ faqat `--allow-full-replace` bilan ishlaydi (admin navbati orqali file+full so'r
 (`smtp_password` siri qo'shilgan).
 API: https://localhost:8443/api/v1/ (sertifikat Caddy'ning ichki CA'si — brauzer ogohlantiradi).
 
+Frontend: https://localhost:8443/ (build `frontend/Dockerfile` → Caddy). O'zgarishdan keyin: `make web`
+yoki `docker compose -f deploy/compose.yml up -d --build caddy`.
+
+Frontend testlari (Node faqat Docker'da):
+```bash
+NODE="docker compose -f deploy/compose.frontend.yml run --rm node"
+$NODE npm ci
+$NODE npm run check            # tsc + eslint + vitest
+curl -skf https://localhost:8443/api/v1/openapi.json -o frontend/openapi.json && $NODE npm run gen:api   # API tiplari
+```
+
 ## Testlar
 
 ```bash

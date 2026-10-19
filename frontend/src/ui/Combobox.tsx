@@ -52,6 +52,8 @@ export function Combobox({
     return options.filter((o) => o.label.toLocaleLowerCase('ru').includes(q));
   }, [options, query, selectedLabel]);
 
+  const last = filtered.length - 1;
+  const current = Math.min(active, last); // -1 faqat ro'yxat bo'sh bo'lsa
   const choose = (option: ComboOption) => {
     onChange(option.value);
     setQuery(option.label);
@@ -64,12 +66,12 @@ export function Combobox({
       if (!open) {
         setOpen(true);
         setActive(0);
-      } else setActive((i) => Math.min(i + 1, filtered.length - 1));
+      } else setActive(Math.min(current + 1, last));
     } else if (event.key === 'ArrowUp') {
       event.preventDefault();
-      setActive((i) => Math.max(i - 1, 0));
+      setActive(Math.max(current - 1, 0));
     } else if (event.key === 'Enter' && open) {
-      const option = filtered[active];
+      const option = filtered[current];
       if (option) {
         event.preventDefault();
         choose(option);
@@ -82,7 +84,7 @@ export function Combobox({
     }
   };
 
-  const activeOption = open ? filtered[active] : undefined;
+  const activeOption = open ? filtered[current] : undefined;
 
   return (
     <Field label={label} hint={hint} error={error} required={required}>
@@ -95,7 +97,7 @@ export function Combobox({
             aria-expanded={open}
             aria-controls={listId}
             aria-autocomplete="list"
-            aria-activedescendant={activeOption ? `${listId}-${active}` : undefined}
+            aria-activedescendant={activeOption ? `${listId}-${current}` : undefined}
             aria-describedby={describedBy}
             aria-invalid={invalid || undefined}
             autoComplete="off"
@@ -112,20 +114,15 @@ export function Combobox({
             onBlur={() => setOpen(false)}
             onKeyDown={onKeyDown}
           />
-          <ul id={listId} role="listbox" aria-label={label} className="combo__list" hidden={!open}>
-            {filtered.length === 0 ? (
-              <li className="combo__empty" role="presentation">
-                {emptyText ?? t('combo.empty')}
-              </li>
-            ) : (
-              filtered.map((option, index) => (
+          <ul id={listId} role="listbox" aria-label={label} className="combo__list" hidden={!open || filtered.length === 0}>
+            {filtered.map((option, index) => (
                 <li
                   key={option.value}
                   id={`${listId}-${index}`}
                   role="option"
                   tabIndex={-1}
                   aria-selected={option.value === value}
-                  className={cx('combo__opt', index === active && 'is-active')}
+                  className={cx('combo__opt', index === current && 'is-active')}
                   onMouseDown={(e) => {
                     e.preventDefault();
                     choose(option);
@@ -134,9 +131,11 @@ export function Combobox({
                   <span>{option.label}</span>
                   {option.hint ? <small>{option.hint}</small> : null}
                 </li>
-              ))
-            )}
+              ))}
           </ul>
+          <div role="status" className="combo__empty">
+            {open && filtered.length === 0 ? (emptyText ?? t('combo.empty')) : null}
+          </div>
         </div>
       )}
     </Field>

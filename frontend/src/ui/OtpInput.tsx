@@ -59,9 +59,9 @@ export function OtpInput({
   const handleChange = (event: ChangeEvent<HTMLInputElement>) => {
     const next = sanitize(event.target.value, mode);
     onChange(next);
-    if (mode === 'totp' && next.length === 6 && completed.current !== next) {
+    if (mode === 'totp' && onComplete && next.length === 6 && completed.current !== next) {
       completed.current = next;
-      onComplete?.(next);
+      onComplete(next);
     }
   };
 
@@ -76,7 +76,6 @@ export function OtpInput({
           autoComplete="one-time-code"
           autoCapitalize="characters"
           spellCheck={false}
-          maxLength={mode === 'totp' ? 6 : 14}
           value={value}
           disabled={disabled}
           aria-describedby={describedBy}

@@ -106,6 +106,58 @@ describe('OtpInput', () => {
     expect(onSubmit).not.toHaveBeenCalled();
   });
 
+  it.each(['123 456', '123-456'])('keeps all digits when pasting %s in totp mode', async (pasted) => {
+    const onComplete = vi.fn();
+    render(<Otp onComplete={onComplete} />);
+    const input = screen.getByLabelText('Код');
+    await userEvent.click(input);
+    await userEvent.paste(pasted);
+    expect(input).toHaveValue('123456');
+    expect(onComplete).toHaveBeenCalledTimes(1);
+  });
+
+  describe('Enter inside a form', () => {
+    function OtpForm({ onSubmit, onComplete, error }: { onSubmit(): void; onComplete?: (v: string) => void; error?: string }) {
+      const [value, setValue] = useState('');
+      return (
+        <form
+          aria-label="2FA"
+          onSubmit={(e) => {
+            e.preventDefault();
+            onSubmit();
+          }}
+        >
+          <OtpInput label="Код" value={value} onChange={setValue} {...(onComplete ? { onComplete } : {})} error={error ?? null} />
+          <button type="submit">Войти</button>
+        </form>
+      );
+    }
+
+    it('submits once when there is no onComplete', async () => {
+      const onSubmit = vi.fn();
+      render(<OtpForm onSubmit={onSubmit} />);
+      await userEvent.type(screen.getByLabelText('Код'), '123456{Enter}');
+      expect(onSubmit).toHaveBeenCalledTimes(1);
+    });
+
+    it('submits normally with a partial code', async () => {
+      const onSubmit = vi.fn();
+      render(<OtpForm onSubmit={onSubmit} onComplete={vi.fn()} />);
+      await userEvent.type(screen.getByLabelText('Код'), '123{Enter}');
+      expect(onSubmit).toHaveBeenCalledTimes(1);
+    });
+
+    it('allows Enter again after the error changes', async () => {
+      const onSubmit = vi.fn();
+      const { rerender } = render(<OtpForm onSubmit={onSubmit} onComplete={vi.fn()} />);
+      await userEvent.type(screen.getByLabelText('Код'), '123456{Enter}');
+      expect(onSubmit).not.toHaveBeenCalled();
+      rerender(<OtpForm onSubmit={onSubmit} onComplete={vi.fn()} error="Неверный код" />);
+      await userEvent.type(screen.getByLabelText('Код'), '{Enter}');
+      expect(onSubmit).toHaveBeenCalledTimes(1);
+    });
+  });
+
   it('accepts pasted backup codes in upper case', async () => {
     const onComplete = vi.fn();
     render(<Otp onComplete={onComplete} mode="backup" />);
@@ -180,6 +232,27 @@ describe('Combobox', () => {
     expect(screen.getByText('Ничего не найдено')).toBeInTheDocument();
     await userEvent.keyboard('{Escape}');
     expect(input).toHaveValue('Администратор');
+  });
+});
+
+describe('Combobox states', () => {
+  it('shows the empty message in a live region outside the listbox', async () => {
+    render(<Combo onChange={vi.fn()} />);
+    const input = screen.getByRole('combobox', { name: 'Должность' });
+    await userEvent.clear(input);
+    await userEvent.type(input, 'xyz');
+    expect(screen.getByRole('status')).toHaveTextContent('Ничего не найдено');
+    expect(screen.getByRole('listbox', { hidden: true })).not.toContainElement(screen.getByRole('status'));
+    expect(input).not.toHaveAttribute('aria-activedescendant');
+    await userEvent.keyboard('{ArrowUp}{ArrowDown}{Enter}');
+    expect(input).toHaveValue('xyz');
+  });
+
+  it('has no axe violations while open', async () => {
+    const { container } = render(<Combo onChange={vi.fn()} />);
+    await userEvent.click(screen.getByRole('combobox', { name: 'Должность' }));
+    expect(screen.getByRole('combobox')).toHaveAttribute('aria-expanded', 'true');
+    await expectNoAxeViolations(container);
   });
 });
 

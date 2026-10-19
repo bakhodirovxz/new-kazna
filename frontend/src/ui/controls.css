@@ -22,8 +22,8 @@
 }
 .btn--primary:hover:not(:disabled), .btn--danger:hover:not(:disabled) { filter: brightness(1.08); }
 .btn--secondary { background: var(--card); border-color: var(--line); color: var(--ink); }
-.btn--secondary:hover:not(:disabled) { border-color: var(--brand2); color: var(--brand2); }
-.btn--ghost { background: transparent; color: var(--brand2); }
+.btn--secondary:hover:not(:disabled) { border-color: var(--brand2); color: var(--brand); }
+.btn--ghost { background: transparent; color: var(--brand); }
 .btn--ghost:hover:not(:disabled) { background: var(--soft); }
 .btn--danger { background: var(--neg); color: #fff; }
 .btn:disabled { opacity: 0.55; cursor: not-allowed; box-shadow: none; }
@@ -152,7 +152,8 @@
 .combo__opt.is-active { background: var(--soft); color: var(--brand); }
 .combo__opt[aria-selected='true'] { font-weight: 600; }
 .combo__opt small { color: var(--muted); }
-.combo__empty { padding: 0.6rem 0.7rem; color: var(--muted); }
+.combo__empty { color: var(--muted); }
+.combo__empty:not(:empty) { position: absolute; z-index: 45; top: calc(100% + 0.25rem); left: 0; right: 0; padding: 0.6rem 0.7rem; background: var(--card); border: 1px solid var(--line); border-radius: 0.6rem; box-shadow: var(--shadow-hover); }
 
 .check { display: flex; align-items: flex-start; gap: 0.55rem; line-height: 1.35; cursor: pointer; }
 .check input { flex: none; width: 1.15rem; height: 1.15rem; margin: 0.1rem 0 0; accent-color: var(--brand2); }
@@ -174,4 +175,7 @@
   .btn, .input, .select { min-height: 44px; }
   .iconbtn { width: 44px; height: 44px; }
   .check input { width: 1.4rem; height: 1.4rem; }
+  .check { min-height: 44px; align-items: center; }
+  .combo__opt { min-height: 44px; align-items: center; }
+  .input-wrap .iconbtn { width: 44px; height: 44px; }
 }

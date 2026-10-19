@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState, type FormEvent } from 'react';
+import { useId, useState, type FormEvent } from 'react';
 import { isApiError } from '../api/client';
 import type { MeOut, PositionOut, UserOut } from '../api/types';
 import { t } from '../i18n';
@@ -10,15 +10,7 @@ import { Icon } from '../ui/icons';
 import { Modal } from '../ui/Modal';
 import { useToast } from '../ui/Toast';
 import { useCreateUser, useResetUserMfa, useResetUserPassword, useSetUserActive, useUpdateUser } from './api';
-
-/** Birinchi noto'g'ri maydonga fokus (ekran o'qiydi), LoginPage/PasswordChangePage kabi. */
-function useFocusFirstInvalid(errors: object) {
-  const ref = useRef<HTMLFormElement>(null);
-  useEffect(() => {
-    ref.current?.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus();
-  }, [errors]);
-  return ref;
-}
+import { useFocusFirstInvalid } from './useFocusFirstInvalid';
 
 const USERNAME_RE = /^[a-z0-9._-]{3,64}$/;
 

@@ -11,4 +11,7 @@ export type AdminPageComponent = LazyExoticComponent<ComponentType<AdminPageProp
 /** Har admin sahifasi alohida chunk. Sahifa hali yo'q bo'lsa AdminScreen «Раздел в разработке» ko'rsatadi. */
 export const ADMIN_COMPONENTS: Partial<Record<AdminPageId, AdminPageComponent>> = {
   users: lazy(() => import('./UsersPage')),
+  roles: lazy(() => import('./RolesPage')),
+  alerts: lazy(() => import('./AlertRulesPage')),
+  finmodel: lazy(() => import('./FinAssumptionsPage')),
 };

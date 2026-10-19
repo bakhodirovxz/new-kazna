@@ -1,8 +1,18 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, isApiError } from '../api/client';
 import type {
+  AlertRuleOut,
+  AlertRuleUpdate,
+  FinAssumptionItem,
+  FinAssumptionOut,
   Page,
+  PermissionOut,
+  PositionIn,
   PositionOut,
+  PositionUpdate,
+  RoleIn,
+  RoleOut,
+  RoleUpdate,
   TemporaryPassword,
   UserCreate,
   UserCreated,
@@ -113,5 +123,106 @@ export function useResetUserMfa() {
     onSuccess: invalidate,
     onError,
     meta: { inline: true }, // xato dialog ichida, takroriy toast yo'q
+  });
+}
+
+export function useRoles() {
+  return useQuery({
+    queryKey: adminKeys.roles,
+    queryFn: ({ signal }) => api<RoleOut[]>('/admin/roles', { signal }),
+    staleTime: 0,
+  });
+}
+
+export function usePermissions() {
+  return useQuery({
+    queryKey: adminKeys.permissions,
+    queryFn: ({ signal }) => api<PermissionOut[]>('/admin/permissions', { signal }),
+    staleTime: 30 * 60_000,
+  });
+}
+
+export type SaveRoleInput = { id: null; body: RoleIn } | { id: number; body: RoleUpdate };
+
+export function useSaveRole() {
+  const client = useQueryClient();
+  const onError = useRefetchOnConflict(adminKeys.roles);
+  return useMutation({
+    mutationFn: (input: SaveRoleInput) =>
+      input.id === null
+        ? api<RoleOut>('/admin/roles', { method: 'POST', body: input.body })
+        : api<RoleOut>(`/admin/roles/${input.id}`, { method: 'PATCH', body: input.body }),
+    onSuccess: () =>
+      Promise.all([
+        client.invalidateQueries({ queryKey: adminKeys.roles }),
+        client.invalidateQueries({ queryKey: adminKeys.positions }),
+      ]),
+    onError,
+    meta: { inline: true }, // xato dialog ichida, takroriy toast yo'q
+  });
+}
+
+export type SavePositionInput = { id: null; body: PositionIn } | { id: number; body: PositionUpdate };
+
+export function useSavePosition() {
+  const invalidate = useInvalidate(adminKeys.positions);
+  const onError = useRefetchOnConflict(adminKeys.positions);
+  return useMutation({
+    mutationFn: (input: SavePositionInput) =>
+      input.id === null
+        ? api<PositionOut>('/admin/positions', { method: 'POST', body: input.body })
+        : api<PositionOut>(`/admin/positions/${input.id}`, { method: 'PATCH', body: input.body }),
+    onSuccess: invalidate,
+    onError,
+    meta: { inline: true },
+  });
+}
+
+export function useAlertRules() {
+  return useQuery({
+    queryKey: adminKeys.alertRules,
+    queryFn: ({ signal }) => api<AlertRuleOut[]>('/admin/alert-rules', { signal }),
+    staleTime: 0,
+  });
+}
+
+export function useAlertRuleHistory(code: string | null) {
+  return useQuery({
+    queryKey: [...adminKeys.alertRules, 'history', code],
+    queryFn: ({ signal }) => api<AlertRuleOut[]>(`/admin/alert-rules/${encodeURIComponent(code ?? '')}/history`, { signal }),
+    enabled: code !== null,
+    staleTime: 0,
+  });
+}
+
+export function useUpdateAlertRule() {
+  const invalidate = useInvalidate(adminKeys.alertRules); // tarix ham shu prefiksda
+  const onError = useRefetchOnConflict(adminKeys.alertRules);
+  return useMutation({
+    mutationFn: ({ code, body }: { code: string; body: AlertRuleUpdate }) =>
+      api<AlertRuleOut>(`/admin/alert-rules/${encodeURIComponent(code)}`, { method: 'PATCH', body }),
+    onSuccess: invalidate,
+    onError, // 409 conflict_modified: xabar dialogda, ro'yxat/tarix qayta yuklanadi
+    meta: { inline: true },
+  });
+}
+
+export function useFinAssumptions() {
+  return useQuery({
+    queryKey: adminKeys.finAssumptions,
+    queryFn: ({ signal }) => api<FinAssumptionOut[]>('/admin/fin-assumptions', { signal }),
+    staleTime: 0,
+  });
+}
+
+export function useUpdateFinAssumptions() {
+  const invalidate = useInvalidate(adminKeys.finAssumptions);
+  const onError = useRefetchOnConflict(adminKeys.finAssumptions);
+  return useMutation({
+    mutationFn: (items: FinAssumptionItem[]) =>
+      api<FinAssumptionOut[]>('/admin/fin-assumptions', { method: 'PUT', body: { items } }),
+    onSuccess: invalidate,
+    onError,
+    meta: { inline: true },
   });
 }

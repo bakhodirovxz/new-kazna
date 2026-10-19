@@ -13,6 +13,7 @@ import { activeFilterCount, FilterChips } from './FilterChips';
 import { FilterControls } from './FilterControls';
 import { PageBoundary } from './PageBoundary';
 import { PageHeader } from './PageHeader';
+import { SourceBar } from './SourceBar';
 import { flattenMenu, isKnownSection, pageIcon, sectionDesc, sectionIcon } from './sectionMeta';
 import type { SideModel } from './SideMenu';
 import { StatusScreen } from './StatusScreen';
@@ -67,6 +68,7 @@ export function SectionScreen({ me, menu, route, tools }: SectionScreenProps) {
         filters={<FilterControls filters={filters} />}
         filterCount={activeFilterCount(filters)}
       />
+      <SourceBar />
       <FilterChips filters={filters} />
       <div id="view" className="view">
         {filters.error && !filters.ready ? (

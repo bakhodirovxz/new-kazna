@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react';
+import { useId, useMemo, useState } from 'react';
+import { isApiError } from '../api/client';
 import type { FinAssumptionItem, FinAssumptionOut } from '../api/types';
 import { t, type MessageKey } from '../i18n';
 import { Button } from '../ui/Button';
@@ -44,6 +45,7 @@ function cellId(scenario: string, year: number, key: string): string {
 }
 
 export default function FinAssumptionsPage() {
+  const errorId = useId();
   const data = useFinAssumptions();
   const update = useUpdateFinAssumptions();
   const toast = useToast();
@@ -100,6 +102,10 @@ export default function FinAssumptionsPage() {
         setDraft({});
         setAttempted(false);
       },
+      onError: (error) => {
+        // Poyga (409) yoki yo'qolgan yozuv (404): boshqa adminning qiymatlari ko'rinsin, ustiga bexabar yozilmasin.
+        if (isApiError(error, 409) || isApiError(error, 404)) setDraft({});
+      },
     });
   };
 
@@ -147,6 +153,7 @@ export default function FinAssumptionsPage() {
                           inputMode="decimal"
                           aria-label={`${keyTitle(key)}, ${year}`}
                           aria-invalid={badSet.has(id) || undefined}
+                          aria-describedby={badSet.has(id) ? errorId : undefined}
                           value={draft[id] ?? formatDecimal(original.value)}
                           onChange={(e) => setDraft((d) => ({ ...d, [id]: e.target.value }))}
                         />
@@ -160,7 +167,7 @@ export default function FinAssumptionsPage() {
         </div>
       </Tabs>
       {invalidLabels.length > 0 ? (
-        <p className="form-error" role="alert">
+        <p id={errorId} className="form-error" role="alert">
           <Icon name="alert" />
           <span>{t('fin.invalid', { cells: invalidLabels.join('; ') })}</span>
         </p>

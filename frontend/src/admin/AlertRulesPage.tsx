@@ -47,7 +47,7 @@ function readThreshold(rule: AlertRuleOut): Threshold {
 
 function condition(rule: AlertRuleOut): string {
   const th = readThreshold(rule);
-  return `${th.metric} ${OP_SIGN[th.op]} ${th.value === null ? '—' : formatDecimal(th.value)}`;
+  return `${th.metric} ${OP_SIGN[th.op]} ${th.value === null ? '—' : formatDecimal(th.value).replace('-', '−')}`; // spec 7.7: manfiy belgi U+2212
 }
 
 function levelBadge(level: string) {
@@ -193,7 +193,9 @@ function AlertRuleDialog({ rule, onClose }: { rule: AlertRuleOut; onClose(): voi
         </div>
       </form>
       <section aria-label={t('alerts.history')}>
-        {history.data ? (
+        {history.isError ? (
+          <ErrorBanner error={history.error} onRetry={() => void history.refetch()} />
+        ) : history.data ? (
           <Table
             caption={t('alerts.history')}
             columns={historyColumns}

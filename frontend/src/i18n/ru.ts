@@ -340,8 +340,8 @@ export const ru = {
   'fin.invalid': 'Значение должно быть числом от −10 до 10: {cells}',
   'fin.saved': 'Допущения сохранены. Изменение записано в журнал аудита.',
   'fin.hint': 'Доли и коэффициенты: 0,08 = 8%. Каждое сохранение создаёт новую версию.',
-  'alerts.valueRange': 'Значение должно быть числом от −1 000 000 до 1 000 000',
-  'roles.positionsFailed': 'Не удалось загрузить роли или должности',
+  'alerts.valueRange': 'Значение должно быть числом от −1\u00A0000\u00A0000 до 1\u00A0000\u00A0000',
+  'roles.rolePlaceholder': 'Выберите роль',
 } as const satisfies Record<string, string>;
 
 export type RuKey = keyof typeof ru;

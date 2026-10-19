@@ -35,7 +35,7 @@ export function RoleDialog({ role, permissions, onClose }: Props) {
   const save = useSaveRole();
   const [code, setCode] = useState(role?.code ?? '');
   const [name, setName] = useState(role?.name ?? '');
-  const [scopeAll, setScopeAll] = useState(role?.scope_all ?? true);
+  const [scopeAll, setScopeAll] = useState(role?.scope_all ?? false);
   const [selected, setSelected] = useState<string[]>(role?.permissions ?? []);
   const [errors, setErrors] = useState<{ code?: string; name?: string }>({});
 

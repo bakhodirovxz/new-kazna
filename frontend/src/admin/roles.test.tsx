@@ -112,7 +112,7 @@ describe('roles', () => {
     expect(server.calls.find((c) => c.method === 'POST')?.body).toEqual({
       code: 'analitik',
       name: 'Аналитик',
-      scope_all: true,
+      scope_all: false,
       permissions: ['export:csv', 'section:obzor:view'],
     });
   });
@@ -162,5 +162,30 @@ describe('Task 15 review hardening', () => {
     await user.click(within(dialog).getByRole('button', { name: 'Создать' }));
     expect(await within(dialog).findByText('Проверьте введённые данные')).toBeInTheDocument();
     expect(within(dialog).getByLabelText('Название')).toHaveFocus();
+  });
+});
+
+describe('Task 15 fix round 1', () => {
+  it('starts a new position with no role selected and refuses to submit without one', async () => {
+    const server = routes({ 'POST /admin/positions': json(POSITIONS[1], 201) });
+    const { user } = renderWithProviders(<RolesPage />);
+    await user.click(await screen.findByRole('button', { name: 'Добавить должность' }));
+    const dialog = screen.getByRole('dialog', { name: 'Новая должность' });
+    const role = within(dialog).getByLabelText(/Роль/);
+    expect(role).toHaveValue('');
+    expect(within(dialog).getByRole('option', { name: 'Выберите роль' })).toBeInTheDocument();
+    await user.type(within(dialog).getByLabelText(/Код/), 'econ_x');
+    await user.type(within(dialog).getByLabelText('Название'), 'Экономист');
+    await user.click(within(dialog).getByRole('button', { name: 'Создать' }));
+    expect(role).toHaveFocus();
+    expect(role).toHaveAttribute('aria-invalid', 'true');
+    expect(server.calls.some((c) => c.method === 'POST')).toBe(false);
+  });
+
+  it('shows a retry banner when the roles list fails and blocks creating a position', async () => {
+    routes({ 'GET /admin/roles': apiError(500, 'internal_error', 'Внутренняя ошибка сервера') });
+    renderWithProviders(<RolesPage />);
+    expect(await screen.findByRole('alert')).toHaveTextContent('Внутренняя ошибка сервера');
+    expect(screen.getByRole('button', { name: 'Повторить' })).toBeInTheDocument();
   });
 });

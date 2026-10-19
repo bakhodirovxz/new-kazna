@@ -25,10 +25,10 @@ export function PositionDialog({ position, roles, branches, onClose }: Props) {
   const save = useSavePosition();
   const [code, setCode] = useState(position?.code ?? '');
   const [name, setName] = useState(position?.name ?? '');
-  const [roleId, setRoleId] = useState(String(position?.role_id ?? roles[0]?.id ?? ''));
+  const [roleId, setRoleId] = useState(position ? String(position.role_id) : '');
   const [branchIds, setBranchIds] = useState<number[]>(position?.branch_ids ?? []);
   const [active, setActive] = useState(position?.is_active ?? true);
-  const [errors, setErrors] = useState<{ code?: string; name?: string }>({});
+  const [errors, setErrors] = useState<{ code?: string; name?: string; role?: string }>({});
   const formRef = useFocusFirstInvalid(errors);
   const role = roles.find((r) => String(r.id) === roleId);
   const scopeAll = role?.scope_all ?? false;
@@ -41,8 +41,9 @@ export function PositionDialog({ position, roles, branches, onClose }: Props) {
     const found: typeof errors = {};
     if (!position && !CODE_RE.test(code.trim())) found.code = t('roles.codeRule');
     if (!name.trim()) found.name = t('field.required');
+    if (!role) found.role = t('field.required'); // rol bo'sh bo'lsa hech qachon role_id=0 yubormaymiz
     setErrors(found);
-    if (found.code || found.name) return;
+    if (found.code || found.name || found.role) return;
     const input =
       position === null
         ? ({ id: null, body: { code: code.trim(), name: name.trim(), role_id: Number(roleId), branch_ids: branchIds } } as const)
@@ -58,6 +59,7 @@ export function PositionDialog({ position, roles, branches, onClose }: Props) {
           const mapped: typeof errors = {};
           if (error.params.fields.includes('code')) mapped.code = error.message;
           if (error.params.fields.includes('name')) mapped.name = error.message;
+          if (error.params.fields.includes('role_id')) mapped.role = error.message;
           setErrors(mapped);
         }
       },
@@ -106,7 +108,9 @@ export function PositionDialog({ position, roles, branches, onClose }: Props) {
           <Select
             label={t('roles.role')}
             value={roleId}
-            options={roles.map((r) => ({ value: String(r.id), label: r.name }))}
+            required
+            error={errors.role}
+            options={[{ value: '', label: t('roles.rolePlaceholder') }, ...roles.map((r) => ({ value: String(r.id), label: r.name }))]}
             onChange={setRoleId}
           />
         </div>

@@ -66,8 +66,17 @@ function PositionsPanel() {
     },
   ];
 
-  if (positions.isError) return <ErrorBanner error={positions.error} onRetry={() => void positions.refetch()} />;
-  if (positions.isPending || roles.isPending) return <PageSkeleton />;
+  const failed = [positions, roles, branches].find((q) => q.isError);
+  if (failed)
+    return (
+      <ErrorBanner
+        error={failed.error}
+        onRetry={() => {
+          for (const q of [positions, roles, branches]) if (q.isError) void q.refetch();
+        }}
+      />
+    );
+  if (positions.isPending || roles.isPending || branches.isPending) return <PageSkeleton />;
 
   return (
     <>
@@ -80,7 +89,7 @@ function PositionsPanel() {
       <Table
         caption={t('roles.tab.positions')}
         columns={columns}
-        rows={positions.data}
+        rows={positions.data ?? []}
         rowKey={(p) => p.id}
         onRowClick={(p) => setEditing(p)}
         initialSort={{ key: 'name', dir: 'asc' }}
@@ -116,7 +125,16 @@ function RolesPanel() {
     },
   ];
 
-  if (roles.isError) return <ErrorBanner error={roles.error} onRetry={() => void roles.refetch()} />;
+  const failed = [roles, permissions].find((q) => q.isError);
+  if (failed)
+    return (
+      <ErrorBanner
+        error={failed.error}
+        onRetry={() => {
+          for (const q of [roles, permissions]) if (q.isError) void q.refetch();
+        }}
+      />
+    );
   if (roles.isPending || permissions.isPending) return <PageSkeleton />;
 
   return (
@@ -127,7 +145,7 @@ function RolesPanel() {
           {t('roles.addRole')}
         </Button>
       </div>
-      <Table caption={t('roles.tab.roles')} columns={columns} rows={roles.data} rowKey={(r) => r.id} onRowClick={(r) => setEditing(r)} />
+      <Table caption={t('roles.tab.roles')} columns={columns} rows={roles.data ?? []} rowKey={(r) => r.id} onRowClick={(r) => setEditing(r)} />
       {editing !== null ? (
         <RoleDialog role={editing === 'new' ? null : editing} permissions={permissions.data ?? []} onClose={() => setEditing(null)} />
       ) : null}

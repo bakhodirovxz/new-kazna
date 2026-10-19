@@ -141,7 +141,7 @@ describe('Task 15 review hardening', () => {
     expect(screen.getByText('Изменено значений: 0')).toBeInTheDocument();
   });
 
-  it('focuses an invalid cell and clears the message once fixed; lost race keeps the draft', async () => {
+  it('focuses an invalid cell and clears the message once fixed; lost race resets the draft to the refetched values', async () => {
     const server = mockApi({ 'GET /admin/fin-assumptions': json(FIN), 'PUT /admin/fin-assumptions': conflict });
     const { user } = renderWithProviders(<FinAssumptionsPage />);
     const cell = await screen.findByLabelText('Рост тарифа, 2027');
@@ -155,7 +155,52 @@ describe('Task 15 review hardening', () => {
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Сохранить изменения' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('Запись изменена другим пользователем, обновите страницу');
-    expect(screen.getByLabelText('Рост тарифа, 2027')).toHaveValue('0,2');
+    await waitFor(() => expect(screen.getByLabelText('Рост тарифа, 2027')).toHaveValue('0,08'));
+    expect(screen.getByText('Изменено значений: 0')).toBeInTheDocument();
     await waitFor(() => expect(server.calls.filter((c) => c.method === 'GET').length).toBeGreaterThan(1));
+  });
+});
+
+describe('Task 15 fix round 1', () => {
+  it('prints negative thresholds with U+2212', async () => {
+    mockApi({ 'GET /admin/alert-rules': json([{ ...RULE, threshold: { metric: 'm', op: '<', value: -0.25 } }]) });
+    renderWithProviders(<AlertRulesPage />);
+    expect(await screen.findByRole('table', { name: 'Пороги «Требует внимания»' })).toHaveTextContent('m < −0,25');
+  });
+
+  it('uses non-breaking spaces in the range message', async () => {
+    mockApi({ 'GET /admin/alert-rules': json([RULE]), 'GET /admin/alert-rules/cash_below_monthly_outflow/history': json([RULE]) });
+    const { user } = renderWithProviders(<AlertRulesPage />);
+    await user.click(await screen.findByText('Остаток ниже месячного расходования'));
+    const dialog = screen.getByRole('dialog');
+    const value = within(dialog).getByLabelText('Пороговое значение');
+    await user.clear(value);
+    await user.type(value, '2000000');
+    await user.click(within(dialog).getByRole('button', { name: 'Сохранить' }));
+    expect(within(dialog).getByText(/от −1\u00A0000\u00A0000 до 1\u00A0000\u00A0000/, { normalizer: (text) => text })).toBeInTheDocument(); // NBSP saqlansin
+  });
+
+  it('shows a retry banner when the history fails to load', async () => {
+    mockApi({
+      'GET /admin/alert-rules': json([RULE]),
+      'GET /admin/alert-rules/cash_below_monthly_outflow/history': apiError(500, 'internal_error', 'Внутренняя ошибка сервера'),
+    });
+    const { user } = renderWithProviders(<AlertRulesPage />);
+    await user.click(await screen.findByText('Остаток ниже месячного расходования'));
+    const dialog = screen.getByRole('dialog');
+    expect(await within(dialog).findByText('Внутренняя ошибка сервера')).toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: 'Повторить' })).toBeInTheDocument();
+  });
+
+  it('links an invalid fin cell to its error message', async () => {
+    mockApi({ 'GET /admin/fin-assumptions': json(FIN) });
+    const { user } = renderWithProviders(<FinAssumptionsPage />);
+    const cell = await screen.findByLabelText('Рост тарифа, 2027');
+    await user.clear(cell);
+    await user.type(cell, '99');
+    await user.click(screen.getByRole('button', { name: 'Сохранить изменения' }));
+    const alert = await screen.findByRole('alert');
+    expect(alert.id).toBeTruthy();
+    expect(cell.getAttribute('aria-describedby')).toBe(alert.id);
   });
 });

@@ -10,6 +10,8 @@ Istisnolar faqat `safe_error`/`sqlstate_of` orqali loglanadi (exc_info/str(exc) 
 
 from __future__ import annotations
 
+import logging
+import sys
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from datetime import UTC, date, datetime
@@ -61,16 +63,35 @@ def job_lock(name: str) -> Iterator[bool]:
                 conn.execute(text("SELECT pg_advisory_unlock(hashtext(:k))"), {"k": key})
 
 
+class _ClassOnlyFormatter(logging.Formatter):
+    def formatException(self, ei: Any) -> str:  # noqa: N802 — stdlib API
+        return str(ei[0].__name__)  # traceback/xabar matni yo'q: faqat sinf nomi
+
+
+def configure_stdlib_logging() -> None:
+    """APScheduler stdlib `logging` ishlatadi va `logger.exception(...)` zanjirli traceback
+    (asl istisno matni, SQL parametrlari) chiqarishi mumkin. Shu logger'ga tracebacksiz
+    handler qo'yamiz (faqat sinf nomi) va root'ga uzatmaymiz (A14.8)."""
+    logger = logging.getLogger("apscheduler")
+    for h in list(logger.handlers):
+        logger.removeHandler(h)
+    handler = logging.StreamHandler(sys.stderr)
+    handler.setFormatter(_ClassOnlyFormatter("%(asctime)s %(levelname)s %(name)s %(message)s"))
+    logger.addHandler(handler)
+    logger.setLevel(logging.INFO)
+    logger.propagate = False
+
+
 def _guarded(name: str, fn: Callable[[], object]) -> Callable[[], None]:
     def job() -> None:
-        with job_lock(name) as got:
-            if not got:
-                log.info("job_skipped_locked", job=name)
-                return
-            try:
+        try:
+            with job_lock(name) as got:
+                if not got:
+                    log.info("job_skipped_locked", job=name)
+                    return
                 fn()
-            except Exception as exc:  # job xatosi scheduler'ni to'xtatmasin
-                _log_error("job_failed", exc, job=name)
+        except Exception as exc:  # job xatosi scheduler'ni to'xtatmasin (traceback yo'q)
+            _log_error("job_failed", exc, job=name)
 
     return job
 
@@ -101,6 +122,14 @@ def _connector_error(exc: Exception) -> str:
     if isinstance(exc, ValueError):
         return "ValueError: noma'lum manba"
     return safe_error(exc)
+
+
+def recover_stuck_requests() -> int:
+    """Worker qayta ishga tushganda `running`da qolib ketgan so'rovlarni yopadi."""
+    with etl_transaction() as conn:
+        return conn.execute(text(
+            "UPDATE core.etl_requests SET status = 'failed', error = :e "
+            "WHERE status = 'running'"), {"e": "worker qayta ishga tushdi"}).rowcount
 
 
 def process_requests(
@@ -156,8 +185,11 @@ def maintain_partitions(today: date) -> dict[str, int]:
     log.info("partitions_maintained", **result)
     if dropped or audit_dropped:
         record(AuditEvent(action=AuditAction.PARTITIONS_DROPPED, object_type="partitions",
-                          details={**result, "keep_years": keep_years,
-                                   "audit_months": audit_months}), role="etl")
+                          details={**result, "keep_years_setting": keep_years,
+                                   "keep_years_effective": max(keep_years, 5),
+                                   "audit_months_setting": audit_months,
+                                   "audit_months_effective": max(audit_months, 12)}),
+               role="etl")
     return result
 
 
@@ -199,26 +231,28 @@ def build_scheduler(settings: Settings, notifier: Notifier, *,
         scheduler.add_job(run_etl_job, CronTrigger.from_crontab(cron, timezone=TASHKENT),
                           args=("synthetic", Mode.FULL, notifier), id="etl_synthetic_full",
                           **opts)
-    scheduler.add_job(process_requests, "interval", seconds=30, args=(notifier,),
-                      id="etl_requests", **opts)
+    scheduler.add_job(_guarded("etl_requests", lambda: process_requests(notifier)),
+                      "interval", seconds=30, id="etl_requests", **opts)
     scheduler.add_job(_guarded("partitions", lambda: maintain_partitions(today_tashkent())),
                       CronTrigger(hour=3, minute=30, timezone=TASHKENT), id="partitions", **opts)
     scheduler.add_job(_guarded("cleanup", cleanup_job),
                       CronTrigger(hour=4, minute=0, timezone=TASHKENT), id="cleanup", **opts)
-    scheduler.add_job(check_freshness, "interval", minutes=30, args=(notifier,),
-                      id="freshness", **opts)
+    scheduler.add_job(_guarded("freshness", lambda: check_freshness(notifier)),
+                      "interval", minutes=30, id="freshness", **opts)
     scheduler.add_job(heartbeat, "interval", seconds=60, id="heartbeat", **opts)
     return scheduler
 
 
 def main() -> None:
     configure_logging()
+    configure_stdlib_logging()
     settings = get_settings()
     problems = settings.problems()
     if problems:
         raise ConfigError("; ".join(problems))
     bootstrap_runtime()
     heartbeat()
+    log.info("stuck_requests_closed", count=recover_stuck_requests())
     scheduler = build_scheduler(settings, build_notifier(settings))
     log.info("worker_started", env=settings.env, jobs=sorted(j.id for j in scheduler.get_jobs()))
     scheduler.start()

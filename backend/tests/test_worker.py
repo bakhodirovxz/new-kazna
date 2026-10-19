@@ -1,3 +1,4 @@
+import logging
 from collections.abc import Iterator
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
@@ -217,3 +218,65 @@ def test_cli_rollback_build(published_synthetic: int) -> None:
     with etl_transaction() as conn:
         assert builds.active_build(conn) == published_synthetic
     assert cli.main(["rollback-build", "--build", "999999999"]) == 1
+
+
+def _scheduled(job_id: str) -> Any:
+    sched = worker.build_scheduler(get_settings().model_copy(update={"env": "prod"}),
+                                   RecordingNotifier())
+    return next(j for j in sched.get_jobs() if j.id == job_id).func
+
+
+def test_unguarded_failure_after_failed_run_does_not_leak(
+    source: str, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """I1: run() fails with a secret, then bookkeeping raises (chained __context__) ->
+    the scheduled job must swallow it; neither structlog nor stderr may show the secret."""
+    spy = _SpyLog()
+    monkeypatch.setattr(worker, "log", spy)
+    monkeypatch.setattr(worker, "Runner", _BoomRunner)
+    _request(source)
+
+    def broken(*args: Any, **kwargs: Any) -> None:
+        raise RuntimeError("db down")
+
+    monkeypatch.setattr(worker, "_set_request", broken)
+    _scheduled("etl_requests")()  # must not raise
+    _scheduled("freshness")()
+    captured = capsys.readouterr()
+    assert "123456789" not in repr(spy.calls) + captured.out + captured.err
+
+
+def test_apscheduler_logger_never_prints_tracebacks(
+    capsys: pytest.CaptureFixture[str]
+) -> None:
+    worker.configure_stdlib_logging()
+    try:
+        try:
+            raise ValueError("secret 123456789")
+        except ValueError:
+            raise RuntimeError("later") from None
+    except RuntimeError:
+        logging.getLogger("apscheduler.executors.default").exception("Job raised")
+    err = capsys.readouterr().err
+    assert "123456789" not in err and "Traceback" not in err and "RuntimeError" in err
+
+
+def test_recover_stuck_requests(source: str) -> None:
+    request_id = _request(source)
+    with etl_transaction() as conn:
+        conn.execute(text("UPDATE core.etl_requests SET status = 'running' WHERE id = :i"),
+                     {"i": request_id})
+    assert worker.recover_stuck_requests() >= 1
+    status, _, error = _request_row(request_id)
+    assert status == "failed" and error == "worker qayta ishga tushdi"
+
+
+def test_partitions_audit_records_effective_retention() -> None:
+    with etl_transaction() as conn:
+        partitions.ensure_partitions(conn, "fact_stock", date(2016, 1, 1), date(2016, 12, 31))
+    worker.maintain_partitions(date(2033, 5, 10))
+    with get_engine("app").connect() as conn:
+        details = conn.execute(text(
+            "SELECT details FROM core.audit_log WHERE action = 'dwh.partitions.dropped' "
+            "ORDER BY id DESC LIMIT 1")).scalar_one()
+    assert details["keep_years_effective"] == 5 and "keep_years_setting" in details

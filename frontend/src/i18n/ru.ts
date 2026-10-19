@@ -1,0 +1,29 @@
+/** Rus tili lug'ati. Kalitlar guruhlar bo'yicha; keyingi vazifalar oxiriga qo'shadi. */
+export const ru = {
+  'app.name': 'UGEKAZNA',
+  'app.tagline': 'O‘zbekgidroenergo g‘aznachilik tizimi',
+  'common.loading': 'Загрузка…',
+  'common.retry': 'Повторить',
+  'common.close': 'Закрыть',
+  'common.cancel': 'Отмена',
+  'common.save': 'Сохранить',
+  'common.create': 'Создать',
+  'common.confirm': 'Подтвердить',
+  'common.back': 'Назад',
+  'common.yes': 'Да',
+  'common.no': 'Нет',
+  'common.dash': '—',
+  'common.noData': 'нет данных в источнике',
+  'common.copy': 'Скопировать',
+  'common.copied': 'Скопировано',
+  'common.copyFailed': 'Не удалось скопировать',
+  'common.skipToContent': 'Перейти к содержимому',
+  'error.network': 'Нет связи с сервером. Проверьте подключение и повторите.',
+  'error.generic': 'Не удалось выполнить запрос',
+  'error.rateLimited': 'Слишком много запросов. Повторите через {seconds} с.',
+  'error.lastSuccess': 'Последняя успешная загрузка: {time}',
+  'error.requestId': 'Код запроса: {id}',
+  'error.loadFailed': 'Не удалось загрузить данные',
+} as const satisfies Record<string, string>;
+
+export type RuKey = keyof typeof ru;

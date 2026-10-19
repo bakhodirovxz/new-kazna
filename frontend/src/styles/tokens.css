@@ -1,0 +1,35 @@
+/* Dizayn tokenlari — tasdiqlangan prototip (spec 7.2). Qiymat o'zgarishlari va sabablari:
+   docs/design/ledger.md, "Token qarorlari". Ma'nolar o'zgarmaydi. */
+:root {
+  --bg: #f5f8fd;
+  --card: #ffffff;
+  --ink: #132338;
+  --muted: #5a6d83;
+  --line: #e4ebf4;
+  --soft: #eef5ff;
+  --brand: #0b4fa8;
+  --brand2: #1d6df2;
+  --teal: #5fd0e0;
+  --neg: #c9362c;
+  --neg-bg: #fdeceb;
+  --warn: #8a5a00;
+  --warn-bg: #fff4dc;
+  --ok: #0a6b73;
+  --ok-bg: #e2f7f9;
+  --top: #0b4fa8;
+  --top2: #083a7d;
+  --top-end: #1668d6;
+  --top-ink: #eaf3ff;
+  --focus: #1d6df2;
+  --focus-on-dark: #ffffff;
+  --v0: #0b4fa8;
+  --v1: #2f8ef5;
+  --v2: #5fd0e0;
+  --shadow: 0 1px 2px rgba(19, 60, 120, 0.06), 0 12px 28px -18px rgba(19, 60, 120, 0.45);
+  --shadow-hover: 0 2px 4px rgba(19, 60, 120, 0.06), 0 20px 36px -22px rgba(19, 60, 120, 0.55);
+  --radius-card: 1rem;
+  --radius-ctl: 0.55rem;
+  --top-h: 5rem;
+  --side-w: 16.5rem;
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+}

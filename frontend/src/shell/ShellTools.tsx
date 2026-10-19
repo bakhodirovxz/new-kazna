@@ -23,6 +23,7 @@ async function writeClipboard(text: string): Promise<boolean> {
     await navigator.clipboard.writeText(text);
     return true;
   } catch {
+    const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const area = document.createElement('textarea');
     area.value = text;
     area.setAttribute('readonly', '');
@@ -35,6 +36,7 @@ async function writeClipboard(text: string): Promise<boolean> {
       return false;
     } finally {
       area.remove();
+      previous?.focus();
     }
   }
 }
@@ -66,11 +68,13 @@ export function ShellTools({ me, menu, route }: ShellToolsProps) {
     [sections, route],
   );
 
-  useSectionHotkeys(ids, activeSection, goSection);
+  useSectionHotkeys(ids, activeSection, goSection, route.kind === 'section');
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (!(event.ctrlKey || event.metaKey) || event.altKey || event.key.toLowerCase() !== 'k') return;
+      if (!(event.ctrlKey || event.metaKey) || event.altKey || event.shiftKey) return;
+      // RU maketda key = 'л', shuning uchun fizik tugma (code) ham tekshiriladi.
+      if (event.code !== 'KeyK' && event.key.toLowerCase() !== 'k') return;
       // Parol / OTP maydonida palitra ochilmaydi.
       const target = event.target;
       if (target instanceof HTMLInputElement && (target.type === 'password' || target.autocomplete === 'one-time-code')) return;

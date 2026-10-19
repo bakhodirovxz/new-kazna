@@ -46,6 +46,10 @@ export function CommandPalette({ open, onClose, me, menu, route }: CommandPalett
   );
   const results = useMemo(() => filterPalette(items, query), [items, query]);
 
+  useEffect(() => {
+    if (open) document.getElementById(`${listId}-${active}`)?.scrollIntoView({ block: 'nearest' });
+  }, [open, active, listId, results]);
+
   const choose = (item: PaletteItem) => {
     onClose();
     navigate(item.target);

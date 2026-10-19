@@ -4,7 +4,7 @@ import type { MeOut, MenuOut } from '../api/types';
 import { useRoute } from '../router/store';
 import { expectNoAxeViolations } from '../test/axe';
 import { FRESH_STALE, ME_ADMIN, ME_BRANCH, MENU_BRANCH, MENU_FULL, shellRoutes } from '../test/fixtures';
-import { json, mockApi } from '../test/mockApi';
+import { apiError, json, mockApi } from '../test/mockApi';
 import { renderWithProviders } from '../test/render';
 import { SectionScreen } from './SectionScreen';
 import { ShellTools } from './ShellTools';
@@ -162,4 +162,54 @@ it('has no axe violations with the toolbar', async () => {
   const { container } = renderWithProviders(<Harness />, { hash: '#obzor/svod' });
   await screen.findByText('Данные на 24.09.2026 10:10');
   await expectNoAxeViolations(container);
+});
+
+describe('review round 1', () => {
+  it('opens the palette on the Russian layout (key л, code KeyK) but not with Shift', async () => {
+    mockApi(shellRoutes());
+    const { user } = renderWithProviders(<Harness />, { hash: '#obzor/svod' });
+    await screen.findByText('Раздел в разработке');
+    await user.keyboard('{Control>}{Shift>}{KeyK}{/Shift}{/Control}');
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'л', code: 'KeyK', ctrlKey: true, bubbles: true, cancelable: true }));
+    expect(await screen.findByRole('dialog', { name: 'Быстрый переход' })).toBeInTheDocument();
+  });
+
+  it('scrolls the active palette option into view', async () => {
+    mockApi(shellRoutes());
+    const { user } = renderWithProviders(<Harness />, { hash: '#obzor/svod' });
+    await screen.findByText('Раздел в разработке');
+    await user.keyboard('{Control>}k{/Control}');
+    const spy = vi.mocked(Element.prototype.scrollIntoView);
+    spy.mockClear();
+    await user.keyboard('{ArrowDown}');
+    expect(spy).toHaveBeenCalledWith({ block: 'nearest' });
+  });
+
+  it('restores focus after the clipboard fallback', async () => {
+    mockApi(shellRoutes());
+    const { user } = renderWithProviders(<Harness />, { hash: '#obzor/svod' });
+    await screen.findByText('Раздел в разработке');
+    vi.spyOn(navigator.clipboard, 'writeText').mockRejectedValue(new Error('denied'));
+    document.execCommand = vi.fn(() => true);
+    const button = screen.getByRole('button', { name: 'Ссылка' });
+    await user.click(button);
+    expect(document.execCommand).toHaveBeenCalledWith('copy');
+    expect(button).toHaveFocus();
+  });
+
+  it('does not jump between sections on non-section routes', async () => {
+    mockApi(shellRoutes());
+    const { user } = renderWithProviders(<ShellTools me={ME_ADMIN} menu={MENU_FULL} route={{ kind: 'admin', page: null }} />, { hash: '#obzor/svod' });
+    await screen.findByRole('button', { name: /Меню пользователя/ });
+    await user.keyboard('{ArrowRight}');
+    expect(window.location.hash).toBe('#obzor/svod');
+  });
+
+  it('shows an unknown-state when freshness fails', async () => {
+    mockApi({ ...shellRoutes(), 'GET /meta/freshness': apiError(500, 'internal') });
+    renderWithProviders(<Harness />, { hash: '#obzor/svod' });
+    await screen.findAllByText('Состояние данных неизвестно');
+    await waitFor(() => expect(screen.getAllByText('Состояние данных неизвестно')).toHaveLength(2));
+  });
 });

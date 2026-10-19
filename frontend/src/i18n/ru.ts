@@ -123,6 +123,7 @@ export const ru = {
   'admin.page.builds': 'Сборки витрины',
   'admin.page.audit': 'Журнал аудита',
   'admin.page.keys': 'Ключи шифрования',
+  'src.unknown': 'Состояние данных неизвестно',
   'src.live': 'Данные витрины',
   'src.stale': 'Данные могут быть неактуальны',
   'src.updated': 'последняя загрузка {time}',

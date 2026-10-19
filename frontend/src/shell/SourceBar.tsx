@@ -5,7 +5,14 @@ import { cx } from '../ui/cx';
 
 /** Prototip-v2 `.srcbar` (2026-10-19 ruling): ma'lumot manbasi va yangiligi, eskirgan bo'lsa — warn. */
 export function SourceBar() {
-  const { data } = useFreshness();
+  const { data, isError } = useFreshness();
+  if (!data && isError) {
+    return (
+      <div className="srcbar warn">
+        <b>{t('src.unknown')}</b>
+      </div>
+    );
+  }
   if (!data) return null;
   return (
     <div className={cx('srcbar', data.stale ? 'warn' : 'live')}>

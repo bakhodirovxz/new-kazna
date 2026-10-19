@@ -8,6 +8,14 @@ import { Icon } from '../ui/icons';
 export function Freshness() {
   const query = useFreshness();
   const data = query.data;
+  if (!data && query.isError) {
+    return (
+      <div className="fresh fresh--stale" role="status">
+        <Icon name="alert" />
+        <span className="fresh__text">{t('src.unknown')}</span>
+      </div>
+    );
+  }
   if (!data) return null;
   const text = data.last_success_at ? t('fresh.at', { time: formatDateTime(data.last_success_at) }) : t('fresh.never');
   return (

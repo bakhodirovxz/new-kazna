@@ -7,8 +7,9 @@ export function isTypingTarget(target: EventTarget | null): boolean {
 }
 
 /** TZ 6: ← → bo'limlar orasida, agar fokus kiritish maydonida, menyuda, dialogda yoki skroll jadvalda bo'lmasa. */
-export function useSectionHotkeys(ids: readonly string[], active: string | null, go: (id: string) => void): void {
+export function useSectionHotkeys(ids: readonly string[], active: string | null, go: (id: string) => void, enabled = true): void {
   useEffect(() => {
+    if (!enabled) return undefined;
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
       if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
@@ -25,5 +26,5 @@ export function useSectionHotkeys(ids: readonly string[], active: string | null,
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [ids, active, go]);
+  }, [ids, active, go, enabled]);
 }

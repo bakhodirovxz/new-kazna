@@ -15,7 +15,7 @@ export default defineConfig({
     environmentOptions: { jsdom: { url: 'https://ugk.test/' } },
     setupFiles: ['./src/test/setup.ts'],
     include: ['src/**/*.test.{ts,tsx}'],
-    css: { include: [/tokens\.css/] }, // ?raw faqat CSS-ishlov yoqilgan faylda matn qaytaradi (tokens.test.ts)
+    css: { include: [/tokens\.css/, /display\.css/] }, // ?raw faqat CSS-ishlov yoqilgan faylda matn qaytaradi (tokens.test.ts)
     restoreMocks: true,
     unstubGlobals: true,
   },

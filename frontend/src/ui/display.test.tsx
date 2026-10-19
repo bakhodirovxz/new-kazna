@@ -1,10 +1,11 @@
-import { render, screen } from '@testing-library/react';
+import { cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useState } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import { ApiError } from '../api/client';
 import { t } from '../i18n';
 import { expectNoAxeViolations } from '../test/axe';
+import css from './display.css?raw';
 import { Badge } from './Badge';
 import { Card } from './Card';
 import { Chip } from './Chip';
@@ -62,6 +63,33 @@ describe('KpiTile without data', () => {
   });
 });
 
+describe('Tooltip (WCAG 1.4.13)', () => {
+  const setup = () => {
+    render(<Tooltip content="Подсказка">{(p) => <button type="button" {...p}>?</button>}</Tooltip>);
+    return screen.getByRole('button', { name: '?' });
+  };
+
+  it('is dismissed with Escape while only hovered', async () => {
+    const trigger = setup();
+    await userEvent.hover(trigger);
+    await userEvent.keyboard('{Escape}');
+    expect(trigger.parentElement).toHaveClass('is-dismissed');
+    await userEvent.unhover(trigger);
+    expect(trigger.parentElement).not.toHaveClass('is-dismissed');
+  });
+
+  it('does not listen on document when hidden and cleans up on unmount', async () => {
+    const add = vi.spyOn(document, 'addEventListener');
+    const remove = vi.spyOn(document, 'removeEventListener');
+    const trigger = setup();
+    expect(add).not.toHaveBeenCalledWith('keydown', expect.anything());
+    await userEvent.hover(trigger);
+    expect(add).toHaveBeenCalledWith('keydown', expect.any(Function));
+    cleanup();
+    expect(remove).toHaveBeenCalledWith('keydown', expect.any(Function));
+  });
+});
+
 describe('Tooltip', () => {
   it('is dismissed with Escape and comes back after blur', async () => {
     render(<Tooltip content="Подсказка">{(p) => <button type="button" {...p}>?</button>}</Tooltip>);
@@ -105,6 +133,24 @@ describe('Tabs', () => {
     expect(second).toHaveFocus();
     expect(first).toHaveAttribute('tabindex', '-1');
     expect(screen.getByRole('tabpanel', { name: 'Роли' })).toHaveTextContent('панель roles');
+  });
+});
+
+describe('Tabs edge cases', () => {
+  it('keeps the tablist reachable when value matches no tab', () => {
+    render(
+      <Tabs label="x" tabs={[{ id: 'a', label: 'A' }, { id: 'b', label: 'B' }]} value="zzz" onChange={vi.fn()}>
+        <p>p</p>
+      </Tabs>,
+    );
+    expect(screen.getByRole('tab', { name: 'A' })).toHaveAttribute('tabindex', '0');
+    expect(screen.getByRole('tab', { name: 'B' })).toHaveAttribute('tabindex', '-1');
+  });
+
+  it('does not clip the focus ring (no overflow:hidden on .tabs__list)', () => {
+    const rule = /\.tabs__list\s*\{[^}]*\}/.exec(css)?.[0] ?? '';
+    expect(rule).not.toBe('');
+    expect(rule).not.toMatch(/overflow\s*:\s*hidden/);
   });
 });
 

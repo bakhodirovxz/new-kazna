@@ -1,29 +1,42 @@
-import { useId, useState, type KeyboardEvent, type ReactNode } from 'react';
+import { useEffect, useId, useState, type ReactNode } from 'react';
 import { cx } from './cx';
 import './display.css';
 
 export interface TooltipTriggerProps {
   'aria-describedby': string;
-  onKeyDown(event: KeyboardEvent<HTMLElement>): void;
-  onBlur(): void;
-  onMouseLeave(): void;
 }
 
-/** Hover/fokusda ko'rinadi (CSS), Esc bilan yopiladi (WCAG 1.4.13). */
+/** Hover/fokusda ko'rinadi (CSS), Esc bilan yopiladi — hover'da ham (WCAG 1.4.13). */
 export function Tooltip({ content, children }: { content: string; children(trigger: TooltipTriggerProps): ReactNode }) {
   const id = useId();
+  const [hovered, setHovered] = useState(false);
+  const [focused, setFocused] = useState(false);
   const [dismissed, setDismissed] = useState(false);
-  const trigger: TooltipTriggerProps = {
-    'aria-describedby': id,
-    onKeyDown: (event) => {
+  const visible = hovered || focused;
+
+  // Esc faqat izoh ko'rinib turganda tinglanadi (fokus trigger'da bo'lmasa ham ishlashi uchun document'da).
+  useEffect(() => {
+    if (!visible) return;
+    const onKey = (event: KeyboardEvent) => {
       if (event.key === 'Escape') setDismissed(true);
-    },
-    onBlur: () => setDismissed(false),
-    onMouseLeave: () => setDismissed(false),
-  };
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [visible]);
+
+  useEffect(() => {
+    if (!visible) setDismissed(false);
+  }, [visible]);
+
   return (
-    <span className={cx('tip', dismissed && 'is-dismissed')}>
-      {children(trigger)}
+    <span
+      className={cx('tip', dismissed && 'is-dismissed')}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      onFocus={() => setFocused(true)}
+      onBlur={() => setFocused(false)}
+    >
+      {children({ 'aria-describedby': id })}
       <span role="tooltip" id={id} className="tip__bubble">
         {content}
       </span>

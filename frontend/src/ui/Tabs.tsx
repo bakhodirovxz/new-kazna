@@ -53,7 +53,7 @@ export function Tabs({ label, tabs, value, onChange, children }: TabsProps) {
             id={`${base}-tab-${tab.id}`}
             aria-selected={tab.id === value}
             aria-controls={`${base}-panel`}
-            tabIndex={tab.id === value ? 0 : -1}
+            tabIndex={i === index ? 0 : -1}
             className="tabs__tab"
             onClick={() => onChange(tab.id)}
             onKeyDown={onKeyDown}

@@ -3,3 +3,7 @@ dist
 coverage
 e2e
 *.log
+# kontekstga tushmasligi kerak bo'lgan begona fayllar
+src/**/*.patch
+src/**/*.diff
+src/**/grid-row.txt

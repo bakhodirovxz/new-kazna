@@ -12,7 +12,7 @@ ENV NODE_EXTRA_CA_CERTS=/tmp/extra-ca.pem \
     npm_config_audit=false \
     npm_config_update_notifier=false
 COPY package.json package-lock.json ./
-RUN npm ci
+RUN npm ci --ignore-scripts
 COPY . .
 RUN npm run build
 

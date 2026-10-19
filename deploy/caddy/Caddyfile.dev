@@ -2,15 +2,8 @@
 	admin off
 }
 
-# "caddy" — ichki tarmoqdagi E2E konteyneri uchun (https://caddy).
-localhost, caddy {
-	tls internal
-	encode zstd gzip
-
-	request_body {
-		max_size 1MB
-	}
-
+# Xavfsizlik sarlavhalari: oddiy javoblar va handle_errors (Caddy'ning o'z xatolari) uchun umumiy.
+(security_headers) {
 	header {
 		Strict-Transport-Security "max-age=63072000; includeSubDomains"
 		X-Content-Type-Options "nosniff"
@@ -22,6 +15,18 @@ localhost, caddy {
 		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; connect-src 'self'; font-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
 		-Server
 	}
+}
+
+# "caddy" — ichki tarmoqdagi E2E konteyneri uchun (https://caddy).
+localhost, caddy {
+	tls internal
+	encode zstd gzip
+
+	request_body {
+		max_size 1MB
+	}
+
+	import security_headers
 
 	# '//evil.com/' kabi yo'llar SPA'ning location.pathname asosidagi navigatsiyasini
 	# cross-origin URL'ga aylantirishi mumkin — bosh slash'lar ko'p bo'lsa '/' ga yo'naltiramiz.
@@ -63,5 +68,13 @@ localhost, caddy {
 		rewrite @spa {file_match.relative}
 
 		file_server
+	}
+
+	# Caddy'ning o'zi hosil qilgan xatolar (404 asset, 502 api, 413) ham sarlavhalarni oladi
+	# va immutable keshni bekor qiladi.
+	handle_errors {
+		import security_headers
+		header Cache-Control "no-store"
+		respond "{err.status_code} {err.status_text}" {err.status_code}
 	}
 }

@@ -900,3 +900,22 @@ def test_forbidden_admin_access_is_audited(
     assert row is not None
     assert row["action"] == "security.access_denied"
     assert row["result"] == "denied"
+
+
+def test_positions_list_readable_with_admin_users_only(
+    client: TestClient, make_user: Callable[..., SeedUser]
+) -> None:
+    """Foydalanuvchi yaratish uchun lavozim tanlash kerak: ro'yxat admin:users yoki admin:roles
+    bilan o'qiladi, yozish (POST/PATCH) esa faqat admin:roles."""
+    login(client, make_user(_make_role({"admin:users"})))
+    assert client.get("/api/v1/admin/positions").status_code == 200
+    assert client.post("/api/v1/admin/positions", json={}).status_code == 403
+    position_id = _position_id("admin")
+    assert client.patch(f"/api/v1/admin/positions/{position_id}", json={}).status_code == 403
+
+
+def test_positions_list_forbidden_without_admin_permissions(
+    client: TestClient, make_user: Callable[..., SeedUser]
+) -> None:
+    login(client, make_user(_make_role({"admin:etl"})))
+    assert client.get("/api/v1/admin/positions").status_code == 403

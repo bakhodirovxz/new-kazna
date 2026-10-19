@@ -30,6 +30,10 @@ from app.core.request_meta import Meta
 router = APIRouter(prefix="/admin", tags=["admin"])
 UsersAdmin = Annotated[AuthContext, Depends(require_perm(Perm.ADMIN_USERS))]
 RolesAdmin = Annotated[AuthContext, Depends(require_perm(Perm.ADMIN_ROLES))]
+# Foydalanuvchi yaratuvchi lavozim tanlashi kerak: ro'yxatni o'qish ikkala ruxsat bilan.
+PositionsReader = Annotated[
+    AuthContext, Depends(require_perm(Perm.ADMIN_USERS, Perm.ADMIN_ROLES, any_of=True))
+]
 
 
 @router.get("/users")
@@ -97,7 +101,7 @@ def update_role(role_id: int, body: RoleUpdate, ctx: RolesAdmin, db: DB, meta: M
 
 
 @router.get("/positions")
-def list_positions(ctx: RolesAdmin, db: DB) -> list[PositionOut]:
+def list_positions(ctx: PositionsReader, db: DB) -> list[PositionOut]:
     return service.list_positions(db)
 
 

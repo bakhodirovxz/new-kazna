@@ -199,6 +199,17 @@ def test_admin_and_audit_routes_require_matching_permission() -> None:
             assert any(p.startswith(needed) for p in perms), f"{method} {path}: {perms}"
 
 
+def test_positions_read_is_any_of_users_or_roles_while_writes_need_roles() -> None:
+    for method, path, dependant in _routes():
+        if not path.startswith("/api/v1/admin/positions"):
+            continue
+        perms: set[str] = set()
+        for call in _calls(dependant):
+            perms |= set(getattr(call, "required_perms", ()))
+        expected = {"admin:users", "admin:roles"} if method == "GET" else {"admin:roles"}
+        assert perms == expected, f"{method} {path}: {perms}"
+
+
 def test_all_protected_routes_return_401_without_session() -> None:
     with TestClient(create_app(), base_url="https://testserver") as client:
         for method, path, _dependant in _routes():

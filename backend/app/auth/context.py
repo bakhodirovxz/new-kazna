@@ -142,14 +142,19 @@ def get_ctx(
 Ctx = Annotated[AuthContext, Depends(get_ctx)]
 
 
-def require_perm(*perms: str) -> Callable[..., AuthContext]:
-    """Endpoint ruxsati. Deny-by-default: tests/test_route_guards.py har route'ni tekshiradi."""
+def require_perm(*perms: str, any_of: bool = False) -> Callable[..., AuthContext]:
+    """Endpoint ruxsati (`any_of=True` — berilganlardan BITTASI yetarli; faqat o'qish uchun).
+    Deny-by-default: tests/test_route_guards.py har route'ni tekshiradi."""
     if not perms:
         raise ValueError("require_perm() kamida bitta ruxsat talab qiladi")
 
     def dependency(request: Request, ctx: Ctx) -> AuthContext:
         try:
-            ctx.require(*perms)
+            if any_of:
+                if not any(ctx.has(p) for p in perms):
+                    raise ForbiddenError()
+            else:
+                ctx.require(*perms)
         except ForbiddenError:
             # Ledger (fix r1): faqat ruxsat YETISHMASLIGI auditga yoziladi — conflict'lar
             # (last_admin, cannot_modify_self va h.k.) bu yerdan o'tmaydi, ular allaqachon

@@ -8,6 +8,7 @@ from decimal import Decimal
 from typing import Any
 
 from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.admin.dwh_schemas import (
@@ -19,12 +20,20 @@ from app.admin.dwh_schemas import (
 )
 from app.audit.service import AuditAction, log_event
 from app.auth.context import AuthContext
-from app.core.errors import NotFoundError, ValidationFailed
+from app.core.errors import AppError, ConflictError, NotFoundError, ValidationFailed
 from app.core.request_meta import ClientMeta
 from app.dwh.reference import DEFAULT_SETTINGS, validate_setting
 
 _RULE_COLS = ("code, version, title, section, page, threshold, level, enabled, updated_by, "
               "updated_at")
+
+
+def _missing_current(db: Session, sql_exists: str, params: dict[str, Any]) -> AppError:
+    """FOR UPDATE kutgandan keyin joriy qator yo'q: kod/kalit mavjud bo'lsa — poyga (409),
+    aks holda 404."""
+    if db.execute(text(sql_exists), params).first() is not None:
+        return ConflictError("conflict_modified")
+    return NotFoundError()
 
 
 def _rule(row: Any) -> AlertRuleOut:
@@ -50,7 +59,8 @@ def update_alert_rule(db: Session, actor: AuthContext, code: str, data: AlertRul
     row = db.execute(text(f"SELECT {_RULE_COLS} FROM core.alert_rules "
                           "WHERE code = :c AND is_current FOR UPDATE"), {"c": code}).first()
     if row is None:
-        raise NotFoundError()
+        raise _missing_current(db, "SELECT 1 FROM core.alert_rules WHERE code = :c LIMIT 1",
+                               {"c": code})
     current = _rule(row)
     threshold = dict(current.threshold)
     if data.value is not None:
@@ -99,7 +109,9 @@ def update_fin_assumptions(db: Session, actor: AuthContext, data: FinAssumptions
             "SELECT version, value FROM core.fin_assumptions WHERE scenario = :s AND year = :y "
             "AND key = :k AND is_current FOR UPDATE"), key).first()
         if row is None:
-            raise NotFoundError()
+            raise _missing_current(
+                db, "SELECT 1 FROM core.fin_assumptions WHERE scenario = :s AND year = :y "
+                "AND key = :k LIMIT 1", key)
         new_value = Decimal(str(item.value))
         if new_value == row.value:
             continue
@@ -150,12 +162,16 @@ def update_setting(db: Session, actor: AuthContext, key: str, value: Any,
     if row is not None and row.value == normalized:
         return SettingOut(**dict(row._mapping))
     version = 1 if row is None else row.version + 1
-    db.execute(text("UPDATE core.settings SET is_current = false WHERE key = :k AND is_current"),
-               {"k": key})
-    db.execute(text("INSERT INTO core.settings (key, version, value, updated_by) "
-                    "VALUES (:k, :v, CAST(:val AS jsonb), :u)"),
-               {"k": key, "v": version, "val": json.dumps(normalized), "u": actor.user_id})
-    db.commit()  # commit-then-audit
+    try:
+        db.execute(text("UPDATE core.settings SET is_current = false WHERE key = :k "
+                        "AND is_current"), {"k": key})
+        db.execute(text("INSERT INTO core.settings (key, version, value, updated_by) "
+                        "VALUES (:k, :v, CAST(:val AS jsonb), :u)"),
+                   {"k": key, "v": version, "val": json.dumps(normalized), "u": actor.user_id})
+        db.commit()  # commit-then-audit
+    except IntegrityError as exc:  # parallel yozuv shu versiyani oldin band qildi
+        db.rollback()
+        raise ConflictError("conflict_modified") from exc
     log_event(meta, AuditAction.SETTING_UPDATED, user_id=actor.user_id, object_type="setting",
               object_id=key, details={"version": version,
                                       "before": None if row is None else row.value,

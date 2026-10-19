@@ -146,3 +146,55 @@ def test_settings_update_and_validation(client: TestClient) -> None:
         assert _audit("admin.setting.updated", "freshness.max_age_hours") >= 1
     finally:
         client.put("/api/v1/admin/settings/freshness.max_age_hours", json={"value": 6})
+
+
+_VERSIONED = {
+    "core.settings": ("(key, version, value) VALUES ('guard.t', 1, '1')", "key = 'guard.t'"),
+    "core.alert_rules": (
+        "(code, version, title, section, page, threshold, level) "
+        "VALUES ('guard_t', 1, 't', 's', 'p', '{}', 'warning')", "code = 'guard_t'"),
+    "core.fin_assumptions": (
+        "(scenario, year, key, version, value) VALUES ('base', 2026, 'guard_t', 1, 1)",
+        "key = 'guard_t'"),
+}
+
+
+@pytest.mark.parametrize("table", list(_VERSIONED))
+def test_versioned_tables_are_append_only_for_app_role(table: str) -> None:
+    from sqlalchemy.exc import DBAPIError
+
+    cols, where = _VERSIONED[table]
+    value_col = {"core.settings": "value = '2'", "core.alert_rules": "level = 'critical'",
+                 "core.fin_assumptions": "value = 2"}[table]
+    with get_engine("app").connect() as conn:
+        conn.execute(text(f"INSERT INTO {table} {cols}"))
+        for stmt in (f"UPDATE {table} SET {value_col} WHERE {where}",
+                     f"UPDATE {table} SET updated_by = 1 WHERE {where}"):
+            sp = conn.begin_nested()
+            with pytest.raises(DBAPIError, match="permission denied"):
+                conn.execute(text(stmt))
+            sp.rollback()
+        # true -> false, nothing else changed: allowed; false -> true: rejected by the trigger
+        conn.execute(text(f"UPDATE {table} SET is_current = false WHERE {where}"))
+        with pytest.raises(DBAPIError, match="append-only"):
+            conn.execute(text(f"UPDATE {table} SET is_current = true WHERE {where}"))
+        conn.rollback()
+
+
+def test_past_alert_rule_version_is_untouched_by_edit(client: TestClient, admin: SeedUser) -> None:
+    snap = ("SELECT to_jsonb(r) FROM core.alert_rules r WHERE code = 'turnover' "
+            "AND version = :v")
+    before = client.get("/api/v1/admin/alert-rules").json()
+    cur = next(r for r in before if r["code"] == "turnover")
+    with get_engine("app").connect() as conn:
+        old = conn.execute(text(snap), {"v": cur["version"]}).scalar_one()
+    client.patch("/api/v1/admin/alert-rules/turnover", json={"value": 0.123})
+    try:
+        with get_engine("app").connect() as conn:
+            new = conn.execute(text(snap), {"v": cur["version"]}).scalar_one()
+        assert {k: v for k, v in new.items() if k != "is_current"} == \
+               {k: v for k, v in old.items() if k != "is_current"}
+        assert new["is_current"] is False
+    finally:
+        client.patch("/api/v1/admin/alert-rules/turnover",
+                     json={"value": cur["threshold"]["value"]})

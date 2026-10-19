@@ -197,8 +197,31 @@ STATEMENTS = [
     "GRANT SELECT, INSERT ON core.etl_requests TO ugk_app",
     "GRANT SELECT, UPDATE ON core.etl_requests TO ugk_etl",
     "GRANT USAGE ON SEQUENCE core.etl_requests_id_seq TO ugk_app",
-    "GRANT SELECT, INSERT, UPDATE ON core.settings, core.alert_rules, core.fin_assumptions TO ugk_app",
+    # Versiyali jadvallar: faqat INSERT + eski qatorni arxivlash (is_current) — qiymatlar
+    # joyida o'zgarmaydi; trigger ikkinchi himoya qatlami (pastda).
+    "GRANT SELECT, INSERT ON core.settings, core.alert_rules, core.fin_assumptions TO ugk_app",
+    "GRANT UPDATE (is_current) ON core.settings, core.alert_rules, core.fin_assumptions "
+    "TO ugk_app",
     "GRANT SELECT ON core.settings, core.alert_rules, core.fin_assumptions TO ugk_etl",
+    """
+    CREATE FUNCTION core.versioned_guard() RETURNS trigger
+    LANGUAGE plpgsql SECURITY INVOKER SET search_path = pg_catalog, pg_temp AS $$
+    BEGIN
+      IF OLD.is_current AND NOT NEW.is_current
+         AND to_jsonb(OLD) - 'is_current' = to_jsonb(NEW) - 'is_current' THEN
+        RETURN NEW;
+      END IF;
+      RAISE EXCEPTION '%: versioned rows are append-only', TG_TABLE_NAME
+        USING ERRCODE = 'check_violation';
+    END
+    $$
+    """,
+    "CREATE TRIGGER settings_guard BEFORE UPDATE ON core.settings "
+    "FOR EACH ROW EXECUTE FUNCTION core.versioned_guard()",
+    "CREATE TRIGGER alert_rules_guard BEFORE UPDATE ON core.alert_rules "
+    "FOR EACH ROW EXECUTE FUNCTION core.versioned_guard()",
+    "CREATE TRIGGER fin_assumptions_guard BEFORE UPDATE ON core.fin_assumptions "
+    "FOR EACH ROW EXECUTE FUNCTION core.versioned_guard()",
     "GRANT SELECT, INSERT, DELETE ON stg.batch, stg.rows TO ugk_etl",
     "GRANT USAGE ON SEQUENCE stg.rows_seq_seq TO ugk_etl",
     # Baza nomi qattiq yozilmagan — current_database() orqali (fix r2 keyingi ruling).
@@ -223,3 +246,4 @@ def downgrade() -> None:
                   "core.settings", "core.etl_requests", "core.etl_error", "core.etl_step",
                   "core.etl_run", "core.data_version", "core.builds"):
         op.execute(f"DROP TABLE {table}")
+    op.execute("DROP FUNCTION core.versioned_guard()")

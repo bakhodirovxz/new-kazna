@@ -1,10 +1,11 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
-import { describe, expect, it } from 'vitest';
-import { json, mockApi } from '../test/mockApi';
+import { describe, expect, it, vi } from 'vitest';
+import { apiError, json, mockApi } from '../test/mockApi';
+import { createQueryClient } from '../api/queryClient';
 import { ME_ADMIN } from '../test/fixtures';
 import { createTestClient, Providers } from '../test/render';
-import { meKey, useLogin, useLogout, useMe, useRevokeSession, useSessions, useVerifyMfa } from './api';
+import { meKey, useChangePassword, useEnrollConfirm, useEnrollStart, useLogin, useLogout, useMe, useRevokeSession, useSessions, useVerifyMfa } from './api';
 import { useAuthFlow } from './AuthFlow';
 import { destinationAfterSignIn } from './destination';
 
@@ -96,5 +97,83 @@ describe('destinationAfterSignIn', () => {
     expect(destinationAfterSignIn(ME_ADMIN, 'kazna/svod?br=3')).toEqual({ kind: 'section', section: 'kazna', page: 'svod', br: 3, per: null });
     expect(destinationAfterSignIn(ME_ADMIN, null)).toEqual({ kind: 'home' });
     expect(destinationAfterSignIn(ME_ADMIN, 'login')).toEqual({ kind: 'home' });
+  });
+});
+
+describe('auth hooks, security (review round 1)', () => {
+  it('drops the previous user cache when a new session is established', async () => {
+    mockApi({
+      'POST /auth/2fa/verify': json(ME_ADMIN),
+      'POST /auth/2fa/enroll/confirm': json({ user: ME_ADMIN, backup_codes: ['aaaa-bbbb'] }),
+    });
+    const { client, wrapper } = setup();
+    client.setQueryData(['meta', 'menu'], { groups: [] });
+    client.setQueryData(['meta', 'branches'], [{ id: 3 }]);
+    client.setQueryData(['auth', 'sessions'], []);
+    const verify = renderHook(() => useVerifyMfa(), { wrapper });
+    await act(async () => {
+      await verify.result.current.mutateAsync({ mfa_token: 't'.repeat(32), code: '123456' });
+    });
+    expect(client.getQueryCache().getAll().map((q) => q.queryKey)).toEqual([meKey]);
+    client.setQueryData(['meta', 'menu'], { groups: [] });
+    const enroll = renderHook(() => useEnrollConfirm(), { wrapper });
+    await act(async () => {
+      await enroll.result.current.mutateAsync({ mfa_token: 't'.repeat(32), code: '123456' });
+    });
+    expect(client.getQueryCache().getAll().map((q) => q.queryKey)).toEqual([meKey]);
+  });
+
+  it('keeps no secrets in the mutation cache after mutations settle', async () => {
+    mockApi({
+      'POST /auth/login': json({ next: 'mfa_verify', mfa_token: 'SECRETTOKEN'.padEnd(32, 'x') }),
+      'POST /auth/2fa/verify': json(ME_ADMIN),
+      'POST /auth/2fa/enroll/start': json({ otpauth_uri: 'otpauth://SECRETURI', qr_svg_data_uri: 'data:x', secret: 'SECRETB32' }),
+      'POST /auth/2fa/enroll/confirm': json({ user: ME_ADMIN, backup_codes: ['BACKUPCODE'] }),
+      'POST /auth/password/change': { status: 204 },
+    });
+    const { client, wrapper } = setup();
+    const hooks = renderHook(
+      () => ({ login: useLogin(), verify: useVerifyMfa(), start: useEnrollStart(), confirm: useEnrollConfirm(), pw: useChangePassword() }),
+      { wrapper },
+    );
+    const tok = 'x'.repeat(32);
+    await act(async () => {
+      await hooks.result.current.login.mutateAsync({ username: 'admin', password: 'PASSWORD1' });
+      await hooks.result.current.verify.mutateAsync({ mfa_token: tok, code: '654321' });
+      await hooks.result.current.start.mutateAsync({ mfa_token: tok });
+      await hooks.result.current.confirm.mutateAsync({ mfa_token: tok, code: '654321' });
+      await hooks.result.current.pw.mutateAsync({ current_password: 'OLDPW', new_password: 'NEWPW' });
+    });
+    hooks.unmount();
+    await waitFor(() => expect(client.getMutationCache().getAll()).toHaveLength(0));
+  });
+
+  it('keeps login and 2FA failures silent (no global hook call)', async () => {
+    mockApi({
+      'POST /auth/login': apiError(401, 'invalid_credentials'),
+      'POST /auth/2fa/verify': apiError(401, 'invalid_code'),
+    });
+    const hooks = { onUnauthenticated: vi.fn(), onPasswordChange: vi.fn(), onForbidden: vi.fn(), notify: vi.fn() };
+    const client = createQueryClient(hooks);
+    const wrapper = ({ children }: { children: ReactNode }) => <Providers client={client}>{children}</Providers>;
+    const { result } = renderHook(() => ({ login: useLogin(), verify: useVerifyMfa() }), { wrapper });
+    await act(async () => {
+      await result.current.login.mutateAsync({ username: 'a', password: 'b' }).catch(() => undefined);
+      await result.current.verify.mutateAsync({ mfa_token: 't'.repeat(32), code: '1' }).catch(() => undefined);
+    });
+    expect(hooks.onUnauthenticated).not.toHaveBeenCalled();
+    expect(hooks.notify).not.toHaveBeenCalled();
+  });
+
+  it('clears the AuthFlow state on logout', async () => {
+    mockApi({ 'POST /auth/logout': { status: 204 } });
+    const { wrapper } = setup();
+    const { result } = renderHook(() => ({ flow: useAuthFlow(), logout: useLogout() }), { wrapper });
+    act(() => result.current.flow.begin({ mfaToken: 'tok', step: 'mfa_verify', username: 'a', returnTo: 'kazna/svod' }));
+    await act(async () => {
+      await result.current.logout.mutateAsync();
+    });
+    expect(result.current.flow.challenge).toBeNull();
+    expect(result.current.flow.returnTo).toBeNull();
   });
 });

@@ -31,6 +31,7 @@ export function useLogin() {
   return useMutation({
     mutationFn: (body: LoginIn) => api<LoginOut>('/auth/login', { method: 'POST', body }),
     meta: { silent: true },
+    gcTime: 0, // sir (parol/kod/token) MutationCache'da qolmasin
   });
 }
 
@@ -39,7 +40,11 @@ export function useVerifyMfa() {
   return useMutation({
     mutationFn: (body: MfaIn) => api<MeOut>('/auth/2fa/verify', { method: 'POST', body }),
     meta: { silent: true },
-    onSuccess: (me) => client.setQueryData(meKey, me),
+    gcTime: 0, // sir (parol/kod/token) MutationCache'da qolmasin
+    onSuccess: (me) => {
+      client.clear(); // oldingi foydalanuvchi keshi yangisiga o'tmasin
+      client.setQueryData(meKey, me);
+    },
   });
 }
 
@@ -47,6 +52,7 @@ export function useEnrollStart() {
   return useMutation({
     mutationFn: (body: MfaTokenIn) => api<EnrollStartOut>('/auth/2fa/enroll/start', { method: 'POST', body }),
     meta: { silent: true },
+    gcTime: 0, // sir (parol/kod/token) MutationCache'da qolmasin
   });
 }
 
@@ -55,7 +61,11 @@ export function useEnrollConfirm() {
   return useMutation({
     mutationFn: (body: MfaIn) => api<EnrollConfirmOut>('/auth/2fa/enroll/confirm', { method: 'POST', body }),
     meta: { silent: true },
-    onSuccess: (result) => client.setQueryData(meKey, result.user),
+    gcTime: 0, // sir (parol/kod/token) MutationCache'da qolmasin
+    onSuccess: (result) => {
+      client.clear();
+      client.setQueryData(meKey, result.user);
+    },
   });
 }
 
@@ -65,6 +75,7 @@ export function useChangePassword() {
   const client = useQueryClient();
   return useMutation({
     mutationFn: (body: PasswordChangeIn) => api<undefined>('/auth/password/change', { method: 'POST', body }),
+    gcTime: 0,
     onSuccess: async () => {
       client.setQueryData<MeOut>(meKey, (old) => (old ? { ...old, must_change_password: false } : old));
       await client.invalidateQueries({ queryKey: meKey });

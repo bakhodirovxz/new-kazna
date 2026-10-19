@@ -4,6 +4,7 @@ import { isApiError } from '../api/client';
 import type { MeOut, MenuOut } from '../api/types';
 import { useAuthFlow } from '../auth/AuthFlow';
 import { useMe } from '../auth/api';
+import { SessionsScreen } from '../auth/SessionsScreen';
 import { PasswordChangePage } from '../auth/PasswordChangePage';
 import { useMenu } from '../meta/api';
 import type { Route } from '../router/hash';
@@ -55,6 +56,8 @@ function Screen({ me, menu, route }: { me: MeOut; menu: MenuOut; route: Route })
       return <HomeRedirect menu={menu} />;
     case 'section':
       return <SectionScreen me={me} menu={menu} route={route} tools={tools} />;
+    case 'sessions':
+      return <SessionsScreen me={me} menu={menu} tools={tools} />;
     case 'noaccess':
       return <StatusScreen kind="noaccess" menu={menu} tools={tools} />;
     default:

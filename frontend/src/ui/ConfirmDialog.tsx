@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useId, type ReactNode } from 'react';
 import { t } from '../i18n';
 import { Button } from './Button';
 import { FormError } from './Field';
@@ -17,12 +17,16 @@ export interface ConfirmDialogProps {
 }
 
 export function ConfirmDialog({ open, title, message, confirmLabel, onConfirm, onCancel, danger, busy, error }: ConfirmDialogProps) {
+  const messageId = useId();
   return (
     <Modal
       open={open}
       onClose={onCancel}
       title={title}
       size="sm"
+      role="alertdialog"
+      describedBy={messageId}
+      dismissible={!busy}
       footer={
         <>
           <Button variant="secondary" onClick={onCancel} disabled={busy}>
@@ -35,7 +39,7 @@ export function ConfirmDialog({ open, title, message, confirmLabel, onConfirm, o
       }
     >
       <div className="confirm">
-        <div className="confirm__text">{message}</div>
+        <div id={messageId} className="confirm__text">{message}</div>
         <FormError error={error} />
       </div>
     </Modal>

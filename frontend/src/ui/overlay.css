@@ -78,8 +78,8 @@
   flex-direction: column;
   gap: 0.5rem;
   width: min(26rem, calc(100vw - 2rem));
+  pointer-events: none;
 }
-.toasts:empty { display: none; }
 .toast {
   display: flex;
   align-items: flex-start;
@@ -89,6 +89,7 @@
   background: var(--ink);
   color: #fff;
   box-shadow: var(--shadow-hover);
+  pointer-events: auto;
   animation: ugk-rise 0.2s var(--ease-out);
 }
 .toast--error { background: var(--neg); }

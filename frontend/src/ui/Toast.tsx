@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useMemo, useRef, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { t } from '../i18n';
 import './overlay.css';
@@ -31,9 +31,8 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     (message: string, tone: ToastTone = 'info') => {
       const id = nextId.current++;
       setItems((list) => [...list.filter((item) => item.message !== message), { id, message, tone }].slice(-4));
-      window.setTimeout(() => dismiss(id), TOAST_MS);
     },
-    [dismiss],
+    [],
   );
 
   const api = useMemo<ToastApi>(() => ({ show }), [show]);
@@ -44,17 +43,37 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       {createPortal(
         <div className="toasts" role="status" aria-live="polite" aria-label={t('toast.region')}>
           {items.map((item) => (
-            <div key={item.id} className={`toast toast--${item.tone}`}>
-              <span>{item.message}</span>
-              <button type="button" aria-label={t('overlay.close')} onClick={() => dismiss(item.id)}>
-                ×
-              </button>
-            </div>
+            <ToastView key={item.id} item={item} onDismiss={dismiss} />
           ))}
         </div>,
         document.body,
       )}
     </ToastContext.Provider>
+  );
+}
+
+/** Taymer sichqoncha/fokus ostida to'xtaydi (WCAG 2.2.1) va unmount'da tozalanadi. */
+function ToastView({ item, onDismiss }: { item: ToastItem; onDismiss(id: number): void }) {
+  const [paused, setPaused] = useState(false);
+  useEffect(() => {
+    if (paused) return undefined;
+    const timer = window.setTimeout(() => onDismiss(item.id), TOAST_MS);
+    return () => window.clearTimeout(timer);
+  }, [paused, item.id, onDismiss]);
+  return (
+    <div
+      className={`toast toast--${item.tone}`}
+      role={item.tone === 'error' ? 'alert' : undefined}
+      onMouseEnter={() => setPaused(true)}
+      onMouseLeave={() => setPaused(false)}
+      onFocus={() => setPaused(true)}
+      onBlur={() => setPaused(false)}
+    >
+      <span>{item.message}</span>
+      <button type="button" aria-label={t('overlay.close')} onClick={() => onDismiss(item.id)}>
+        ×
+      </button>
+    </div>
   );
 }
 

@@ -1,4 +1,4 @@
-import { act, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useState } from 'react';
 import { describe, expect, it, vi } from 'vitest';
@@ -9,6 +9,7 @@ import { ConfirmDialog } from './ConfirmDialog';
 import { Drawer } from './Drawer';
 import { Modal } from './Modal';
 import { Tooltip } from './Tooltip';
+import overlayCss from './overlay.css?raw';
 import { TOAST_MS, ToastProvider, useToast } from './Toast';
 
 function ModalHarness() {
@@ -88,23 +89,108 @@ describe('Overlay layering', () => {
   });
 
   it('keeps the app inert until the last of nested overlays closes', () => {
-    document.body.innerHTML = '<div id="root"></div>';
-    const { rerender } = render(
-      <>
-        <Modal open onClose={vi.fn()} title="Первое">a</Modal>
-        <Modal open onClose={vi.fn()} title="Второе">b</Modal>
-      </>,
+    const root = document.createElement('div');
+    root.id = 'root';
+    document.body.append(root);
+    try {
+      const { rerender } = render(
+        <>
+          <Modal open onClose={vi.fn()} title="Первое">a</Modal>
+          <Modal open onClose={vi.fn()} title="Второе">b</Modal>
+        </>,
+      );
+      expect(root).toHaveAttribute('inert');
+      rerender(
+        <>
+          <Modal open={false} onClose={vi.fn()} title="Первое">a</Modal>
+          <Modal open onClose={vi.fn()} title="Второе">b</Modal>
+        </>,
+      );
+      expect(root).toHaveAttribute('inert');
+      expect(document.body).toHaveClass('no-scroll');
+    } finally {
+      root.remove();
+    }
+  });
+
+  it('wraps Tab from the panel itself and Shift+Tab from the panel or from outside', async () => {
+    render(
+      <Modal open onClose={vi.fn()} title="Окно" footer={<Button>Создать</Button>}>
+        <input aria-label="Логин" />
+      </Modal>,
     );
-    const root = document.getElementById('root');
-    expect(root).toHaveAttribute('inert');
-    rerender(
-      <>
-        <Modal open={false} onClose={vi.fn()} title="Первое">a</Modal>
-        <Modal open onClose={vi.fn()} title="Второе">b</Modal>
-      </>,
-    );
-    expect(root).toHaveAttribute('inert');
-    expect(document.body).toHaveClass('no-scroll');
+    const dialog = screen.getByRole('dialog');
+    dialog.focus();
+    await userEvent.tab({ shift: true });
+    expect(screen.getByRole('button', { name: 'Создать' })).toHaveFocus();
+    dialog.focus();
+    await userEvent.tab();
+    expect(screen.getByRole('button', { name: 'Закрыть' })).toHaveFocus();
+    (document.activeElement as HTMLElement).blur();
+    await userEvent.tab({ shift: true });
+    expect(screen.getByRole('button', { name: 'Создать' })).toHaveFocus();
+  });
+
+  it('restores focus to a fallback when the trigger was removed while open', async () => {
+    function Detach() {
+      const [open, setOpen] = useState(false);
+      return (
+        <div id="root">
+          <main>
+            <h1>Страница</h1>
+            {open ? null : <Button onClick={() => setOpen(true)}>Открыть</Button>}
+          </main>
+          <Modal open={open} onClose={() => setOpen(false)} title="Окно">текст</Modal>
+        </div>
+      );
+    }
+    render(<Detach />);
+    await userEvent.click(screen.getByRole('button', { name: 'Открыть' }));
+    await userEvent.keyboard('{Escape}');
+    expect(screen.getByRole('heading', { name: 'Страница' })).toHaveFocus();
+  });
+
+  it('keeps Escape and Tab working after the focused control becomes disabled', async () => {
+    function Busy() {
+      const [busy, setBusy] = useState(false);
+      return (
+        <ConfirmDialog
+          open
+          title="Удалить?"
+          message="Точно?"
+          confirmLabel="Удалить"
+          busy={busy}
+          onCancel={() => setBusy(false)}
+          onConfirm={() => setBusy(true)}
+        />
+      );
+    }
+    render(<Busy />);
+    await userEvent.click(screen.getByRole('button', { name: 'Удалить' }));
+    (document.activeElement as HTMLElement).blur();
+    await userEvent.tab();
+    expect(screen.getByRole('alertdialog')).toContainElement(document.activeElement as HTMLElement);
+  });
+
+  it('does not close on Escape, backdrop or X while busy', async () => {
+    const onCancel = vi.fn();
+    render(<ConfirmDialog open busy title="Удалить?" message="Точно?" confirmLabel="Удалить" onCancel={onCancel} onConfirm={vi.fn()} />);
+    await userEvent.keyboard('{Escape}');
+    fireEvent.mouseDown(screen.getByRole('alertdialog').parentElement as HTMLElement);
+    fireEvent.click(screen.getByRole('alertdialog').parentElement as HTMLElement);
+    expect(screen.getByRole('button', { name: 'Закрыть' })).toBeDisabled();
+    expect(onCancel).not.toHaveBeenCalled();
+  });
+
+  it('closes on backdrop only when both mousedown and click land on it', () => {
+    const onClose = vi.fn();
+    render(<Modal open onClose={onClose} title="Окно"><p>текст</p></Modal>);
+    const backdrop = screen.getByRole('dialog').parentElement as HTMLElement;
+    fireEvent.mouseDown(backdrop);
+    fireEvent.click(screen.getByText('текст'));
+    fireEvent.mouseDown(screen.getByText('текст'));
+    fireEvent.click(backdrop);
+    expect(onClose).not.toHaveBeenCalled();
   });
 });
 
@@ -123,7 +209,8 @@ describe('ConfirmDialog', () => {
         onCancel={onCancel}
       />,
     );
-    expect(screen.getByRole('dialog', { name: 'Заблокировать пользователя?' })).toHaveTextContent('Все его сеансы');
+    const dialog = screen.getByRole('alertdialog', { name: 'Заблокировать пользователя?' });
+    expect(dialog).toHaveAccessibleDescription('Все его сеансы будут завершены.');
     await userEvent.click(screen.getByRole('button', { name: 'Заблокировать' }));
     expect(onConfirm).toHaveBeenCalledOnce();
     await userEvent.click(screen.getByRole('button', { name: 'Отмена' }));
@@ -171,6 +258,34 @@ describe('Toast', () => {
       expect(region).toHaveTextContent('Пароль изменён');
       act(() => vi.advanceTimersByTime(TOAST_MS + 10));
       expect(region).not.toHaveTextContent('Пароль изменён');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('keeps the live region in the tree when empty (no :empty display:none)', () => {
+    render(<ToastProvider><ToastButton /></ToastProvider>);
+    expect(screen.getByRole('status', { name: 'Уведомления' })).toBeInTheDocument();
+    expect(overlayCss).not.toMatch(/:empty/);
+  });
+
+  it('error toasts are alerts and stay while hovered; timers resume on leave', () => {
+    vi.useFakeTimers();
+    try {
+      function ErrButton() {
+        const toast = useToast();
+        return <Button onClick={() => toast.show('Повторите через 5 с', 'error')}>Ошибка</Button>;
+      }
+      render(<ToastProvider><ErrButton /></ToastProvider>);
+      act(() => screen.getByRole('button', { name: 'Ошибка' }).click());
+      const alert = screen.getByRole('alert');
+      expect(alert).toHaveTextContent('Повторите через 5 с');
+      fireEvent.mouseEnter(alert);
+      act(() => vi.advanceTimersByTime(TOAST_MS * 3));
+      expect(screen.getByRole('alert')).toBeInTheDocument();
+      fireEvent.mouseLeave(alert);
+      act(() => vi.advanceTimersByTime(TOAST_MS + 10));
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
     } finally {
       vi.useRealTimers();
     }

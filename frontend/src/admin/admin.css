@@ -1,0 +1,52 @@
+.toolbar { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 0.7rem; margin-bottom: 0.9rem; }
+.toolbar .field { min-width: 14rem; }
+.toolbar__grow { flex: 1; }
+.form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
+.span-2 { grid-column: 1 / -1; }
+.span-2:empty { display: none; }
+.note { margin: 0; font-size: 0.9rem; color: var(--muted); }
+.note .icon { width: 1rem; height: 1rem; vertical-align: -0.15em; }
+.fieldset { min-width: 0; margin: 0; padding: 0.8rem 1rem 1rem; border: 1px solid var(--line); border-radius: 0.7rem; }
+.fieldset legend { padding: 0 0.3rem; font-weight: 600; }
+.checklist { display: grid; grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr)); gap: 0.5rem 1rem; margin-top: 0.5rem; }
+.danger-zone { display: flex; flex-direction: column; gap: 0.6rem; padding-top: 1rem; border-top: 1px solid var(--line); }
+.danger-zone h3 { margin: 0; font-size: 1rem; }
+.row-actions { display: flex; flex-wrap: wrap; gap: 0.6rem; }
+.notice { display: flex; align-items: flex-start; gap: 0.6rem; margin: 0; padding: 0.8rem 0.9rem; border-radius: 0.6rem; background: var(--warn-bg); color: var(--warn); font-weight: 500; }
+.notice .icon { width: 1.2rem; height: 1.2rem; flex: none; margin-top: 0.1rem; }
+.secret-box {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.8rem 1rem;
+  border-radius: 0.6rem;
+  background: var(--soft);
+  font-size: 1.2rem;
+}
+.matrix input { width: 6.5rem; text-align: right; }
+.matrix .field { min-width: 0; }
+.result { display: flex; align-items: flex-start; gap: 0.6rem; margin: 0; padding: 0.8rem 1rem; border-radius: 0.7rem; font-weight: 500; }
+.result .icon { width: 1.2rem; height: 1.2rem; flex: none; margin-top: 0.1rem; }
+.result--ok { background: var(--ok-bg); color: var(--ok); }
+.result--bad { background: var(--neg-bg); color: var(--neg); }
+.details {
+  max-height: 20rem;
+  margin: 0;
+  padding: 0.8rem;
+  overflow: auto;
+  border-radius: 0.6rem;
+  background: var(--soft);
+  font-size: 0.85rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.dl { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 0.4rem 1rem; margin: 0; }
+.dl dt { color: var(--muted); }
+.dl dd { margin: 0; }
+@media (max-width: 767.98px) {
+  .form-grid { grid-template-columns: minmax(0, 1fr); }
+  .toolbar .field { width: 100%; min-width: 0; }
+  .toolbar__grow { display: none; }
+}

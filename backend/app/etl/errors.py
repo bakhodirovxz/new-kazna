@@ -35,8 +35,13 @@ class EtlConfigError(Exception):
     kaliti/qiymat turi haqida, manba/foydalanuvchi ma'lumoti emas — xavfsiz."""
 
 
+class FileFormatError(ValueError):
+    """CSV format xatosi (FileConnector): xabari faqat fayl nomi:qator va xato turidan iborat,
+    manba qiymatini O'ZIDA SAQLAMAYDI — xavfsiz. ValueError qoldi: qayta urinilmaydi."""
+
+
 _SAFE_MESSAGE_TYPES: tuple[type[BaseException], ...] = (
-    EtlBusyError, QualityContextError, EtlConfigError,
+    EtlBusyError, QualityContextError, EtlConfigError, FileFormatError,
 )
 
 

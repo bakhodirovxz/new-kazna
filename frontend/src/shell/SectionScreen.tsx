@@ -4,13 +4,14 @@ import { useDocumentTitle } from '../app/useDocumentTitle';
 import { t } from '../i18n';
 import type { SectionRoute } from '../router/hash';
 import { navigate } from '../router/store';
-import { resolveSectionPage } from '../sections/registry';
+import { resolveSectionPage, type SectionPageProps } from '../sections/registry';
 import { SectionPlaceholder } from '../sections/SectionPlaceholder';
 import { ErrorBanner } from '../ui/ErrorBanner';
 import { PageSkeleton } from '../ui/Skeleton';
 import { AppFrame } from './AppFrame';
 import { activeFilterCount, FilterChips } from './FilterChips';
 import { FilterControls } from './FilterControls';
+import { PageBoundary } from './PageBoundary';
 import { PageHeader } from './PageHeader';
 import { flattenMenu, isKnownSection, pageIcon, sectionDesc, sectionIcon } from './sectionMeta';
 import type { SideModel } from './SideMenu';
@@ -22,6 +23,12 @@ export interface SectionScreenProps {
   menu: MenuOut;
   route: SectionRoute;
   tools?: ReactNode;
+}
+
+/** Har renderda reyestrdan oladi: boundary reset'idan keyin yangi lazy komponent ishlatiladi. */
+function PageView(props: SectionPageProps) {
+  const Page = resolveSectionPage(props.section, props.page);
+  return Page ? <Page {...props} /> : null;
 }
 
 export function SectionScreen({ me, menu, route, tools }: SectionScreenProps) {
@@ -48,7 +55,7 @@ export function SectionScreen({ me, menu, route, tools }: SectionScreenProps) {
     activeId: page.id,
     items: section.pages.map((p) => ({ id: p.id, label: p.title, icon: pageIcon(p.id), href: filters.hrefFor(section.id, p.id) })),
   };
-  const Page = resolveSectionPage(section.id, page.id);
+  const hasPage = resolveSectionPage(section.id, page.id) !== null;
   const navQuery = { br: filters.state.br, per: filters.state.per === filters.defaultPeriod ? null : filters.state.per };
 
   return (
@@ -66,10 +73,12 @@ export function SectionScreen({ me, menu, route, tools }: SectionScreenProps) {
           <ErrorBanner error={filters.error} title={t('filters.loadFailed')} onRetry={filters.retry} />
         ) : !filters.ready ? (
           <PageSkeleton />
-        ) : Page ? (
-          <Suspense fallback={<PageSkeleton />}>
-            <Page section={section.id} page={page.id} filters={filters.state} />
-          </Suspense>
+        ) : hasPage ? (
+          <PageBoundary onRetry={() => resolveSectionPage.reset(section.id, page.id)}>
+            <Suspense fallback={<PageSkeleton />}>
+              <PageView section={section.id} page={page.id} filters={filters.state} />
+            </Suspense>
+          </PageBoundary>
         ) : (
           <SectionPlaceholder title={page.title} />
         )}

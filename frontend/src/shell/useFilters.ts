@@ -51,7 +51,8 @@ export function useFilters(route: SectionRoute, me: MeOut): FiltersApi {
 
   useEffect(() => {
     if (!ready) return;
-    if (route.br !== br || route.per !== urlPer) navigate({ ...route, br, per: urlPer }, { replace: true });
+    // navigate bir xil hash'da hech narsa qilmaydi (sikl yo'q); noto'g'ri/begona parametrlar ham tozalanadi
+    navigate({ ...route, br, per: urlPer }, { replace: true });
   }, [ready, route, br, urlPer]);
 
   const go = useCallback(

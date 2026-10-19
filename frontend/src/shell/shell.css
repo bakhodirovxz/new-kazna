@@ -188,7 +188,7 @@
   .logo__mark { width: 2.4rem; height: 2.4rem; }
   .logo__text { display: none; }
   .sections-nav { order: 3; flex-basis: 100%; }
-  .sections { flex-wrap: nowrap; overflow-x: auto; padding: 4px 4px 0.3rem; /* fokus halqasi kesilmasin */ scrollbar-width: none; }
+  .sections { flex-wrap: nowrap; overflow-x: auto; padding: 5px 5px 0.3rem; /* fokus halqasi kesilmasin */ scrollbar-width: none; }
   .sections::-webkit-scrollbar { display: none; }
   .sec { height: 2.75rem; padding: 0 0.8rem; font-size: 0.98rem; }
   .sec .icon { display: none; }
@@ -199,6 +199,7 @@
 }
 @media (max-width: 767.98px), (pointer: coarse) {
   .pages a, .sec { min-height: 44px; }
+  .logo { min-width: 44px; min-height: 44px; justify-content: center; }
 }
 @media print {
   .skip, .topbar, .side, .filters, .head__menu, .chips button, .chips__reset { display: none !important; }

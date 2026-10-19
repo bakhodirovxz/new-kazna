@@ -29,3 +29,7 @@ it('resolves pages by file name and returns null for missing pages', async () =>
 it('has no real section pages yet (they arrive in later plans)', () => {
   expect(resolveSectionPage('obzor', 'svod')).toBeNull();
 });
+
+it('ignores Object.prototype names', () => {
+  expect(createRegistry({})('constructor', 'x')).toBeNull();
+});

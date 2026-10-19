@@ -1,4 +1,5 @@
 import { t } from '../i18n';
+import { plural } from '../i18n/format';
 import { Icon, type IconName } from '../ui/icons';
 
 export interface NavItem {
@@ -38,7 +39,7 @@ export function SideMenu({ model, id, hidden, onNavigate }: { model: SideModel; 
               {item.count ? (
                 <span className="cnt">
                   {item.count}
-                  <span className="visually-hidden"> {t('shell.attentionCount', { count: item.count })}</span>
+                  <span className="visually-hidden"> {plural(item.count, [t('shell.attentionOne'), t('shell.attentionFew'), t('shell.attentionMany')])}</span>
                 </span>
               ) : null}
             </a>

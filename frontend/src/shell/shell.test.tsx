@@ -8,6 +8,7 @@ import { apiError, mockApi } from '../test/mockApi';
 import { renderWithProviders } from '../test/render';
 import { setViewport } from '../test/viewport';
 import { SectionScreen } from './SectionScreen';
+import { SideMenu } from './SideMenu';
 
 function Harness({ me = ME_ADMIN, menu = MENU_FULL }: { me?: MeOut; menu?: MenuOut }) {
   const route = useRoute();
@@ -56,6 +57,29 @@ describe('SectionScreen', () => {
     mockApi(shellRoutes());
     renderWithProviders(<Harness />, { hash: '#obzor/svod?per=ytd' });
     await waitFor(() => expect(window.location.hash).toBe('#obzor/svod'));
+  });
+
+  it.each([
+    ['#obzor/svod?per=5', '#obzor/svod?per=m05'],
+    ['#obzor/svod?per=m13&br=0', '#obzor/svod'],
+    ['#obzor/svod?br=abc', '#obzor/svod'],
+    ['#obzor/svod?foo=1', '#obzor/svod'],
+  ])('canonicalises %s to %s', async (from, to) => {
+    mockApi(shellRoutes());
+    renderWithProviders(<Harness />, { hash: from });
+    await waitFor(() => expect(window.location.hash).toBe(to));
+  });
+
+  it('treats Object.prototype names as unknown sections', async () => {
+    mockApi(shellRoutes());
+    renderWithProviders(<Harness />, { hash: '#constructor/x' });
+    expect(await screen.findByRole('heading', { name: 'Страница не найдена' })).toBeInTheDocument();
+  });
+
+  it('announces the attention count with a Russian plural and without repeating the number', () => {
+    const model = { title: 'Т', desc: '', icon: 'grid' as const, activeId: null, items: [{ id: 'a', label: 'A', icon: 'grid' as const, href: '#a', count: 3 }] };
+    const { container } = renderWithProviders(<SideMenu model={model} />);
+    expect(container.querySelector('.cnt')).toHaveTextContent(/^3 отклонения$/);
   });
 
   it('shows no-access for a forbidden section and not-found for an unknown one', async () => {

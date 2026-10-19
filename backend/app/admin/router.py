@@ -5,7 +5,6 @@ from __future__ import annotations
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query, Response
-from sqlalchemy.orm import Session
 
 from app.admin import service
 from app.admin.schemas import (
@@ -25,11 +24,10 @@ from app.admin.schemas import (
 )
 from app.auth.context import AuthContext, require_perm
 from app.auth.permissions import Perm
-from app.core.db import get_db
+from app.core.db import DB
 from app.core.request_meta import Meta
 
 router = APIRouter(prefix="/admin", tags=["admin"])
-DB = Annotated[Session, Depends(get_db)]
 UsersAdmin = Annotated[AuthContext, Depends(require_perm(Perm.ADMIN_USERS))]
 RolesAdmin = Annotated[AuthContext, Depends(require_perm(Perm.ADMIN_ROLES))]
 

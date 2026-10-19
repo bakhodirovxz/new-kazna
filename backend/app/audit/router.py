@@ -19,11 +19,10 @@ from app.auth.context import AuthContext, require_perm
 from app.auth.permissions import Perm
 from app.core import keystore, ratelimit
 from app.core.crypto import CryptoError, Purpose
-from app.core.db import get_db
+from app.core.db import DB
 from app.core.request_meta import Meta
 
 router = APIRouter(prefix="/audit", tags=["audit"])
-DB = Annotated[Session, Depends(get_db)]
 Auditor = Annotated[AuthContext, Depends(require_perm(Perm.AUDIT_READ))]
 EXPORT_LIMIT = 50_000
 DEFAULT_WINDOW = timedelta(days=30)

@@ -3,14 +3,12 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import Annotated
 
-from fastapi import APIRouter, Depends, Response
-from sqlalchemy.orm import Session
+from fastapi import APIRouter, Response
 
 from app.auth.context import Ctx
 from app.core.cache import Cache
-from app.core.db import get_db
+from app.core.db import DB
 from app.dwh.dates import today_tashkent
 from app.dwh.freshness import freshness
 from app.meta import service
@@ -19,7 +17,6 @@ from app.meta.periods import build_periods
 from app.meta.schemas import BranchOut, FreshnessOut, MenuOut, PeriodOut, PeriodsOut
 
 router = APIRouter(prefix="/meta", tags=["meta"])
-DB = Annotated[Session, Depends(get_db)]
 
 
 @router.get("/branches", response_model=list[BranchOut])

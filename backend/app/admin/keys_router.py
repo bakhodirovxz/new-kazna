@@ -23,7 +23,6 @@ from typing import Annotated
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from sqlalchemy import text
-from sqlalchemy.orm import Session
 
 from app.audit.service import AuditAction, log_event
 from app.auth.context import AuthContext, require_perm
@@ -31,12 +30,11 @@ from app.auth.permissions import Perm
 from app.core import keystore
 from app.core.config import get_settings
 from app.core.crypto import Purpose
-from app.core.db import get_db
+from app.core.db import DB
 from app.core.reencrypt import reencrypt
 from app.core.request_meta import Meta
 
 router = APIRouter(prefix="/admin/keys", tags=["admin"])
-DB = Annotated[Session, Depends(get_db)]
 KeysAdmin = Annotated[AuthContext, Depends(require_perm(Perm.ADMIN_KEYS))]
 
 

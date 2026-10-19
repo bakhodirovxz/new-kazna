@@ -1,19 +1,17 @@
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
-from typing import Annotated
 
 import pytest
 from fastapi import Depends, FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy import text, update
-from sqlalchemy.orm import Session
 
 from app.auth import context as context_module
 from app.auth import sessions
 from app.auth.context import CSRF_COOKIE, CSRF_HEADER, SESSION_COOKIE, Ctx, require_perm
 from app.auth.models import Position, User, UserSession
 from app.auth.permissions import Perm
-from app.core.db import get_db, new_session
+from app.core.db import DB, new_session
 from app.main import create_app
 from tests.helpers import SeedUser, issue_session, use_session
 
@@ -22,7 +20,7 @@ def _app() -> FastAPI:
     app = create_app()
 
     @app.get("/api/v1/_probe")
-    def probe(ctx: Ctx, db: Annotated[Session, Depends(get_db)]) -> dict[str, object]:
+    def probe(ctx: Ctx, db: DB) -> dict[str, object]:
         return {
             "user": ctx.username,
             "branches": db.execute(

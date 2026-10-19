@@ -17,7 +17,7 @@ from app.auth import sessions
 from app.auth.models import Position, PositionBranch, Role, RolePermission, User
 from app.core import ratelimit
 from app.core.config import get_settings
-from app.core.db import apply_rls, get_db
+from app.core.db import DB, apply_rls
 from app.core.errors import AuthError, ForbiddenError, PasswordChangeRequired, ScopeViolationError
 
 SESSION_COOKIE = "__Host-ugk_session"
@@ -113,7 +113,7 @@ def csrf_ok(session_token: str, cookie: str | None, header: str | None) -> bool:
 
 def get_ctx(
     request: Request,
-    db: Annotated[Session, Depends(get_db)],
+    db: DB,
     session_cookie: Annotated[str | None, Cookie(alias=SESSION_COOKIE)] = None,
     csrf_cookie: Annotated[str | None, Cookie(alias=CSRF_COOKIE)] = None,
     csrf_header: Annotated[str | None, Header(alias=CSRF_HEADER)] = None,

@@ -30,6 +30,7 @@ from starlette.routing import BaseRoute
 from starlette.routing import Route as StarletteRoute
 
 from app.auth.context import get_ctx
+from app.core.db import get_db
 from app.main import create_app
 
 PUBLIC = {
@@ -212,3 +213,24 @@ def test_all_protected_routes_return_401_without_session() -> None:
             )
             response = client.request(method, req_path, json={})
             assert response.status_code == 401, f"{method} {req_path}: {response.status_code}"
+
+
+def _subs(dep: Dependant) -> Iterator[Dependant]:
+    for sub in dep.dependencies:
+        yield sub
+        yield from _subs(sub)
+
+
+def test_every_db_dependency_is_function_scoped() -> None:
+    """Hotfix C2: `scope="request"`dagi `get_db` commit'ni javob yuborilgandan KEYINGA suradi;
+    aralash scope esa bitta so'rovda IKKI sessiya beradi (kesh kaliti scope'ni o'z ichiga
+    oladi) — `get_ctx`ning RLS `SET LOCAL`i endpoint sessiyasiga yetmay qolardi."""
+    scopes = {
+        (method, path, sub.scope)
+        for method, path, dependant in _routes()
+        for sub in _subs(dependant)
+        if sub.call is get_db
+    }
+    assert scopes and {s for _, _, s in scopes} == {"function"}, sorted(
+        x for x in scopes if x[2] != "function"
+    )[:5]

@@ -6,7 +6,6 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import text
-from sqlalchemy.orm import Session
 
 from app.admin.dwh_schemas import (
     BuildOut,
@@ -23,14 +22,13 @@ from app.audit.service import AuditAction, log_event
 from app.auth.context import AuthContext, require_perm
 from app.auth.permissions import Perm
 from app.core.config import get_settings
-from app.core.db import get_db
+from app.core.db import DB
 from app.core.errors import NotFoundError, ValidationFailed
 from app.core.request_meta import Meta
 from app.dwh import builds
 from app.etl.connectors import KNOWN_SOURCES
 
 router = APIRouter(prefix="/admin", tags=["admin"])
-DB = Annotated[Session, Depends(get_db)]
 EtlAdmin = Annotated[AuthContext, Depends(require_perm(Perm.ADMIN_ETL))]
 _RUN_COLS = ("id, source, mode, status, started_at, finished_at, window_from, window_to, "
              "rows_in, rows_upserted, build_id, triggered_by, error")

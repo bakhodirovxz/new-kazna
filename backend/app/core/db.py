@@ -66,7 +66,10 @@ def get_db() -> Iterator[Session]:
         db.close()
 
 
-DB = Annotated[Session, Depends(get_db)]
+# scope="function": commit/rollback endpoint qaytgach, javob YUBORILISHIDAN OLDIN bajariladi
+# (standart "request" scope'da teardown javobdan keyin ishlaydi — read-your-writes buziladi).
+# Hamma joyda shu `DB`dan foydalaning: boshqa scope'dagi `Depends(get_db)` ikkinchi sessiya beradi.
+DB = Annotated[Session, Depends(get_db, scope="function")]
 
 
 def apply_rls(db: Session, branch_ids: frozenset[int] | None) -> None:

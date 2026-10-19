@@ -6,8 +6,7 @@ import uuid
 from datetime import UTC, datetime
 from typing import Annotated
 
-from fastapi import APIRouter, Cookie, Depends, Header, Response
-from sqlalchemy.orm import Session
+from fastapi import APIRouter, Cookie, Header, Response
 
 from app.auth import service, sessions
 from app.auth.context import CSRF_COOKIE, CSRF_HEADER, SESSION_COOKIE, Ctx, build_context, csrf_ok
@@ -23,12 +22,11 @@ from app.auth.schemas import (
     SessionOut,
     me_out,
 )
-from app.core.db import get_db
+from app.core.db import DB
 from app.core.errors import ForbiddenError
 from app.core.request_meta import Meta
 
 router = APIRouter(prefix="/auth", tags=["auth"])
-DB = Annotated[Session, Depends(get_db)]
 
 
 def _set_session_cookies(response: Response, new: sessions.NewSession) -> None:

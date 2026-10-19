@@ -1,12 +1,17 @@
-from collections.abc import Iterator
+import json
+from collections.abc import Callable, Iterator
+from typing import Any
 
+import anyio
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError, ProgrammingError
 
+from app.auth import service
 from app.core.db import apply_rls, get_engine, new_session
-from app.main import create_app
+from app.main import app, create_app
+from tests.helpers import DEFAULT_PASSWORD, SeedUser
 
 
 @pytest.fixture
@@ -97,3 +102,42 @@ def test_etl_engine_does_not_leak_bound_value_on_error() -> None:
     with get_engine("etl").connect() as conn, pytest.raises(DBAPIError) as etl_exc:
         conn.execute(text("SELECT :v FROM core.no_such_table_xyz"), {"v": secret})
     assert secret not in str(etl_exc.value)
+
+
+def test_write_is_committed_before_response_is_sent(
+    make_user: Callable[..., SeedUser],
+) -> None:
+    """Hotfix C2: `get_db` commit'i javob yuborilishidan OLDIN bo'lishi shart (read-your-writes).
+
+    Xom ASGI chaqiruvi: javob tanasi `send`ga kelgan paytda (dependency teardown hali
+    ishlamagan bo'lishi mumkin) alohida ulanish login yaratgan challenge'ni ko'rishi kerak.
+    TestClient/httpx teardown tugashini kutib qaytadi — shuning uchun ular buni ko'rmaydi.
+    Middleware'lar sof ASGI, `send` bloklovchi: tekshiruv paytida teardown ishlay olmaydi.
+    """
+    user = make_user()
+    seen: list[bool] = []
+    body = json.dumps({"username": user.username, "password": DEFAULT_PASSWORD}).encode()
+    scope = {
+        "type": "http", "asgi": {"version": "3.0"}, "http_version": "1.1", "method": "POST",
+        "scheme": "https", "path": "/api/v1/auth/login", "raw_path": b"/api/v1/auth/login",
+        "query_string": b"", "root_path": "", "server": ("testserver", 443),
+        "client": ("10.0.0.9", 1234),
+        "headers": [(b"host", b"testserver"), (b"content-type", b"application/json"),
+                    (b"content-length", str(len(body)).encode())],
+    }
+
+    async def receive() -> dict[str, Any]:
+        return {"type": "http.request", "body": body, "more_body": False}
+
+    async def send(message: dict[str, Any]) -> None:
+        if message["type"] == "http.response.body":
+            token = json.loads(message["body"])["mfa_token"]
+            with get_engine("migrator").connect() as conn:
+                seen.append(conn.execute(
+                    text("SELECT count(*) FROM core.mfa_challenges WHERE token_hmac = :h"),
+                    {"h": service._challenge_hmac(token)},
+                ).scalar_one() == 1)
+
+    anyio.run(app, scope, receive, send)
+    assert seen == [True]
+

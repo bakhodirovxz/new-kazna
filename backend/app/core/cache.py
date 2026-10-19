@@ -24,7 +24,7 @@ from sqlalchemy.orm import Session
 
 from app.auth.context import AuthContext, Ctx
 from app.core.config import get_settings
-from app.core.db import get_db
+from app.core.db import DB
 from app.core.logging import get_logger
 
 CACHE_TTL = 3600
@@ -186,9 +186,7 @@ class ResponseCache:
         return Response(content=body, media_type="application/json", headers=headers)
 
 
-def get_cache(
-    request: Request, ctx: Ctx, db: Annotated[Session, Depends(get_db)]
-) -> ResponseCache:
+def get_cache(request: Request, ctx: Ctx, db: DB) -> ResponseCache:
     return ResponseCache(request, ctx, db)
 
 

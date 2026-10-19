@@ -21,7 +21,10 @@ type DialogState = { kind: 'create' } | { kind: 'edit'; user: UserOut } | null;
 export default function UsersPage({ me }: AdminPageProps) {
   const [search, setSearch] = useState('');
   const q = useDebouncedValue(search.trim().toLowerCase(), 300);
-  const [page, setPage] = useState(1);
+  // Sahifa shu so'rov (q) uchun; q o'zgarsa 1-sahifa: eski q bilan ortiqcha so'rov ketmaydi.
+  const [paged, setPaged] = useState({ q, page: 1 });
+  const page = paged.q === q ? paged.page : 1;
+  const setPage = (next: number) => setPaged({ q, page: next });
   const users = useUsers(q, page);
   const positions = usePositions();
   const [dialog, setDialog] = useState<DialogState>(null);
@@ -77,7 +80,6 @@ export default function UsersPage({ me }: AdminPageProps) {
             maxLength={64}
             onChange={(e) => {
               setSearch(e.target.value);
-              setPage(1);
             }}
           />
           <span className="toolbar__grow" />

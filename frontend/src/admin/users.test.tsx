@@ -4,6 +4,7 @@ import type { PositionOut, UserOut } from '../api/types';
 import { expectNoAxeViolations } from '../test/axe';
 import { ME_ADMIN } from '../test/fixtures';
 import { apiError, json, mockApi, type MockHandler } from '../test/mockApi';
+import { createQueryClient } from '../api/queryClient';
 import { renderWithProviders } from '../test/render';
 import UsersPage from './UsersPage';
 
@@ -262,5 +263,68 @@ describe('UsersPage fix round 1', () => {
     await screen.findByRole('table', { name: 'Пользователи' });
     expect(screen.getByLabelText('Поиск')).toHaveAttribute('maxlength', '64');
     await user.type(screen.getByLabelText('Поиск'), 'k');
+  });
+});
+
+describe('UsersPage fix round 2', () => {
+  it('keeps focus where the user put it while the name error is shown', async () => {
+    routes({ 'POST /admin/users/3/reset-2fa': json(null, 204) });
+    const { user } = renderWithProviders(<UsersPage me={ME_ADMIN} />);
+    const dialog = await openUser(user, 'Рахимов Ильхом');
+    await user.clear(within(dialog).getByLabelText('ФИО'));
+    await user.click(within(dialog).getByRole('button', { name: 'Сохранить' }));
+    expect(within(dialog).getByLabelText('ФИО')).toHaveFocus();
+    const position = within(dialog).getByRole('combobox', { name: 'Должность' });
+    await user.click(position);
+    await user.keyboard('{ArrowDown}{Enter}');
+    expect(position).toHaveFocus();
+    await user.click(within(dialog).getByRole('button', { name: 'Сбросить 2FA' }));
+    const confirm = screen.getByRole('alertdialog', { name: 'Сбросить 2FA?' });
+    expect(confirm.contains(document.activeElement)).toBe(true);
+  });
+
+  it('does not request (oldQ, page 1) while typing; the page follows the debounced query', async () => {
+    const server = mockApi({
+      'GET /admin/users': (req) => {
+        const page = Number(req.url.searchParams.get('page') ?? '1');
+        return json({ items: USERS, total: 120, page, page_size: 50 });
+      },
+      'GET /admin/positions': json(POSITIONS),
+    });
+    const { user } = renderWithProviders(<UsersPage me={ME_ADMIN} />);
+    await screen.findByRole('table', { name: 'Пользователи' });
+    await user.click(screen.getByRole('button', { name: /следующ/i }));
+    await waitFor(() => expect(server.calls.some((c) => c.url.searchParams.get('page') === '2')).toBe(true));
+    const before = server.calls.length;
+    await user.type(screen.getByLabelText('Поиск'), 'kar');
+    await waitFor(() => expect(server.calls.some((c) => c.url.searchParams.get('q') === 'kar')).toBe(true));
+    const added = server.calls.slice(before).map((c) => `${c.url.searchParams.get('q') ?? ''}|${c.url.searchParams.get('page')}`);
+    expect(added).toEqual(['kar|1']);
+  });
+
+  it('403 on an admin mutation raises no global notification (inline meta)', async () => {
+    const hooks = { onUnauthenticated: vi.fn(), onPasswordChange: vi.fn(), onForbidden: vi.fn(), notify: vi.fn() };
+    routes({ 'POST /admin/users/3/block': apiError(403, 'privilege_escalation', 'Недостаточно прав') });
+    const { user } = renderWithProviders(<UsersPage me={ME_ADMIN} />, { client: createQueryClient(hooks) });
+    const dialog = await openUser(user, 'Рахимов Ильхом');
+    await user.click(within(dialog).getByRole('button', { name: 'Заблокировать' }));
+    const confirm = screen.getByRole('alertdialog', { name: 'Заблокировать пользователя?' });
+    await user.click(within(confirm).getByRole('button', { name: 'Заблокировать' }));
+    expect(await within(confirm).findByRole('alert')).toHaveTextContent('Недостаточно прав');
+    expect(hooks.notify).not.toHaveBeenCalled();
+    expect(hooks.onForbidden).not.toHaveBeenCalled();
+  });
+
+  it('the open edit dialog reflects refreshed list data', async () => {
+    let name = 'Рахимов Ильхом';
+    mockApi({
+      'GET /admin/users': () => json({ items: [{ ...USERS[2], full_name: name }], total: 1, page: 1, page_size: 50 }),
+      'GET /admin/positions': json(POSITIONS),
+    });
+    const { user, client } = renderWithProviders(<UsersPage me={ME_ADMIN} />);
+    await openUser(user, 'Рахимов Ильхом');
+    name = 'Рахимов Ильхом Каримович';
+    await client.invalidateQueries({ queryKey: ['admin', 'users'] });
+    expect(await screen.findByRole('dialog', { name: 'Рахимов Ильхом Каримович' })).toBeInTheDocument();
   });
 });

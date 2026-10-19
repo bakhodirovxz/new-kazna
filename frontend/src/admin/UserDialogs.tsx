@@ -149,18 +149,19 @@ export function UserEditDialog({ me, user, positions, positionsFailed, onClose, 
   const resetMfa = useResetUserMfa();
   const [fullName, setFullName] = useState(user.full_name);
   const [positionId, setPositionId] = useState<string | null>(String(user.position.id));
-  const [nameError, setNameError] = useState<string | null>(null);
-  const formRef = useFocusFirstInvalid({ nameError });
+  const [errors, setErrors] = useState<{ name?: string }>({}); // har setErrors yangi obyekt: fokus faqat xato qo'yilganda
+  const nameError = errors.name ?? null;
+  const formRef = useFocusFirstInvalid(errors);
   const [danger, setDanger] = useState<Danger | null>(null);
   const self = user.id === me.id;
 
   const save = (event: FormEvent) => {
     event.preventDefault();
     if (!fullName.trim()) {
-      setNameError(t('field.required'));
+      setErrors({ name: t('field.required') });
       return;
     }
-    setNameError(null);
+    setErrors({});
     update.mutate(
       { id: user.id, body: { full_name: fullName.trim(), position_id: Number(positionId ?? user.position.id) } },
       {
@@ -170,7 +171,7 @@ export function UserEditDialog({ me, user, positions, positionsFailed, onClose, 
         },
         onError: (error) => {
           if (isApiError(error, 422) && Array.isArray(error.params.fields) && error.params.fields.includes('full_name')) {
-            setNameError(error.message);
+            setErrors({ name: error.message });
           }
         },
       },

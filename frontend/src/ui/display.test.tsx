@@ -84,9 +84,9 @@ describe('Tooltip (WCAG 1.4.13)', () => {
     const trigger = setup();
     expect(add).not.toHaveBeenCalledWith('keydown', expect.anything());
     await userEvent.hover(trigger);
-    expect(add).toHaveBeenCalledWith('keydown', expect.any(Function));
+    expect(add).toHaveBeenCalledWith('keydown', expect.any(Function), true);
     cleanup();
-    expect(remove).toHaveBeenCalledWith('keydown', expect.any(Function));
+    expect(remove).toHaveBeenCalledWith('keydown', expect.any(Function), true);
   });
 });
 

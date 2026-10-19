@@ -31,6 +31,8 @@ export const ru = {
   'otp.backupHint': 'Формат: XXXX-XXXX-XXXX',
   'chip.remove': 'Сбросить: {name}',
   'kpi.hint': 'Как считается: {label}',
+  'overlay.close': 'Закрыть',
+  'toast.region': 'Уведомления',
 } as const satisfies Record<string, string>;
 
 export type RuKey = keyof typeof ru;

@@ -16,13 +16,16 @@ export function Tooltip({ content, children }: { content: string; children(trigg
 
   // Esc faqat izoh ko'rinib turganda tinglanadi (fokus trigger'da bo'lmasa ham ishlashi uchun document'da).
   useEffect(() => {
-    if (!visible) return;
+    if (!visible || dismissed) return;
+    // capture + stopPropagation: Esc dialog ichida avval faqat izohni yopadi (eng ichki qatlam), dialogni emas.
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setDismissed(true);
+      if (event.key !== 'Escape') return;
+      event.stopPropagation();
+      setDismissed(true);
     };
-    document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
-  }, [visible]);
+    document.addEventListener('keydown', onKey, true);
+    return () => document.removeEventListener('keydown', onKey, true);
+  }, [visible, dismissed]);
 
   useEffect(() => {
     if (!visible) setDismissed(false);

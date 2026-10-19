@@ -1,6 +1,7 @@
 import { screen, waitFor } from '@testing-library/react';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+import { makeQueryClient } from '../app/queryClient';
 import { expectNoAxeViolations } from '../test/axe';
 import { ME_ADMIN } from '../test/fixtures';
 import { apiError, json, mockApi } from '../test/mockApi';
@@ -82,7 +83,71 @@ describe('LoginPage', () => {
   });
 });
 
+describe('auth hardening (review round 1)', () => {
+  it('leaves no password in the mutation cache after a failed login (M1) and focuses the password (M2)', async () => {
+    mockApi({ 'POST /auth/login': apiError(401, 'invalid_credentials', 'Неверный логин или пароль') });
+    const { user, client } = renderWithProviders(<LoginPage next={null} />, { hash: '#login' });
+    expect(screen.getByLabelText('Логин')).toHaveFocus();
+    await user.type(screen.getByLabelText('Логин'), 'admin');
+    await user.type(screen.getByLabelText('Пароль'), 'Wrong-Secret-9');
+    await user.click(screen.getByRole('button', { name: 'Войти' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Неверный логин');
+    expect(screen.getByLabelText('Пароль')).toHaveFocus();
+    expect(JSON.stringify(client.getMutationCache().getAll().map((m) => m.state.variables))).not.toContain('Wrong-Secret-9');
+  });
+
+  it('does not toast a rate limit that the password form shows inline (M5)', async () => {
+    mockApi({ 'POST /auth/password/change': apiError(429, 'rate_limited', 'Слишком много запросов', undefined, { 'Retry-After': '30' }) });
+    const notify = vi.fn();
+    const { user } = renderWithProviders(<PasswordChangePage me={{ ...ME_ADMIN, must_change_password: true }} />, {
+      hash: '#password',
+      client: makeQueryClient(notify),
+    });
+    await user.type(screen.getByLabelText('Текущий пароль'), 'Old-Parol-2025!');
+    await user.type(screen.getByLabelText('Новый пароль'), 'Yangi-Mustahkam-77');
+    await user.type(screen.getByLabelText('Повторите новый пароль'), 'Yangi-Mustahkam-77');
+    await user.click(screen.getByRole('button', { name: 'Сохранить пароль' }));
+    expect(await screen.findByRole('alert')).toBeInTheDocument();
+    expect(notify).not.toHaveBeenCalled();
+  });
+
+  it('has a hidden username field for password managers (M9)', () => {
+    renderWithProviders(<PasswordChangePage me={ME_ADMIN} />, { hash: '#password' });
+    const hidden = document.querySelector('input[autocomplete="username"]');
+    expect(hidden).toHaveValue('admin');
+    expect(hidden).toHaveAttribute('readonly');
+  });
+});
+
 describe('MfaVerifyPage', () => {
+  it('disables the code input once the challenge expired (M6)', async () => {
+    mockApi({ 'POST /auth/2fa/verify': apiError(401, 'mfa_expired', 'Время подтверждения истекло, войдите снова') });
+    const { user } = renderWithProviders(
+      <WithChallenge>
+        <MfaVerifyPage />
+      </WithChallenge>,
+      { hash: '#2fa' },
+    );
+    await user.type(await screen.findByLabelText('Код из приложения'), '123456');
+    expect(await screen.findByRole('alert')).toHaveTextContent('Время подтверждения истекло');
+    expect(screen.getByLabelText('Код из приложения')).toBeDisabled();
+  });
+
+  it('refocuses the code input after a wrong code (M2) and keeps no code in the cache (M1)', async () => {
+    mockApi({ 'POST /auth/2fa/verify': apiError(401, 'invalid_mfa_code', 'Неверный код подтверждения') });
+    const { user, client } = renderWithProviders(
+      <WithChallenge>
+        <MfaVerifyPage />
+      </WithChallenge>,
+      { hash: '#2fa' },
+    );
+    const input = await screen.findByLabelText('Код из приложения');
+    await user.type(input, '654321');
+    expect(await screen.findByRole('alert')).toBeInTheDocument();
+    expect(input).toHaveFocus();
+    expect(JSON.stringify(client.getMutationCache().getAll().map((m) => m.state.variables))).not.toContain('654321');
+  });
+
   it('sends the user back to login without a challenge', async () => {
     renderWithProviders(<MfaVerifyPage />, { hash: '#2fa' });
     await waitFor(() => expect(window.location.hash).toBe('#login'));

@@ -13,6 +13,8 @@ interface AuthFlowValue {
   /** 2FA'dan keyin (masalan, majburiy parol almashtirishdan so'ng) qaytiladigan joy. */
   returnTo: string | null;
   begin(challenge: Challenge): void;
+  /** Majburiy parol almashtirishdan keyin qaytiladigan joyni eslab qoladi (bor bo'lsa — almashtirmaydi). */
+  remember(path: string | null): void;
   finish(): void;
   clear(): void;
 }
@@ -27,13 +29,14 @@ export function AuthFlowProvider({ children }: { children: ReactNode }) {
     setChallenge(next);
     setReturnTo(next.returnTo);
   }, []);
+  const remember = useCallback((path: string | null) => setReturnTo((prev) => prev ?? path), []);
   const finish = useCallback(() => setChallenge(null), []);
   const clear = useCallback(() => {
     setChallenge(null);
     setReturnTo(null);
   }, []);
 
-  const value = useMemo(() => ({ challenge, returnTo, begin, finish, clear }), [challenge, returnTo, begin, finish, clear]);
+  const value = useMemo(() => ({ challenge, returnTo, begin, remember, finish, clear }), [challenge, returnTo, begin, remember, finish, clear]);
   return <AuthFlowContext.Provider value={value}>{children}</AuthFlowContext.Provider>;
 }
 

@@ -1,4 +1,4 @@
-import { useRef, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useDocumentTitle } from '../app/useDocumentTitle';
 import { t } from '../i18n';
 import { navigate } from '../router/store';
@@ -17,7 +17,9 @@ export function LoginPage({ next }: { next: string | null }) {
   const [errors, setErrors] = useState<{ username?: string; password?: string }>({});
   const userRef = useRef<HTMLInputElement>(null);
   const passRef = useRef<HTMLInputElement>(null);
+  const [serverError, setServerError] = useState<string | null>(null);
   useDocumentTitle(t('login.docTitle'));
+  useEffect(() => userRef.current?.focus(), []); // masalan, sessiya tugab yo'naltirilganda
 
   const onSubmit = (event: FormEvent) => {
     event.preventDefault();
@@ -26,6 +28,7 @@ export function LoginPage({ next }: { next: string | null }) {
     if (!name) found.username = t('login.required.username');
     if (!password) found.password = t('login.required.password');
     setErrors(found);
+    setServerError(null);
     if (found.username || found.password) {
       (found.username ? userRef : passRef).current?.focus();
       return;
@@ -39,7 +42,12 @@ export function LoginPage({ next }: { next: string | null }) {
           setPassword('');
           navigate({ kind: result.next === 'mfa_enroll' ? 'mfaEnroll' : 'mfa' });
         },
-        onError: () => setPassword(''),
+        onError: (err) => {
+          setServerError(authErrorText(err));
+          setPassword('');
+          login.reset(); // parol kuzatuvchi/MutationCache'da qolmasin
+          passRef.current?.focus();
+        },
       },
     );
   };
@@ -49,7 +57,7 @@ export function LoginPage({ next }: { next: string | null }) {
       <h1>{t('login.title')}</h1>
       <p className="auth__lead">{t('login.lead')}</p>
       <form className="auth__form" noValidate onSubmit={onSubmit}>
-        {login.error ? <AuthAlert message={authErrorText(login.error)} /> : null}
+        {serverError ? <AuthAlert message={serverError} /> : null}
         <TextInput
           label={t('login.username')}
           name="username"

@@ -41,6 +41,7 @@ export function PasswordChangePage({ me }: { me: MeOut }) {
   const [repeat, setRepeat] = useState('');
   const [errors, setErrors] = useState<Errors>({});
   const [problems, setProblems] = useState<string[]>([]);
+  const [otherError, setOtherError] = useState<unknown>(null);
   const refs = { current: useRef<HTMLInputElement>(null), next: useRef<HTMLInputElement>(null), repeat: useRef<HTMLInputElement>(null) };
   const rules = checkPassword(next, me.username);
   useDocumentTitle(t('password.docTitle'));
@@ -54,6 +55,7 @@ export function PasswordChangePage({ me }: { me: MeOut }) {
     if (next !== repeat) found.repeat = t('password.mismatch');
     setErrors(found);
     setProblems([]);
+    setOtherError(null);
     if (found.current || found.next || found.repeat) {
       (found.current ? refs.current : found.next ? refs.next : refs.repeat).current?.focus();
       return;
@@ -69,19 +71,22 @@ export function PasswordChangePage({ me }: { me: MeOut }) {
           navigate(destinationAfterSignIn({ ...me, must_change_password: false }, returnTo), { replace: true });
         },
         onError: (error) => {
+          change.reset(); // parollar kuzatuvchida qolmasin
           if (isApiError(error, 422, 'invalid_current_password')) {
             setErrors({ current: error.message });
+            refs.current.current?.focus();
           } else if (isApiError(error, 422, 'password_policy')) {
             const raw = error.params.problems;
             const list = Array.isArray(raw) ? raw.filter((p): p is string => typeof p === 'string') : [];
             setProblems(list.length > 0 ? list : ['unknown']);
+            refs.next.current?.focus();
+          } else {
+            setOtherError(error);
           }
         },
       },
     );
   };
-
-  const otherError = change.error && !isApiError(change.error, 422) ? change.error : null;
 
   return (
     <AuthLayout>
@@ -102,6 +107,16 @@ export function PasswordChangePage({ me }: { me: MeOut }) {
           </div>
         ) : null}
         <FormError error={otherError} />
+        <input
+          type="text"
+          className="visually-hidden"
+          name="username"
+          autoComplete="username"
+          value={me.username}
+          readOnly
+          tabIndex={-1}
+          aria-hidden="true"
+        />
         <PasswordInput
           label={t('password.current')}
           ref={refs.current}

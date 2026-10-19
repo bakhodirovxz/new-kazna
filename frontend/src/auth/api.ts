@@ -75,6 +75,7 @@ export function useChangePassword() {
   const client = useQueryClient();
   return useMutation({
     mutationFn: (body: PasswordChangeIn) => api<undefined>('/auth/password/change', { method: 'POST', body }),
+    meta: { inline: true }, // 422/429 formada ko'rsatiladi; 401 va password_change_required global
     gcTime: 0,
     onSuccess: async () => {
       client.setQueryData<MeOut>(meKey, (old) => (old ? { ...old, must_change_password: false } : old));

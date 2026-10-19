@@ -8,7 +8,7 @@ import { Routes } from './Routes';
 function ClientBoundary({ children }: { children: ReactNode }) {
   const toast = useToast();
   const flow = useAuthFlow();
-  const [client] = useState(() => makeQueryClient((message) => toast.show(message, 'error'), flow.clear));
+  const [client] = useState(() => makeQueryClient((message) => toast.show(message, 'error'), flow.clear, flow.remember));
   return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
 }
 

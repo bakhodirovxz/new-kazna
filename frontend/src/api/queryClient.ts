@@ -5,6 +5,8 @@ import { ApiError } from './client';
 interface AppMeta extends Record<string, unknown> {
   /** true — global ishlov (redirect/toast) o'tkazib yuboriladi; komponent o'zi ko'rsatadi. */
   silent?: boolean;
+  /** true — 429/403 xabarini komponent o'zi ko'rsatadi (toast yo'q); 401 va password_change_required baribir yo'naltiriladi. */
+  inline?: boolean;
 }
 
 declare module '@tanstack/react-query' {
@@ -22,7 +24,7 @@ export interface GlobalErrorHooks {
 }
 
 /** Spec 8: 401 → login; 403 password_change_required → parol; 403 → нет доступа / toast; 429 → toast. */
-export function handleApiError(error: unknown, kind: 'query' | 'mutation', hooks: GlobalErrorHooks): void {
+export function handleApiError(error: unknown, kind: 'query' | 'mutation', hooks: GlobalErrorHooks, inline = false): void {
   if (!(error instanceof ApiError)) return;
   if (error.status === 401) {
     hooks.onUnauthenticated();
@@ -32,6 +34,7 @@ export function handleApiError(error: unknown, kind: 'query' | 'mutation', hooks
     hooks.onPasswordChange();
     return;
   }
+  if (inline) return;
   if (error.status === 429) {
     hooks.notify(t('error.rateLimited', { seconds: error.retryAfter ?? 60 }));
     return;
@@ -57,7 +60,7 @@ export function createQueryClient(hooks: GlobalErrorHooks): QueryClient {
     }),
     mutationCache: new MutationCache({
       onError: (error, _variables, _context, mutation) => {
-        if (!mutation.meta?.silent) handleApiError(error, 'mutation', hooks);
+        if (!mutation.meta?.silent) handleApiError(error, 'mutation', hooks, mutation.meta?.inline === true);
       },
     }),
     defaultOptions: {

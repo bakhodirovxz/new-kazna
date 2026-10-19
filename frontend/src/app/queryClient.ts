@@ -1,5 +1,7 @@
 import type { QueryClient } from '@tanstack/react-query';
+import type { MeOut } from '../api/types';
 import { createQueryClient } from '../api/queryClient';
+import { meKey } from '../auth/api';
 import { isPublicRoute, parseHash, safeNext } from '../router/hash';
 import { currentPath, navigate } from '../router/store';
 
@@ -14,10 +16,18 @@ export function endSession(client: QueryClient, clearFlow: () => void): void {
 }
 
 /** Spec 8 xato siyosatini router bilan bog'laydi. */
-export function makeQueryClient(notify: (message: string) => void, clearFlow: () => void = () => undefined): QueryClient {
+export function makeQueryClient(
+  notify: (message: string) => void,
+  clearFlow: () => void = () => undefined,
+  remember: (path: string | null) => void = () => undefined,
+): QueryClient {
   const client: QueryClient = createQueryClient({
     onUnauthenticated: () => endSession(client, clearFlow),
-    onPasswordChange: () => navigate({ kind: 'password' }, { replace: true }),
+    onPasswordChange: () => {
+      remember(safeNext(currentPath()));
+      client.setQueryData<MeOut>(meKey, (old) => (old ? { ...old, must_change_password: true } : old)); // majburiy rejim
+      navigate({ kind: 'password' }, { replace: true });
+    },
     onForbidden: () => navigate({ kind: 'noaccess' }, { replace: true }),
     notify,
   });

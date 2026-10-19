@@ -7,7 +7,8 @@ import { useMe } from '../auth/api';
 import { PasswordChangePage } from '../auth/PasswordChangePage';
 import { useMenu } from '../meta/api';
 import type { Route } from '../router/hash';
-import { navigate } from '../router/store';
+import { safeNext } from '../router/hash';
+import { currentPath, navigate } from '../router/store';
 import { HomeRedirect } from '../shell/HomeRedirect';
 import { SectionScreen } from '../shell/SectionScreen';
 import { ShellSkeleton } from '../shell/ShellSkeleton';
@@ -26,8 +27,11 @@ export function RequireAuth({ route }: { route: Route }) {
   const menu = useMenu(me.isSuccess && !mustChange);
 
   useEffect(() => {
-    if (mustChange && route.kind !== 'password') navigate({ kind: 'password' }, { replace: true });
-  }, [mustChange, route.kind]);
+    if (mustChange && route.kind !== 'password') {
+      flow.remember(safeNext(currentPath())); // parol almashgach shu sahifaga qaytamiz
+      navigate({ kind: 'password' }, { replace: true });
+    }
+  }, [mustChange, route.kind, flow]);
 
   // useMe — silent: global 401 ishlovi ishlamaydi, shuning uchun sessiya tugashini shu yerda yakunlaymiz.
   useEffect(() => {

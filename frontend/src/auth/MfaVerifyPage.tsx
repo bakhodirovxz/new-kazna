@@ -23,6 +23,8 @@ export function MfaVerifyPage() {
   const [mode, setMode] = useState<Mode>('totp');
   const [code, setCode] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [expired, setExpired] = useState(false);
+  const formRef = useRef<HTMLFormElement>(null);
   const inFlight = useRef(false);
   /** true — sahifa o'zi boshqa joyga o'tkazdi; challenge tozalangani uchun login'ga qaytarmaymiz. */
   const leaving = useRef(false);
@@ -58,6 +60,10 @@ export function MfaVerifyPage() {
         onError: (err) => {
           setCode('');
           setError(authErrorText(err));
+          const dead = isApiError(err, 401, 'mfa_expired');
+          setExpired(dead);
+          verify.reset(); // kod/token kuzatuvchida qolmasin
+          if (!dead) formRef.current?.querySelector('input')?.focus();
         },
         onSettled: () => {
           inFlight.current = false;
@@ -78,13 +84,11 @@ export function MfaVerifyPage() {
     submit(code);
   };
 
-  const expired = isApiError(verify.error, 401, 'mfa_expired');
-
   return (
     <AuthLayout>
       <h1>{t('mfa.title')}</h1>
       <p className="auth__lead">{mode === 'totp' ? t('mfa.lead') : t('mfa.leadBackup')}</p>
-      <form className="auth__form" noValidate onSubmit={onSubmit}>
+      <form ref={formRef} className="auth__form" noValidate onSubmit={onSubmit}>
         {error ? <AuthAlert message={error} /> : null}
         <OtpInput
           key={mode}
@@ -94,6 +98,7 @@ export function MfaVerifyPage() {
           onChange={setCode}
           onComplete={submit}
           focusOnMount
+          disabled={expired}
         />
         <Button type="submit" block loading={verify.isPending} disabled={expired}>
           {t('mfa.submit')}

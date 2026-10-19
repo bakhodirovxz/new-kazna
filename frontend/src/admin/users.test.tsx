@@ -171,3 +171,96 @@ describe('UsersPage', () => {
     await expectNoAxeViolations(container);
   });
 });
+
+describe('UsersPage fix round 1', () => {
+  async function fillCreate(user: ReturnType<typeof renderWithProviders>['user'], dialog: HTMLElement, login = 'novikov') {
+    await user.type(within(dialog).getByLabelText('Логин'), login);
+    await user.type(within(dialog).getByLabelText('ФИО'), 'Новиков Сотрудник');
+    await user.type(within(dialog).getByRole('combobox', { name: 'Должность' }), 'Спец');
+    await user.keyboard('{ArrowDown}{Enter}');
+  }
+
+  it('works for admin:users without admin:roles (positions 403 is inline and silent)', async () => {
+    routes({ 'GET /admin/positions': apiError(403, 'forbidden', 'Нет доступа') });
+    const { user, client } = renderWithProviders(<UsersPage me={{ ...ME_ADMIN, permissions: ['admin:users'] }} />);
+    await user.click(await screen.findByRole('button', { name: 'Добавить пользователя' }));
+    const dialog = screen.getByRole('dialog', { name: 'Новый пользователь' });
+    expect(await within(dialog).findByText('Не удалось загрузить список должностей')).toBeInTheDocument();
+    expect(client.getQueryCache().find({ queryKey: ['admin', 'positions'] })?.meta).toEqual({ silent: true });
+  });
+
+  it('focuses the first invalid field and announces it', async () => {
+    routes({ 'POST /admin/users': apiError(409, 'username_taken', 'Логин уже занят') });
+    const { user } = renderWithProviders(<UsersPage me={ME_ADMIN} />);
+    await user.click(await screen.findByRole('button', { name: 'Добавить пользователя' }));
+    const dialog = screen.getByRole('dialog', { name: 'Новый пользователь' });
+    await user.click(within(dialog).getByRole('button', { name: 'Создать' }));
+    expect(within(dialog).getByLabelText('Логин')).toHaveFocus();
+    await fillCreate(user, dialog, 'admin');
+    await user.click(within(dialog).getByRole('button', { name: 'Создать' }));
+    await within(dialog).findByText('Логин уже занят');
+    expect(within(dialog).getByLabelText('Логин')).toHaveFocus();
+  });
+
+  it('maps 422 params.fields to field errors and limits input length', async () => {
+    routes({ 'POST /admin/users': apiError(422, 'validation_failed', 'Проверьте ФИО', { fields: ['full_name'] }) });
+    const { user } = renderWithProviders(<UsersPage me={ME_ADMIN} />);
+    await user.click(await screen.findByRole('button', { name: 'Добавить пользователя' }));
+    const dialog = screen.getByRole('dialog', { name: 'Новый пользователь' });
+    expect(within(dialog).getByLabelText('Логин')).toHaveAttribute('maxlength', '64');
+    expect(within(dialog).getByLabelText('ФИО')).toHaveAttribute('maxlength', '200');
+    await fillCreate(user, dialog);
+    await user.click(within(dialog).getByRole('button', { name: 'Создать' }));
+    expect(await within(dialog).findByText('Проверьте ФИО')).toBeInTheDocument();
+    expect(within(dialog).getByLabelText('ФИО')).toHaveAttribute('aria-invalid', 'true');
+    expect(within(dialog).getByLabelText('ФИО')).toHaveFocus();
+  });
+
+  it('keeps the one-time password until «Закрыть» and then leaves no trace', async () => {
+    routes({ 'POST /admin/users': json({ user: { ...USERS[0], id: 9 }, temporary_password: 'Tmp-Parol-1234567' }, 201) });
+    const { user, client } = renderWithProviders(<UsersPage me={ME_ADMIN} />);
+    await user.click(await screen.findByRole('button', { name: 'Добавить пользователя' }));
+    const dialog = screen.getByRole('dialog', { name: 'Новый пользователь' });
+    await fillCreate(user, dialog);
+    await user.click(within(dialog).getByRole('button', { name: 'Создать' }));
+    const secret = await screen.findByRole('dialog', { name: 'Временный пароль' });
+    await user.keyboard('{Escape}');
+    expect(screen.getByTestId('temp-password')).toBeInTheDocument();
+    await user.click(within(secret).getAllByRole('button', { name: 'Закрыть' }).at(-1) as HTMLElement); // footer; X disabled
+    expect(screen.queryByTestId('temp-password')).toBeNull();
+    expect(document.body.textContent).not.toContain('Tmp-Parol-1234567');
+    expect(JSON.stringify(client.getMutationCache().getAll().map((m) => m.state))).not.toContain('Tmp-Parol');
+  });
+
+  it('shows feedback when copying fails', async () => {
+    routes({ 'POST /admin/users': json({ user: { ...USERS[0], id: 9 }, temporary_password: 'Tmp-Parol-1234567' }, 201) });
+    const { user } = renderWithProviders(<UsersPage me={ME_ADMIN} />);
+    await user.click(await screen.findByRole('button', { name: 'Добавить пользователя' }));
+    const dialog = screen.getByRole('dialog', { name: 'Новый пользователь' });
+    await fillCreate(user, dialog);
+    await user.click(within(dialog).getByRole('button', { name: 'Создать' }));
+    const secret = await screen.findByRole('dialog', { name: 'Временный пароль' });
+    vi.spyOn(navigator.clipboard, 'writeText').mockRejectedValue(new Error('denied'));
+    await user.click(within(secret).getByRole('button', { name: 'Скопировать' }));
+    expect(await screen.findByText('Не удалось скопировать. Выделите пароль и скопируйте вручную.')).toBeInTheDocument();
+  });
+
+  it('requires the full name and locks the position on the own account', async () => {
+    routes();
+    const { user } = renderWithProviders(<UsersPage me={ME_ADMIN} />);
+    const dialog = await openUser(user, 'Азимов Бахтиёр');
+    expect(within(dialog).getByRole('combobox', { name: 'Должность' })).toBeDisabled();
+    await user.clear(within(dialog).getByLabelText('ФИО'));
+    await user.click(within(dialog).getByRole('button', { name: 'Сохранить' }));
+    expect(within(dialog).getByLabelText('ФИО')).toHaveFocus();
+    expect(within(dialog).getByLabelText('ФИО')).toHaveAttribute('aria-invalid', 'true');
+  });
+
+  it('limits search length and returns to page 1 immediately on typing', async () => {
+    routes();
+    const { user } = renderWithProviders(<UsersPage me={ME_ADMIN} />);
+    await screen.findByRole('table', { name: 'Пользователи' });
+    expect(screen.getByLabelText('Поиск')).toHaveAttribute('maxlength', '64');
+    await user.type(screen.getByLabelText('Поиск'), 'k');
+  });
+});

@@ -258,6 +258,8 @@ export const ru = {
   'users.tempTitle': 'Временный пароль',
   'users.tempNote': 'Пароль показывается один раз. Передайте его пользователю лично — при первом входе он задаст свой пароль и подключит 2FA.',
   'users.tempFor': 'Пользователь: {username}',
+  'users.positionsFailed': 'Не удалось загрузить список должностей',
+  'users.copyFailed': 'Не удалось скопировать. Выделите пароль и скопируйте вручную.',
 } as const satisfies Record<string, string>;
 
 export type RuKey = keyof typeof ru;

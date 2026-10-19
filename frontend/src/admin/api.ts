@@ -40,6 +40,7 @@ export function usePositions() {
     queryKey: adminKeys.positions,
     queryFn: ({ signal }) => api<PositionOut[]>('/admin/positions', { signal }),
     staleTime: 0,
+    meta: { silent: true }, // admin:users bilan 403 mumkin: dialog ichida xabar, global «Нет доступа» emas
   });
 }
 
@@ -64,6 +65,7 @@ export function useCreateUser() {
     mutationFn: (body: UserCreate) => api<UserCreated>('/admin/users', { method: 'POST', body }),
     onSuccess: invalidate,
     onError,
+    meta: { inline: true }, // xato dialog ichida, takroriy toast yo'q
   });
 }
 
@@ -75,6 +77,7 @@ export function useUpdateUser() {
       api<UserOut>(`/admin/users/${id}`, { method: 'PATCH', body }),
     onSuccess: invalidate,
     onError,
+    meta: { inline: true }, // xato dialog ichida, takroriy toast yo'q
   });
 }
 
@@ -86,6 +89,7 @@ export function useSetUserActive() {
       api<UserOut>(`/admin/users/${id}/${active ? 'unblock' : 'block'}`, { method: 'POST' }),
     onSuccess: invalidate,
     onError,
+    meta: { inline: true }, // xato dialog ichida, takroriy toast yo'q
   });
 }
 
@@ -97,6 +101,7 @@ export function useResetUserPassword() {
     mutationFn: (id: number) => api<TemporaryPassword>(`/admin/users/${id}/reset-password`, { method: 'POST' }),
     onSuccess: invalidate,
     onError,
+    meta: { inline: true }, // xato dialog ichida, takroriy toast yo'q
   });
 }
 
@@ -107,5 +112,6 @@ export function useResetUserMfa() {
     mutationFn: (id: number) => api<undefined>(`/admin/users/${id}/reset-2fa`, { method: 'POST' }),
     onSuccess: invalidate,
     onError,
+    meta: { inline: true }, // xato dialog ichida, takroriy toast yo'q
   });
 }

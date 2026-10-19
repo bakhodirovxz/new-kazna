@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import type { UserOut } from '../api/types';
 import { t } from '../i18n';
 import { formatDateTime } from '../i18n/format';
@@ -26,10 +26,6 @@ export default function UsersPage({ me }: AdminPageProps) {
   const positions = usePositions();
   const [dialog, setDialog] = useState<DialogState>(null);
   const [secret, setSecret] = useState<{ username: string; password: string } | null>(null);
-
-  useEffect(() => {
-    setPage(1);
-  }, [q]);
 
   const columns: Column<UserOut>[] = [
     {
@@ -78,7 +74,11 @@ export default function UsersPage({ me }: AdminPageProps) {
             label={t('users.search')}
             placeholder={t('users.searchPlaceholder')}
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            maxLength={64}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setPage(1);
+            }}
           />
           <span className="toolbar__grow" />
           <Button icon="plus" onClick={() => setDialog({ kind: 'create' })}>
@@ -106,6 +106,7 @@ export default function UsersPage({ me }: AdminPageProps) {
       {dialog?.kind === 'create' ? (
         <UserCreateDialog
           positions={positions.data ?? []}
+          positionsFailed={positions.isError}
           onClose={() => setDialog(null)}
           onCreated={(user, password) => {
             setDialog(null);
@@ -116,8 +117,9 @@ export default function UsersPage({ me }: AdminPageProps) {
       {dialog?.kind === 'edit' ? (
         <UserEditDialog
           me={me}
-          user={dialog.user}
+          user={users.data?.items.find((u) => u.id === dialog.user.id) ?? dialog.user}
           positions={positions.data ?? []}
+          positionsFailed={positions.isError}
           onClose={() => setDialog(null)}
           onTemporaryPassword={(username, password) => {
             setDialog(null);

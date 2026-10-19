@@ -1,4 +1,4 @@
-import { useId, useState, type FormEvent } from 'react';
+import { useEffect, useId, useRef, useState, type FormEvent } from 'react';
 import { isApiError } from '../api/client';
 import type { MeOut, PositionOut, UserOut } from '../api/types';
 import { t } from '../i18n';
@@ -11,6 +11,15 @@ import { Modal } from '../ui/Modal';
 import { useToast } from '../ui/Toast';
 import { useCreateUser, useResetUserMfa, useResetUserPassword, useSetUserActive, useUpdateUser } from './api';
 
+/** Birinchi noto'g'ri maydonga fokus (ekran o'qiydi), LoginPage/PasswordChangePage kabi. */
+function useFocusFirstInvalid(errors: object) {
+  const ref = useRef<HTMLFormElement>(null);
+  useEffect(() => {
+    ref.current?.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus();
+  }, [errors]);
+  return ref;
+}
+
 const USERNAME_RE = /^[a-z0-9._-]{3,64}$/;
 
 function positionOptions(positions: readonly PositionOut[], keepId?: number) {
@@ -21,17 +30,19 @@ function positionOptions(positions: readonly PositionOut[], keepId?: number) {
 
 interface CreateProps {
   positions: readonly PositionOut[];
+  positionsFailed?: boolean;
   onClose(): void;
   onCreated(user: UserOut, temporaryPassword: string): void;
 }
 
-export function UserCreateDialog({ positions, onClose, onCreated }: CreateProps) {
+export function UserCreateDialog({ positions, positionsFailed, onClose, onCreated }: CreateProps) {
   const formId = useId();
   const create = useCreateUser();
   const [username, setUsername] = useState('');
   const [fullName, setFullName] = useState('');
   const [positionId, setPositionId] = useState<string | null>(null);
   const [errors, setErrors] = useState<{ username?: string; fullName?: string; position?: string }>({});
+  const formRef = useFocusFirstInvalid(errors);
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
@@ -52,12 +63,21 @@ export function UserCreateDialog({ positions, onClose, onCreated }: CreateProps)
         },
         onError: (error) => {
           if (isApiError(error, 409, 'username_taken')) setErrors({ username: error.message });
+          else if (isApiError(error, 422)) {
+            const fields = Array.isArray(error.params.fields) ? error.params.fields : [];
+            const mapped: typeof errors = {};
+            if (fields.includes('username')) mapped.username = error.message;
+            if (fields.includes('full_name')) mapped.fullName = error.message;
+            if (fields.includes('position_id')) mapped.position = error.message;
+            setErrors(mapped);
+          }
         },
       },
     );
   };
 
-  const otherError = create.error && !isApiError(create.error, 409, 'username_taken') ? create.error : null;
+  const handled = isApiError(create.error, 409, 'username_taken') || (isApiError(create.error, 422) && Object.keys(errors).length > 0);
+  const otherError = create.error && !handled ? create.error : null;
 
   return (
     <Modal
@@ -75,9 +95,10 @@ export function UserCreateDialog({ positions, onClose, onCreated }: CreateProps)
         </>
       }
     >
-      <form id={formId} className="form-grid" noValidate onSubmit={submit}>
+      <form id={formId} ref={formRef} className="form-grid" noValidate onSubmit={submit}>
         <div className="span-2">
           <FormError error={otherError} />
+          {positionsFailed ? <p className="note">{t('users.positionsFailed')}</p> : null}
         </div>
         <TextInput
           label={t('users.username')}
@@ -86,11 +107,12 @@ export function UserCreateDialog({ positions, onClose, onCreated }: CreateProps)
           autoCapitalize="none"
           spellCheck={false}
           required
+          maxLength={64}
           value={username}
           error={errors.username}
           onChange={(e) => setUsername(e.target.value)}
         />
-        <TextInput label={t('users.fullName')} required value={fullName} error={errors.fullName} onChange={(e) => setFullName(e.target.value)} />
+        <TextInput label={t('users.fullName')} required maxLength={200} value={fullName} error={errors.fullName} onChange={(e) => setFullName(e.target.value)} />
         <div className="span-2">
           <Combobox
             label={t('users.position')}
@@ -113,11 +135,12 @@ interface EditProps {
   me: MeOut;
   user: UserOut;
   positions: readonly PositionOut[];
+  positionsFailed?: boolean;
   onClose(): void;
   onTemporaryPassword(username: string, password: string): void;
 }
 
-export function UserEditDialog({ me, user, positions, onClose, onTemporaryPassword }: EditProps) {
+export function UserEditDialog({ me, user, positions, positionsFailed, onClose, onTemporaryPassword }: EditProps) {
   const formId = useId();
   const toast = useToast();
   const update = useUpdateUser();
@@ -127,6 +150,7 @@ export function UserEditDialog({ me, user, positions, onClose, onTemporaryPasswo
   const [fullName, setFullName] = useState(user.full_name);
   const [positionId, setPositionId] = useState<string | null>(String(user.position.id));
   const [nameError, setNameError] = useState<string | null>(null);
+  const formRef = useFocusFirstInvalid({ nameError });
   const [danger, setDanger] = useState<Danger | null>(null);
   const self = user.id === me.id;
 
@@ -143,6 +167,11 @@ export function UserEditDialog({ me, user, positions, onClose, onTemporaryPasswo
         onSuccess: () => {
           toast.show(t('users.saved'), 'success');
           onClose();
+        },
+        onError: (error) => {
+          if (isApiError(error, 422) && Array.isArray(error.params.fields) && error.params.fields.includes('full_name')) {
+            setNameError(error.message);
+          }
         },
       },
     );
@@ -215,15 +244,16 @@ export function UserEditDialog({ me, user, positions, onClose, onTemporaryPasswo
           </>
         }
       >
-        <form id={formId} className="form-grid" noValidate onSubmit={save}>
+        <form id={formId} ref={formRef} className="form-grid" noValidate onSubmit={save}>
           <div className="span-2">
-            <FormError error={update.error} />
+            <FormError error={update.error && !nameError ? update.error : null} />
+            {positionsFailed ? <p className="note">{t('users.positionsFailed')}</p> : null}
           </div>
           <div className="span-2">
-            <TextInput label={t('users.fullName')} value={fullName} error={nameError} onChange={(e) => setFullName(e.target.value)} />
+            <TextInput label={t('users.fullName')} required maxLength={200} value={fullName} error={nameError} onChange={(e) => setFullName(e.target.value)} />
           </div>
           <div className="span-2">
-            <Combobox label={t('users.position')} options={positionOptions(positions, user.position.id)} value={positionId} onChange={setPositionId} />
+            <Combobox label={t('users.position')} options={positionOptions(positions, user.position.id)} value={positionId} onChange={setPositionId} disabled={self} />
           </div>
         </form>
         <section className="danger-zone" aria-labelledby={`${formId}-danger`}>
@@ -268,6 +298,7 @@ export function UserEditDialog({ me, user, positions, onClose, onTemporaryPasswo
 }
 
 export function TemporaryPasswordDialog({ username, password, onClose }: { username: string; password: string; onClose(): void }) {
+  const toast = useToast();
   const [copied, setCopied] = useState(false);
   const copy = async () => {
     try {
@@ -275,6 +306,7 @@ export function TemporaryPasswordDialog({ username, password, onClose }: { usern
       setCopied(true);
     } catch {
       setCopied(false);
+      toast.show(t('users.copyFailed'), 'error');
     }
   };
   return (
@@ -284,6 +316,7 @@ export function TemporaryPasswordDialog({ username, password, onClose }: { usern
       title={t('users.tempTitle')}
       note={t('users.tempFor', { username })}
       size="sm"
+      dismissible={false} // bir martalik sir Esc/fon bosilishi bilan yo'qolmasin
       footer={<Button onClick={onClose}>{t('common.close')}</Button>}
     >
       <p className="notice">

@@ -1,6 +1,11 @@
 """Staging maqsadlari reyestri: har dwh jadvali uchun ustunlar, idempotentlik kaliti,
 o'lcham kodlarini id'ga aylantirish (lookup), SCD-2 va shifrlanadigan maydonlar.
 
+DIQQAT: o'lchov `code` ustuni OCHIQ matn sifatida saqlanadi, shifrlash AAD'iga kiradi
+("{schema}.{table}.{column}:{pk}") va topilmagan lookup xatosida `etl_error.message`ga
+yoziladi — shuning uchun `code` hech qachon INN, hisob raqami yoki boshqa sezgir qiymat
+bo'lmasligi shart (ular faqat `*_enc`/`*_bidx` ustunlarida).
+
 Barcha SQL identifikatorlari shu fayldan olinadi (whitelist) — tashqi kiritishdan emas.
 Keyingi rejalar yangi fakt qo'shganda faqat shu yerga Target qo'shadi.
 

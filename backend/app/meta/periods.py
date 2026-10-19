@@ -45,4 +45,4 @@ def resolve_period(code: str, today: date) -> Period:
     for p in build_periods(today):
         if p.code == code:
             return p
-    raise ValidationFailed(field="per")
+    raise ValidationFailed(fields=["per"])

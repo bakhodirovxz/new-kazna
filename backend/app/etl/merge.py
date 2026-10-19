@@ -26,8 +26,10 @@ qayta skan bor edi). Bosqichlar (barchasi bitta SQL ichida, CTE zanjiri):
    fallback'li lookup (masalan item_id) hech qachon qatorni bloklamaydi — alohida
    `warning`-darajali ustunlarda kuzatiladi.
 
-Xato xabarlarida HECH QACHON xom qiymat yo'q (faqat ustun/cheklov nomi) — sezgir maydonlar esa
-umuman staging'ga tushmaydi (`app.etl.staging.protect()`).
+Xato xabarlarida xom qiymat yo'q (faqat ustun/cheklov nomi), ISTISNO: topilmagan lookup kodlari
+(filial/statya/o'lchov `code`) `core.etl_error.message`ga ECHO qilinadi ("Не найден справочник
+...: <kod>") — shu sababli o'lchov `code` hech qachon INN/hisob raqami bo'lmasligi shart
+(targets.py). Sezgir maydonlar esa umuman staging'ga tushmaydi (`app.etl.staging.protect()`).
 """
 
 from __future__ import annotations

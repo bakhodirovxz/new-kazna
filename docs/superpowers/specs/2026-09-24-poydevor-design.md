@@ -136,7 +136,7 @@ DB rollari:
 | Rol | Huquq |
 |---|---|
 | `ugk_migrator` | DDL; faqat migratsiya vaqtida ishlatiladi |
-| `ugk_app` | `core` (cheklangan), `pub` SELECT; RLS majburiy; `BYPASSRLS` yo'q; `audit_log` ga faqat INSERT |
+| `ugk_app` | `core` (cheklangan), `pub` SELECT, shuningdek `mart.agg_*`, `dwh.dim_branch`, `dwh.dim_item` ga to'g'ridan-to'g'ri SELECT (`pub` view'lari `security_invoker` — ular chaqiruvchi roli huquqi bilan ishlaydi, shuning uchun bu jadvallarga ham SELECT kerak; RLS FORCE baribir qo'llanadi); RLS majburiy; `BYPASSRLS` yo'q; `audit_log` ga faqat INSERT; `core.builds`da faqat published<->superseded o'tishlari (trigger) |
 | `ugk_etl` | `stg`, `dwh`, `mart` yozish; `core.etl_*` yozish; `core.data_version` UPDATE |
 | `ugk_readonly` | ixtiyoriy, tekshiruvchilar uchun `pub` SELECT, RLS bilan |
 
@@ -189,7 +189,7 @@ host hardening qo'llanmasi; SBOM.
 | Sxema | Mazmun |
 |---|---|
 | `core` | users, positions, roles, permissions, sessions, audit_log, crypto_keys, settings, alert_rules, fin_assumptions, etl_run, etl_step, etl_error, data_version, integration_credentials |
-| `stg` | manbadan xom yuklangan ma'lumot: umumiy `stg.rows` (jsonb, UNLOGGED) + `stg.batch`, har yuklash `load_id` bilan; sezgir maydonlar staging'dan oldin shifrlanadi |
+| `stg` | manbadan xom yuklangan ma'lumot: umumiy `stg.rows` (jsonb, UNLOGGED) + `stg.batch (load_id, target, …)` (`doc_type` o'rniga `target`: faktlarda `doc_type` manba hujjat turini bildiradi), har yuklash `load_id` bilan; sezgir maydonlar staging'dan oldin shifrlanadi |
 | `dwh` | yulduz sxema: `dim_*`, `fact_*`, `fx_rate` |
 | `mart` | oylik agregatlar (`build_id` bilan) |
 | `pub` | UI o'qiydigan view'lar (faqat aktiv build) |
@@ -262,6 +262,7 @@ Worker har kuni: kelgusi 3 oy partitsiyalarini oldindan yaratadi; 5 yildan eski 
 - `core.fin_assumptions (scenario, year, key, value, version, updated_by)` — 4 ssenariy.
 - `core.settings` — tizim sozlamalari (freshness chegarasi 6 soat va h.k.).
 Har o'zgarish yangi `version` qatori + audit.
+- Ongli chetlanish: `core.alert_rules` — faqat o'qish va versiyali tahrirlash (qiymat, operator, daraja, yoqilgan/o'chirilgan); yangi qoida yaratish/o'chirish yo'q (har qoidaning metrikasi kodda hisoblanadi, "o'chirish" = `enabled=false`).
 
 ## 5. ETL karkasi
 

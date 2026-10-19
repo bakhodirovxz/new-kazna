@@ -1,3 +1,4 @@
+from datetime import timedelta
 from decimal import Decimal
 
 import pytest
@@ -5,6 +6,7 @@ from sqlalchemy import text
 from sqlalchemy.exc import ProgrammingError
 
 from app.core.db import get_engine, new_session
+from app.dwh.dates import today_tashkent
 from app.dwh.reference import (
     ALERT_RULES,
     DEFAULT_SETTINGS,
@@ -71,6 +73,15 @@ def test_settings_defaults_and_validation() -> None:
         validate_setting("freshness.max_age_hours", True)
     with pytest.raises(KeyError):
         validate_setting("no.such", 1)
+    # M1: retention.fact_years DB floor (5) va etl.history_start chegaralari.
+    assert validate_setting("retention.fact_years", 5) == 5
+    for bad_years in (1, 4):
+        with pytest.raises(ValueError):
+            validate_setting("retention.fact_years", bad_years)
+    assert validate_setting("etl.history_start", "2015-01-01") == "2015-01-01"
+    for bad_date in ("2014-12-31", (today_tashkent() + timedelta(days=1)).isoformat()):
+        with pytest.raises(ValueError):
+            validate_setting("etl.history_start", bad_date)
     assert set(DEFAULT_SETTINGS) == {
         "freshness.max_age_hours", "etl.history_start", "etl.synthetic_cron", "builds.keep",
         "retention.fact_years", "retention.audit_months", "partitions.months_ahead",

@@ -149,5 +149,6 @@ def test_resolve_period() -> None:
     assert (q3.date_from, q3.date_to) == (date(2026, 7, 1), date(2026, 9, 24))
     assert resolve_period("ytd", date(2026, 9, 24)).date_to != resolve_period(
         "ytd", date(2026, 10, 1)).date_to  # oy almashganda kesh kaliti o'zgaradi
-    with pytest.raises(ValidationFailed):
+    with pytest.raises(ValidationFailed) as exc:
         resolve_period("m12", date(2026, 9, 24))  # hali kelmagan oy
+    assert exc.value.params["fields"] == ["per"]  # T12: uy formati

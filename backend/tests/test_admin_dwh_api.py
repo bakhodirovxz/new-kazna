@@ -67,6 +67,13 @@ def test_trigger_unknown_source_or_mode_is_422(client: TestClient) -> None:
 
 
 @pytest.mark.usefixtures("admin")
+def test_runs_list_page_upper_bound_is_422(client: TestClient) -> None:
+    """T13: page cheksiz bo'lsa OFFSET katta qiymatda DB'ni yuklaydi — le=100000."""
+    r = client.get("/api/v1/admin/etl/runs?page=100001")
+    assert r.status_code == 422
+
+
+@pytest.mark.usefixtures("admin")
 def test_runs_list_and_detail(client: TestClient, synthetic_run: RunResult) -> None:
     page = client.get("/api/v1/admin/etl/runs", params={"page_size": 500}).json()
     assert synthetic_run.run_id in [r["id"] for r in page["items"]]

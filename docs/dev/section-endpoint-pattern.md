@@ -23,7 +23,9 @@ def svod(
 
 Qoidalar:
 1. **Faqat `pub.*` view'lar.** Servis `dwh`/`mart` jadvallarini to'g'ridan-to'g'ri o'qimaydi; view'lar
-   faqat aktiv build'ni ko'rsatadi va `security_invoker = true` — DB RLS (2-qavat) ishlaydi.
+   faqat aktiv build'ni ko'rsatadi. `security_invoker = true` view'ni chaqiruvchi roli huquqi bilan ishlatadi
+   (shu sabab `ugk_app`ga asosiy jadvallarga ham SELECT berilgan); RLS (2-qavat) asosiy jadvallardagi
+   `FORCE ROW LEVEL SECURITY` + policy tufayli ishlaydi.
 2. **Faktlarga so'rov yo'q** (TZ 9): yangi ko'rsatkich kerak bo'lsa — `app/dwh/aggregates.py` ga
    `register(Aggregate(...))` + migratsiyada `mart.agg_*` jadvali va `pub.*` view.
 3. **Kesh kaliti** `ugk:v{data_version}:{endpoint}:{scope_hash}:{filters_hash}` — `endpoint` nomi

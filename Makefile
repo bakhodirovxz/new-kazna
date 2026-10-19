@@ -43,6 +43,8 @@ lint:
 typecheck:
 	$(TEST) mypy app
 
+MODE ?= incremental
+
 etl-run: ## make etl-run SOURCE=synthetic MODE=full
 	$(COMPOSE) exec worker python -m app.cli etl-run --source "$(SOURCE)" --mode "$(MODE)"
 

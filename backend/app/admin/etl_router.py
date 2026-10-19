@@ -40,7 +40,7 @@ _RUN_COLS = ("id, source, mode, status, started_at, finished_at, window_from, wi
 def list_runs(
     ctx: EtlAdmin,
     db: DB,
-    page: Annotated[int, Query(ge=1)] = 1,
+    page: Annotated[int, Query(ge=1, le=100000)] = 1,
     page_size: Annotated[int, Query(ge=1, le=500)] = 50,
 ) -> Page[EtlRunOut]:
     total = db.execute(text("SELECT count(*) FROM core.etl_run")).scalar_one()

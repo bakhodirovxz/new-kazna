@@ -19,6 +19,8 @@ from pydantic import ValidationError as PydanticValidationError
 from sqlalchemy import text
 from sqlalchemy.engine import Connection
 
+from app.dwh.dates import today_tashkent
+
 
 def _cron(value: str) -> str:
     # A4.2: aniq timezone="UTC" — tzlocal qidiruvisiz (filterwarnings = error::DeprecationWarning
@@ -30,6 +32,13 @@ def _cron(value: str) -> str:
 
 def _iso_date(value: str) -> str:
     return date.fromisoformat(value).isoformat()
+
+
+def _history_start(value: str) -> str:
+    # M1: kelajak sanasi bo'sh oyna / IndexError beradi; 2015 dan oldin ma'lumot yo'q.
+    if not date(2015, 1, 1) <= date.fromisoformat(value) <= today_tashkent():
+        raise ValueError("etl.history_start: 2015-01-01 va bugun oralig'ida bo'lishi kerak")
+    return _iso_date(value)
 
 
 DEFAULT_SETTINGS: dict[str, Any] = {
@@ -44,10 +53,10 @@ DEFAULT_SETTINGS: dict[str, Any] = {
 
 SETTING_TYPES: dict[str, TypeAdapter[Any]] = {
     "freshness.max_age_hours": TypeAdapter(Annotated[int, Field(strict=True, ge=1, le=168)]),
-    "etl.history_start": TypeAdapter(Annotated[str, AfterValidator(_iso_date)]),
+    "etl.history_start": TypeAdapter(Annotated[str, AfterValidator(_history_start)]),
     "etl.synthetic_cron": TypeAdapter(Annotated[str, AfterValidator(_cron)]),
     "builds.keep": TypeAdapter(Annotated[int, Field(strict=True, ge=2, le=10)]),
-    "retention.fact_years": TypeAdapter(Annotated[int, Field(strict=True, ge=1, le=10)]),
+    "retention.fact_years": TypeAdapter(Annotated[int, Field(strict=True, ge=5, le=10)]),
     "retention.audit_months": TypeAdapter(Annotated[int, Field(strict=True, ge=12, le=120)]),
     "partitions.months_ahead": TypeAdapter(Annotated[int, Field(strict=True, ge=1, le=12)]),
 }

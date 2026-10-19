@@ -134,8 +134,10 @@ def upgrade() -> None:
         "CREATE UNIQUE INDEX dim_branch_version_current ON dwh.dim_branch_version (branch_id) "
         "WHERE is_current"
     )
+    # placeholder — real INNs are loaded from 1C. `999000NNN`: reserved synthetic prefix
+    # (999…), not a valid assigned INN range.
     values = ", ".join(
-        _row((bid, code, name, short, f"2011{bid:05d}", kind, cap, lat, lon, bid))
+        _row((bid, code, name, short, f"999000{bid:03d}", kind, cap, lat, lon, bid))
         for bid, code, name, short, kind, cap, lat, lon in BRANCHES
     )
     op.execute(

@@ -1,3 +1,4 @@
+import re
 from collections import defaultdict
 from collections.abc import Mapping
 from datetime import date
@@ -139,3 +140,87 @@ def test_incremental_rerun_changes_nothing(synthetic_run: RunResult) -> None:
     assert run.window_from == date(2026, 8, 10)
     assert run.rows_upserted == 0
     assert date(2024, 1, 1) == HISTORY_START
+
+
+def _extract(as_of: date, window: Window, seed: int = 7) -> list[tuple[str, dict[str, Any]]]:
+    sink = CollectSink()
+    SyntheticConnector(seed=seed, as_of=as_of).extract(window, sink)
+    return sink.rows
+
+
+def test_month_rollover_changes_no_closed_period_row() -> None:
+    # I1: as_of 24 sentyabr -> 5 oktyabr; oyna yopiq oylar (2024-01-01..2026-06-30) — BARCHA
+    # oilalar (o'lchovlar ham: ular as_of'ga bog'liq emas) ayni bir xil bo'lishi shart.
+    window = Window(date(2024, 1, 1), date(2026, 6, 30))
+    before = _extract(date(2026, 9, 24), window)
+    after = _extract(date(2026, 10, 5), window)
+    assert {t for t, _ in before} >= {"fact_debt", "fact_payment_order", "fact_balance",
+                                      "fact_cashflow", "fx_rate", "dim_contract"}
+    assert before == after
+
+
+def test_current_month_orders_never_move_between_days() -> None:
+    window = Window(date(2026, 9, 1), date(2026, 9, 30))
+    early = {r["src_id"]: r["date_id"] for t, r in _extract(date(2026, 9, 10), window)
+             if t == "fact_payment_order"}
+    late = {r["src_id"]: r["date_id"] for t, r in _extract(date(2026, 9, 24), window)
+            if t == "fact_payment_order"}
+    assert early and len(late) > len(early)
+    assert all(late[k] == v for k, v in early.items())
+
+
+def test_no_negative_account_balances_across_seeds() -> None:
+    for seed in (1, 2, 3, 7, 11, 42):
+        for as_of in (TEST_AS_OF, date(2026, 9, 2), date(2025, 3, 3)):
+            model = SynthModel(seed, as_of)
+            assert min(row.balance for row in model.cash.balances) >= 0, (seed, as_of)
+
+
+def test_mid_month_window_still_carries_opening_balance() -> None:
+    rows = _extract(TEST_AS_OF, Window(date(2026, 8, 10), TEST_AS_OF))
+    assert 20260731 in {r["date_id"] for t, r in rows if t == "fact_balance"}
+
+
+def test_fx_rates_stop_at_as_of() -> None:
+    rows = _extract(date(2026, 9, 24), Window(date(2026, 9, 20), date(2026, 9, 30)))
+    assert max(r["date_id"] for t, r in rows if t == "fx_rate") == 20260924
+
+
+def test_synthetic_identifiers_use_reserved_prefixes() -> None:
+    rows = _extract(TEST_AS_OF, Window(date(2026, 9, 1), TEST_AS_OF))
+    inns = [r["inn"] for t, r in rows if t in ("dim_branch", "dim_counterparty")]
+    accounts = [r["account_number"] for t, r in rows if t == "dim_bank"]
+    assert len(inns) == 16 + 16 and len(accounts) == 80 and len(set(accounts)) == 80
+    assert all(re.fullmatch(r"999\d{6}", v) for v in inns)
+    assert all(re.fullmatch(r"99999\d{15}", v) for v in accounts)
+
+
+def test_control_totals_match_staged_cashflow() -> None:
+    connector = SyntheticConnector(seed=7, as_of=TEST_AS_OF)
+    window = Window(date(2025, 1, 1), TEST_AS_OF)
+    sink = CollectSink()
+    connector.extract(window, sink)
+    staged: dict[int, Decimal] = defaultdict(Decimal)
+    for target, row in sink.rows:
+        if target == "fact_cashflow":
+            staged[row["date_id"] // 100] += row["amount"]
+    totals = connector.control_totals(window)
+    assert totals is not None and dict(totals.cashflow_by_month) == dict(staged)
+
+
+def test_sensitive_dim_columns_are_encrypted(synthetic_run: RunResult) -> None:
+    with etl_transaction() as conn:
+        banks = conn.execute(text(
+            "SELECT account_enc, account_bidx FROM dwh.dim_bank WHERE src_system = 'synthetic'"
+        )).all()
+    assert len(banks) == 80
+    assert all(enc is not None and bidx is not None for enc, bidx in banks)
+    assert all(not bytes(enc).startswith(b"99999") and not re.search(rb"99999\d{15}", bytes(enc))
+               for enc, _ in banks)
+
+
+def test_published_synthetic_activates_its_build(published_synthetic: int) -> None:
+    with etl_transaction() as conn:
+        active = conn.execute(
+            text("SELECT active_build_id FROM core.data_version WHERE id = 1")).scalar_one()
+    assert active == published_synthetic

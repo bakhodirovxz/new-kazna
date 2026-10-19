@@ -28,8 +28,10 @@ def generate(model: SynthModel, window: Window, sink: StagingSink) -> dict[str, 
         for day in _snapshot_days(model, c):
             if not window.contains(day):
                 continue
-            months_left = (model.as_of.year - day.year) * 12 + model.as_of.month - day.month
-            outstanding = float(c.amount) * (1 + 0.025 * months_left)  # prototip debAt()
+            # Prototip debAt(): eski kesim kattaroq. Mos yozuv as_of'ga EMAS, shartnoma
+            # tugash oyiga bog'langan — kesim (seed, oy) ning sof funksiyasi.
+            months_left = max(0, (c.end_date.year - day.year) * 12 + c.end_date.month - day.month)
+            outstanding = float(c.amount) * (1 + 0.025 * months_left)
             overdue_days = (day - c.due_date).days if c.late and day > c.due_date else 0
             overdue = outstanding * c.overdue_ratio if overdue_days else 0.0
             sink.add("fact_debt", {

@@ -1,7 +1,6 @@
 """Umumiy fixture'lar. Testlar HAQIQIY PostgreSQL 16 va Redis'ga qarshi ishlaydi."""
 
 from collections.abc import Callable, Iterator
-from datetime import date
 
 import pytest
 import redis as redis_lib
@@ -145,14 +144,26 @@ def synthetic_run() -> RunResult:
 
 
 @pytest.fixture
-def published_synthetic(synthetic_run: RunResult) -> int:
+def published_synthetic(synthetic_run: RunResult) -> Iterator[int]:
     """Aktiv build'da sintetik ma'lumot bo'lishini kafolatlaydi (boshqa testlar bo'sh
-    build publish qilgan bo'lishi mumkin)."""
+    build publish qilgan bo'lishi mumkin).
+
+    Yon ta'sir: yangi build publish qilinadi (`core.builds`, `core.data_version`).
+    Test tugagach oldingi aktiv build (agar hali mavjud bo'lsa) qayta aktivlanadi."""
+    from app.core.errors import ConflictError
+    from app.etl.synthetic.model import HISTORY_START
     from tests.etl_helpers import TEST_AS_OF
 
     with etl_transaction() as conn:
+        previous = builds.active_build(conn)
         build_id = builds.create_build(conn, synthetic_run.run_id)
-        build_all(conn, build_id, BuildParams(as_of=TEST_AS_OF, date_from=date(2024, 1, 1)))
+        build_all(conn, build_id, BuildParams(as_of=TEST_AS_OF, date_from=HISTORY_START))
         builds.mark_ready(conn, build_id)
         builds.publish(conn, build_id, keep=3)
-    return build_id
+    yield build_id
+    if previous is not None:
+        try:
+            with etl_transaction() as conn:
+                builds.rollback(conn, previous)
+        except ConflictError:
+            pass  # oldingi build prune qilingan — qayta aktivlash mumkin emas

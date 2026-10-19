@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import timedelta
 
-from app.dwh.dates import date_id
+from app.dwh.dates import date_id, month_start
 from app.etl.synthetic.model import SynthModel
 from app.etl.synthetic.reference import BRANCH_BY_ID
 from app.etl.types import StagingSink, Window
@@ -24,8 +24,9 @@ def generate(model: SynthModel, window: Window, sink: StagingSink) -> dict[str, 
             "contract_code": p.contract_code, "bank_code": f"ACC-{p.branch_id:02d}-{p.bank + 1}",
         })
         counts["fact_cashflow"] += 1
-    # Oyna boshidagi ochilish qoldig'i ham kerak — bir kun oldingi qatorlar ham beriladi.
-    first = window.date_from - timedelta(days=1)
+    # Oyna boshlangan OY uchun ochilish qoldig'i kerak (sifat tekshiruvi): oldingi oy
+    # oxiridan boshlab beriladi (oyna 1-kundan boshlansa u date_from − 1 kun bilan bir xil).
+    first = month_start(window.date_from) - timedelta(days=1)
     for row in cash.balances:
         if not first <= row.day <= window.date_to:
             continue

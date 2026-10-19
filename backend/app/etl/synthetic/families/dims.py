@@ -1,4 +1,13 @@
-"""Barcha o'lchovlar (oyna ularga ta'sir qilmaydi — har yuklashda to'liq)."""
+"""Barcha o'lchovlar (oyna ularga ta'sir qilmaydi — har yuklashda to'liq).
+
+Sintetik identifikatorlar haqiqiyisi bilan adashtirilmasligi shart (reserved synthetic
+prefix — haqiqiy tayinlangan oraliq EMAS): INN `999…` (9 raqam; filiallar `999000NNN`,
+kontragentlar `999` + 6 raqamli hisoblagich), bank hisobi `99999000…` (20 raqam, `99999` —
+mavjud bo'lmagan balans hisobi kodi). Kontragent/bank NOMLARI prototipdagi kabi real
+muassasalarga o'xshaydi — sintetik manba (`src_system = 'synthetic'`) INN/hisob bo'yicha
+qidiruvlarga (blind-index) kirmaydi: bugungi kunda bidx bo'yicha qidiruv mavjud emas
+(faqat merge'dagi o'zgarish aniqlash), kelajakda qo'shilsa `src_system <> 'synthetic'`
+bilan filtrlansin."""
 
 from __future__ import annotations
 
@@ -36,7 +45,7 @@ def generate(model: SynthModel, window: Window, sink: StagingSink) -> dict[str, 
         counts[target] = len(rows)
 
     emit("dim_branch", [
-        {"code": b.code, "name": b.name, "short_name": b.short, "inn": f"2011{b.id:05d}",
+        {"code": b.code, "name": b.name, "short_name": b.short, "inn": f"999000{b.id:03d}",
          "kind": b.kind, "capacity_mw": b.capacity, "lat": b.lat, "lon": b.lon,
          "sort_order": b.id}
         for b in BRANCHES
@@ -49,13 +58,14 @@ def generate(model: SynthModel, window: Window, sink: StagingSink) -> dict[str, 
     counterparties = [(c, n, "supplier") for c, n in zip(SUPPLIER_CODES, SUPPLIERS, strict=True)]
     counterparties += list(OTHER_COUNTERPARTIES)
     emit("dim_counterparty", [
-        {"code": code, "name": name, "kind": kind, "inn": f"{300000000 + n * 7919}"}
+        {"code": code, "name": name, "kind": kind, "inn": f"999{n:06d}"}
         for n, (code, name, kind) in enumerate(counterparties, start=1)
     ])
     emit("dim_bank", [
         {"code": f"ACC-{b.id:02d}-{k + 1}", "bank_name": bank, "currency": "UZS",
-         "account_number": f"20210000{b.id:02d}{k + 1}{(b.id * 7 + k) * 13:09d}"}
-        for b in BRANCHES for k, bank in enumerate(BANKS)
+         "account_number": f"99999000{n:012d}"}
+        for n, (b, k, bank) in enumerate(
+            ((b, k, bank) for b in BRANCHES for k, bank in enumerate(BANKS)), start=1)
     ])
     emit("dim_nomenclature", [
         {"code": f"NOM-{n:03d}", "name": name, "category": STOCK_CATEGORIES[cat], "unit": unit,

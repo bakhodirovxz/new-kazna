@@ -31,6 +31,7 @@ from app.etl.synthetic.rng import rnd
 
 HISTORY_START = date(2024, 1, 1)
 CONTRACT_EPOCH = date(2024, 1, 1)  # shartnoma sanalari as_of'ga bog'liq bo'lmasligi uchun
+FLOOR_HORIZON = date(2035, 12, 31)  # ochilish qoldig'i pasti hisoblanadigan qat'iy gorizont
 YEAR_FACTOR = {2024: 0.82, 2025: 0.91}  # 2026 = 1.0 (prototip "2025" ≈ 0,86–0,96)
 
 
@@ -176,20 +177,48 @@ class SynthModel:
                         if c.branch_id == branch.id and c.kind == "payable"]
             for month in self.months():
                 ym = month_id(month)
-                factor = YEAR_FACTOR.get(month.year, 1.0)
-                for item in (*INCOME_ITEMS, *EXPENSE_ITEMS):
-                    item_share = share(branch, item.hq_share)
-                    if item_share <= 0:
-                        continue
-                    r = rnd(self.seed, "amt", branch.id, item.code, ym)
-                    amount = (item.base * item_share * _season(self.seed, item, ym) * factor
-                              * r.uniform(0.9, 1.1))
-                    if amount < 1:
-                        continue
+                for item, amount in self._month_amounts(branch, month):
                     full[(branch.id, ym, item.code)] = amount
                     postings.extend(self._split(branch, item, month, amount, payables))
         postings.sort(key=lambda p: (p.day, p.src_id))
         return CashModel(postings, full, self._balances(postings))
+
+    def _month_amounts(self, branch: BranchRef, month: date) -> list[tuple[CashItem, float]]:
+        """Filial-oy to'liq summalari — as_of'dan butunlay mustaqil (sof funksiya)."""
+        ym = month_id(month)
+        factor = YEAR_FACTOR.get(month.year, 1.0)
+        out: list[tuple[CashItem, float]] = []
+        for item in (*INCOME_ITEMS, *EXPENSE_ITEMS):
+            item_share = share(branch, item.hq_share)
+            if item_share <= 0:
+                continue
+            r = rnd(self.seed, "amt", branch.id, item.code, ym)
+            amount = (item.base * item_share * _season(self.seed, item, ym) * factor
+                      * r.uniform(0.9, 1.1))
+            if amount >= 1:
+                out.append((item, amount))
+        return out
+
+    def _opening_floor(self, branch: BranchRef) -> Decimal:
+        """Filial qoldig'i hech qachon manfiy bo'lmasligi uchun minimal ochilish qoldig'i.
+
+        Qat'iy gorizont (`FLOOR_HORIZON`) bo'yicha eng chuqur kumulyativ kamayish + bitta
+        oy chiqimi zaxirasi. Gorizont as_of'ga bog'liq emas — shuning uchun o'tgan
+        qoldiqlar as_of o'zgarganda siljimaydi."""
+        running = low = peak_out = 0.0
+        month = month_start(self.history_start)
+        while month <= FLOOR_HORIZON:
+            inflow = outflow = 0.0
+            for item, amount in self._month_amounts(branch, month):
+                if item.direction == "in":
+                    inflow += amount
+                else:
+                    outflow += amount
+            running += inflow - outflow - 0.004 * (inflow + outflow)  # «Разница»ning eng yomoni
+            low = min(low, running)
+            peak_out = max(peak_out, outflow)
+            month = add_months(month, 1)
+        return money(-low + peak_out)
 
     def _split(self, branch: BranchRef, item: CashItem, month: date, amount: float,
                payables: list[ContractRef]) -> list[Posting]:
@@ -217,29 +246,39 @@ class SynthModel:
         return out
 
     def _balances(self, postings: list[Posting]) -> list[BalanceRow]:
-        net: dict[tuple[int, int, int], Decimal] = defaultdict(Decimal)
+        """Filial jami qoldig'i oy sayin: ochilish + ЧДП + «Разница»; hisoblarga
+        `jami × bank_share` bo'linadi (prototip), shuning uchun hech bir hisob manfiy emas
+        va filial bo'yicha balans tengligi saqlanadi. Ochilish qatori har doim
+        `history_start - 1 kun`da (oyna 1-kundan boshlansa sifat tekshiruvi uni ko'radi)."""
+        net: dict[tuple[int, int], Decimal] = defaultdict(Decimal)
         turnover: dict[tuple[int, int], Decimal] = defaultdict(Decimal)
         for p in postings:
             ym = month_id(p.day)
-            net[(p.branch_id, p.bank, ym)] += p.amount if p.direction == "in" else -p.amount
+            net[(p.branch_id, ym)] += p.amount if p.direction == "in" else -p.amount
             turnover[(p.branch_id, ym)] += p.amount
         opening_day = self.history_start - timedelta(days=1)
         rows: list[BalanceRow] = []
         for branch in BRANCHES:
             r0 = rnd(self.seed, "open", branch.id)
-            open0 = (r0.uniform(820000, 900000) if branch.id == HQ_ID
-                     else r0.uniform(18000, 32000) * branch.weight)
-            shares = self.bank_shares[branch.id]
-            balances = [money(open0 * s) for s in shares]
-            main = max(range(len(shares)), key=shares.__getitem__)
-            rows += [BalanceRow(branch.id, k, opening_day, balances[k]) for k in range(len(BANKS))]
+            open0 = money(r0.uniform(820000, 900000) if branch.id == HQ_ID
+                          else r0.uniform(18000, 32000) * branch.weight)
+            deltas: list[tuple[date, Decimal]] = []
             for month in self.months():
                 ym = month_id(month)
-                for k in range(len(BANKS)):
-                    balances[k] += net.get((branch.id, k, ym), Decimal(0))
                 rd = rnd(self.seed, "diff", branch.id, ym)
                 ratio = -rd.uniform(0, 0.004) if rd.random() < 0.75 else rd.uniform(0, 0.0015)
-                balances[main] += money(float(turnover.get((branch.id, ym), Decimal(0))) * ratio)
-                end = self.period_end(month)
-                rows += [BalanceRow(branch.id, k, end, balances[k]) for k in range(len(BANKS))]
+                delta = net.get((branch.id, ym), Decimal(0)) + money(
+                    float(turnover.get((branch.id, ym), Decimal(0))) * ratio)
+                deltas.append((self.period_end(month), delta))
+            total = max(open0, self._opening_floor(branch))
+            rows += self._split_balance(branch.id, opening_day, total)
+            for day, delta in deltas:
+                total += delta
+                rows += self._split_balance(branch.id, day, total)
         return rows
+
+    def _split_balance(self, branch_id: int, day: date, total: Decimal) -> list[BalanceRow]:
+        shares = self.bank_shares[branch_id]
+        parts = [money(total * Decimal(s)) for s in shares]
+        parts[-1] = total - sum(parts[:-1], Decimal(0))  # yaxlitlash qoldig'i
+        return [BalanceRow(branch_id, k, day, v) for k, v in enumerate(parts)]

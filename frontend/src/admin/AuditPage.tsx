@@ -42,7 +42,7 @@ function OpError({ error }: { error: unknown }) {
   );
 }
 
-/** Blob -> vaqtinchalik URL -> yuklab olish -> URL darhol bekor qilinadi. Fayl nomi mijozda yasaladi (serverga ishonilmaydi). */
+/** Blob -> vaqtinchalik URL -> yuklab olish -> URL biroz kechikib bekor qilinadi. Fayl nomi mijozda yasaladi (serverga ishonilmaydi). */
 function saveBlob(blob: Blob) {
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
@@ -51,7 +51,7 @@ function saveBlob(blob: Blob) {
   document.body.append(link);
   link.click();
   link.remove();
-  URL.revokeObjectURL(url);
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000); // Firefox/Safari yuklashni darhol boshlamasligi mumkin
 }
 
 function objectText(row: AuditOut): string {

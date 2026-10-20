@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import type { EtlErrorOut, EtlRunOut, EtlStepOut } from '../api/types';
 import { t } from '../i18n';
 import { formatDate, formatDateTime, formatDuration, formatNumber } from '../i18n/format';
@@ -39,6 +39,7 @@ export default function EtlPage() {
   const request = useRequestEtlRun();
   const [source, setSource] = useState('synthetic');
   const [mode, setMode] = useState<Mode>('incremental');
+  const busyNote = useRef<HTMLParagraphElement>(null);
   const [openId, setOpenId] = useState<number | null>(null);
   const running = runs.data?.items.some((r) => r.status === 'running') ?? false;
   const blocked = running || queuedAt !== null;
@@ -48,6 +49,11 @@ export default function EtlPage() {
     if (queuedAt === null) return undefined;
     const id = window.setTimeout(() => setQueuedAt(null), QUEUED_LOCK_MS);
     return () => window.clearTimeout(id);
+  }, [queuedAt]);
+
+  // Navbatga qo'yilgach "Запустить" disabled bo'ladi — fokus body'ga tushmasin.
+  useEffect(() => {
+    if (queuedAt !== null) busyNote.current?.focus();
   }, [queuedAt]);
 
   const submit = (event: FormEvent) => {
@@ -117,7 +123,11 @@ export default function EtlPage() {
             {t('etl.start')}
           </Button>
         </form>
-        {blocked ? <p className="note">{t('etl.busy')}</p> : null}
+        {blocked ? (
+          <p className="note" role="status" tabIndex={-1} ref={busyNote}>
+            {t('etl.busy')}
+          </p>
+        ) : null}
         <FormError error={request.error} />
       </Card>
       <Card title={t('etl.historyTitle')}>

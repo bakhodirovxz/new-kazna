@@ -74,7 +74,8 @@ describe('AuditPage', () => {
       await user.type(screen.getByLabelText('Действие (начало кода)'), 'auth.login');
       await user.click(screen.getByRole('button', { name: 'Применить' }));
       await user.click(screen.getByRole('button', { name: 'Выгрузить CSV' }));
-      await waitFor(() => expect(dl.revoke).toHaveBeenCalledWith('blob:mock-1'));
+      expect(dl.revoke).not.toHaveBeenCalled(); // darhol emas: brauzerga yuklashni boshlashga vaqt
+      await waitFor(() => expect(dl.revoke).toHaveBeenCalledWith('blob:mock-1'), { timeout: 3000 });
       const call = server.calls.find((c) => c.path === '/audit/export.csv');
       expect(call?.url.searchParams.get('action')).toBe('auth.login');
       expect(call?.url.searchParams.has('page')).toBe(false);
@@ -99,7 +100,7 @@ describe('AuditPage', () => {
       expect(await screen.findByRole('alert')).toHaveTextContent('Повторите через 42 с');
       await user.click(screen.getByRole('button', { name: 'Выгрузить CSV' }));
       expect(await screen.findByText(/усечена/)).toBeInTheDocument();
-      expect(dl.revoke).toHaveBeenCalledTimes(1);
+      await waitFor(() => expect(dl.revoke).toHaveBeenCalledTimes(1), { timeout: 3000 });
       dl.click.mockRestore();
     });
   });

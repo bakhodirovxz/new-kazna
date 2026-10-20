@@ -1,9 +1,10 @@
-import { screen, waitFor, within } from '@testing-library/react';
+import { renderHook, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import type { BuildOut, EtlRunDetail, EtlRunOut, KeyOut } from '../api/types';
 import { expectNoAxeViolations } from '../test/axe';
 import { apiError, json, mockApi } from '../test/mockApi';
-import { renderWithProviders } from '../test/render';
+import { createTestClient, Providers, renderWithProviders } from '../test/render';
+import { useEtlRuns } from './api';
 import BuildsPage from './BuildsPage';
 import EtlPage from './EtlPage';
 import KeysPage from './KeysPage';
@@ -60,6 +61,19 @@ describe('EtlPage', () => {
     expect(server.calls.find((c) => c.method === 'POST')?.body).toEqual({ source: 'synthetic', mode: 'full' });
     expect(screen.getByRole('button', { name: 'Запустить' })).toBeDisabled();
     expect(screen.getByText(/Загрузка выполняется или поставлена в очередь/)).toBeInTheDocument();
+  });
+
+  it('moves focus to the busy note after queueing', async () => {
+    mockApi({
+      'GET /admin/etl/runs': json({ items: [], total: 0, page: 1, page_size: 50 }),
+      'POST /admin/etl/run': json({ request_id: 5, status: 'pending' }, 202),
+    });
+    const { user } = renderWithProviders(<EtlPage />);
+    await screen.findByLabelText('Режим');
+    await user.click(screen.getByRole('button', { name: 'Запустить' }));
+    const note = await screen.findByText(/Загрузка выполняется или поставлена в очередь/);
+    expect(note).toHaveAttribute('role', 'status');
+    await waitFor(() => expect(note).toHaveFocus());
   });
 
   it('blocks a start while a run is already running', async () => {
@@ -208,4 +222,18 @@ it('has no axe violations on ETL, builds and keys pages', async () => {
   await screen.findByRole('table', { name: 'Сборки витрины' });
   await screen.findByRole('table', { name: 'Ключи шифрования' });
   await expectNoAxeViolations(container);
+});
+
+describe('useEtlRuns polling', () => {
+  it('first load is user-initiated, refetches are background requests', async () => {
+    const server = mockApi({ 'GET /admin/etl/runs': json({ items: [], total: 0, page: 1, page_size: 50 }) });
+    const client = createTestClient();
+    const { result } = renderHook(() => useEtlRuns(1), {
+      wrapper: ({ children }) => <Providers client={client}>{children}</Providers>,
+    });
+    await waitFor(() => expect(result.current.data).toBeDefined());
+    await result.current.refetch();
+    expect(server.calls[0]?.headers.get('X-UGK-Background')).toBeNull();
+    expect(server.calls[1]?.headers.get('X-UGK-Background')).toBe('1');
+  });
 });

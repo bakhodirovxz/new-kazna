@@ -10,6 +10,7 @@ import {
 } from '../fixtures';
 
 test('login → 2FA → navigatsiya → filtrlar → admin → sessiya tugashi', async ({ page }, info) => {
+  test.setTimeout(120_000); // TOTP oynasini kutish uzun testni 30 s'dan oshirishi mumkin
   const mobile = isMobile(info.project.name);
   const desktop = info.project.name === 'desktop-1440';
   const username = adminFor(info.project.name);

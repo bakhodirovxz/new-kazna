@@ -21,6 +21,14 @@ describe('api', () => {
     expect(server.calls[0]?.headers.get('X-CSRF-Token')).toBeNull();
   });
 
+  it('marks background requests so the server does not slide the idle timeout', async () => {
+    const server = mockApi({ 'GET /meta/freshness': json({}) });
+    await api('/meta/freshness', { background: true });
+    await api('/meta/freshness');
+    expect(server.calls[0]?.headers.get('X-UGK-Background')).toBe('1');
+    expect(server.calls[1]?.headers.get('X-UGK-Background')).toBeNull();
+  });
+
   it('sends the CSRF token and JSON body on unsafe methods', async () => {
     document.cookie = '__Host-ugk_csrf=tok123; Secure; Path=/';
     expect(readCookie('__Host-ugk_csrf')).toBe('tok123');

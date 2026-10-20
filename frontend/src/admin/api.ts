@@ -244,9 +244,17 @@ export const AUDIT_EXPORT_LIMIT = 50_000; // backend EXPORT_LIMIT
 
 /** poll — so'rov navbatga qo'yilgandan keyin (run qatori hali yo'q) tarixni vaqti-vaqti bilan yangilaydi. */
 export function useEtlRuns(page: number, poll = false) {
+  const client = useQueryClient();
+  const queryKey = [...adminKeys.etlRuns, page];
   return useQuery({
-    queryKey: [...adminKeys.etlRuns, page],
-    queryFn: ({ signal }) => api<Page<EtlRunOut>>('/admin/etl/runs', { signal, query: { page, page_size: ETL_PAGE_SIZE } }),
+    queryKey,
+    // Kesh bor = takroriy yangilash (polling/fokus) -> fon so'rovi; birinchi yuklash/sahifa almashtirish — foydalanuvchi harakati.
+    queryFn: ({ signal }) =>
+      api<Page<EtlRunOut>>('/admin/etl/runs', {
+        signal,
+        query: { page, page_size: ETL_PAGE_SIZE },
+        background: client.getQueryData(queryKey) !== undefined,
+      }),
     placeholderData: keepPreviousData,
     staleTime: 0,
     refetchInterval: (query) => (poll || query.state.data?.items.some((run) => run.status === 'running') ? 15_000 : false),

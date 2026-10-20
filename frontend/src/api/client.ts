@@ -3,6 +3,7 @@ import { t } from '../i18n';
 export const API_PREFIX = '/api/v1';
 export const CSRF_COOKIE = '__Host-ugk_csrf';
 export const CSRF_HEADER = 'X-CSRF-Token';
+export const BACKGROUND_HEADER = 'X-UGK-Background';
 /** Backend imzolangan double-submit: GET/HEAD/OPTIONS dan boshqa har bir so'rovda cookie qiymati sarlavhada. */
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 
@@ -14,6 +15,8 @@ export interface RequestOptions {
   body?: unknown;
   query?: Query;
   signal?: AbortSignal;
+  /** Fon (polling) so'rovi: server idle muddatini surmaydi — ochiq qolgan tab sessiyani cho'zmasin. */
+  background?: boolean;
 }
 
 /** Backend `{"error": {code, message, request_id, params?}}` formatidagi xato. */
@@ -91,6 +94,7 @@ export async function api<T>(path: string, options: RequestOptions = {}): Promis
   const method = options.method ?? 'GET';
   const headers: Record<string, string> = { Accept: 'application/json' };
   if (options.body !== undefined) headers['Content-Type'] = 'application/json';
+  if (options.background) headers[BACKGROUND_HEADER] = '1';
   if (!SAFE_METHODS.has(method)) {
     const token = readCookie(CSRF_COOKIE);
     if (token) headers[CSRF_HEADER] = token;

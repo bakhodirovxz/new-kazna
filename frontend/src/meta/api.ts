@@ -29,7 +29,7 @@ export function usePeriods() {
 export function useFreshness() {
   return useQuery({
     queryKey: ['meta', 'freshness'],
-    queryFn: ({ signal }) => api<FreshnessOut>('/meta/freshness', { signal }),
+    queryFn: ({ signal }) => api<FreshnessOut>('/meta/freshness', { signal, background: true }),
     staleTime: 60_000,
     refetchInterval: 5 * 60_000,
   });

@@ -24,6 +24,15 @@ it('loads menu, branches, periods and freshness', async () => {
   });
 });
 
+it('polls freshness as a background request', async () => {
+  const server = mockApi({ 'GET /meta/freshness': json(FRESH_OK) });
+  const client = createTestClient();
+  const wrapper = ({ children }: { children: ReactNode }) => <Providers client={client}>{children}</Providers>;
+  const { result } = renderHook(() => useFreshness(), { wrapper });
+  await waitFor(() => expect(result.current.data).toBeDefined());
+  expect(server.calls[0]?.headers.get('X-UGK-Background')).toBe('1');
+});
+
 it('does not request the menu while disabled', () => {
   const server = mockApi({});
   const client = createTestClient();

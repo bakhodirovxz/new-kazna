@@ -629,3 +629,67 @@ def test_unknown_username_audit_details_are_safe(client: TestClient) -> None:
     assert raw not in row["raw_text"]
     assert raw.lower() not in row["raw_text"].lower()
     assert "username" not in details  # xom kalit nomi ham yo'q
+
+
+# ── Final review I1: fon so'rovlari idle muddatini surmaydi ──────────────────
+
+
+BACKGROUND = {"X-UGK-Background": "1"}
+
+
+def _idle_expires(user_id: int) -> datetime:
+    with new_session() as s:
+        return s.execute(
+            select(UserSession.idle_expires_at).where(UserSession.user_id == user_id)
+        ).scalar_one()
+
+
+def _age_session(user_id: int, seconds: int) -> None:
+    """last_seen/idle'ni `seconds` orqaga suradi (60 s sliding oynasidan o'tish uchun)."""
+    delta = timedelta(seconds=seconds)
+    with new_session() as s:
+        s.execute(
+            update(UserSession)
+            .where(UserSession.user_id == user_id)
+            .values(
+                last_seen_at=UserSession.last_seen_at - delta,
+                idle_expires_at=UserSession.idle_expires_at - delta,
+            )
+        )
+        s.commit()
+
+
+def test_background_request_does_not_slide_idle(
+    client: TestClient, make_user: Callable[..., SeedUser]
+) -> None:
+    user = make_user()
+    login(client, user)
+    _age_session(user.id, 120)
+    before = _idle_expires(user.id)
+    assert client.get("/api/v1/auth/me", headers=BACKGROUND).status_code == 200
+    assert _idle_expires(user.id) == before
+    assert client.get("/api/v1/auth/me").status_code == 200
+    assert _idle_expires(user.id) > before
+
+
+def test_idle_session_expires_despite_background_polls(
+    client: TestClient, make_user: Callable[..., SeedUser], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from app.auth import context
+
+    user = make_user()
+    login(client, user)
+    real = context.datetime
+    offset = timedelta()
+
+    class Shifted(real):  # type: ignore[valid-type, misc]
+        @classmethod
+        def now(cls, tz=None):  # type: ignore[no-untyped-def]
+            return real.now(tz) + offset
+
+    monkeypatch.setattr(context, "datetime", Shifted)
+    for minutes in (10, 20):
+        offset = timedelta(minutes=minutes)
+        assert client.get("/api/v1/auth/me", headers=BACKGROUND).status_code == 200
+    offset = timedelta(minutes=31)
+    assert client.get("/api/v1/auth/me", headers=BACKGROUND).status_code == 401

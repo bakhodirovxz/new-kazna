@@ -23,6 +23,7 @@ from app.core.errors import AuthError, ForbiddenError, PasswordChangeRequired, S
 SESSION_COOKIE = "__Host-ugk_session"
 CSRF_COOKIE = "__Host-ugk_csrf"
 CSRF_HEADER = "X-CSRF-Token"
+BACKGROUND_HEADER = "X-UGK-Background"  # faqat qisqartiradi: idle surilmaydi, spoof zararsiz
 SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
 PASSWORD_CHANGE_ALLOWED = frozenset(
     {"/api/v1/auth/me", "/api/v1/auth/password/change", "/api/v1/auth/logout"}
@@ -117,11 +118,12 @@ def get_ctx(
     session_cookie: Annotated[str | None, Cookie(alias=SESSION_COOKIE)] = None,
     csrf_cookie: Annotated[str | None, Cookie(alias=CSRF_COOKIE)] = None,
     csrf_header: Annotated[str | None, Header(alias=CSRF_HEADER)] = None,
+    background: Annotated[str | None, Header(alias=BACKGROUND_HEADER)] = None,
 ) -> AuthContext:
     if not session_cookie:
         raise AuthError("unauthenticated")
     now = datetime.now(UTC)
-    resolved = sessions.resolve(db, session_cookie, now)
+    resolved = sessions.resolve(db, session_cookie, now, slide=background != "1")
     if resolved is None:
         raise AuthError("session_expired")
     sess, user = resolved

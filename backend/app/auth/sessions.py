@@ -96,7 +96,11 @@ def create(
     return NewSession(session_id, token, csrf_for(token), absolute)
 
 
-def resolve(db: Session, token: str, now: datetime) -> tuple[UserSession, User] | None:
+def resolve(
+    db: Session, token: str, now: datetime, *, slide: bool = True
+) -> tuple[UserSession, User] | None:
+    """`slide=False` — fon (polling) so'rovi: autentifikatsiya qilinadi, lekin idle muddati
+    surilmaydi, aks holda ochiq qolgan tab sessiyani 12 soatgacha "tirik" tutardi."""
     row = db.execute(
         select(UserSession, User)
         .join(User, User.id == UserSession.user_id)
@@ -112,7 +116,7 @@ def resolve(db: Session, token: str, now: datetime) -> tuple[UserSession, User] 
         or not user.is_active
     ):
         return None
-    if now - sess.last_seen_at >= SLIDE_EVERY:
+    if slide and now - sess.last_seen_at >= SLIDE_EVERY:
         idle = timedelta(minutes=get_settings().session_idle_minutes)
         sess.last_seen_at = now
         sess.idle_expires_at = min(now + idle, sess.absolute_expires_at)

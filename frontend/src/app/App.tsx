@@ -3,6 +3,7 @@ import { useState, type ReactNode } from 'react';
 import { AuthFlowProvider, useAuthFlow } from '../auth/AuthFlow';
 import { ToastProvider, useToast } from '../ui/Toast';
 import { makeQueryClient } from './queryClient';
+import { RootBoundary } from './RootBoundary';
 import { Routes } from './Routes';
 
 function ClientBoundary({ children }: { children: ReactNode }) {
@@ -15,12 +16,14 @@ function ClientBoundary({ children }: { children: ReactNode }) {
 // AuthFlowProvider ClientBoundary'dan tashqarida: 401 AuthFlow'ni ham tozalashi kerak (flow.clear barqaror).
 export function App() {
   return (
-    <ToastProvider>
-      <AuthFlowProvider>
-        <ClientBoundary>
-          <Routes />
-        </ClientBoundary>
-      </AuthFlowProvider>
-    </ToastProvider>
+    <RootBoundary>
+      <ToastProvider>
+        <AuthFlowProvider>
+          <ClientBoundary>
+            <Routes />
+          </ClientBoundary>
+        </AuthFlowProvider>
+      </ToastProvider>
+    </RootBoundary>
   );
 }

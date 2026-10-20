@@ -1,15 +1,42 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { FRESH_OK, ME_ADMIN, shellRoutes } from '../test/fixtures';
 import { apiError, json, mockApi, type MockHandler } from '../test/mockApi';
 import { App } from './App';
+import type * as RoutesModule from './Routes';
+
+const crash = vi.hoisted(() => ({ on: false }));
+vi.mock('./Routes', async () => {
+  const actual = await vi.importActual<typeof RoutesModule>('./Routes');
+  return {
+    Routes: () => {
+      if (crash.on) throw new Error('boom');
+      return actual.Routes();
+    },
+  };
+});
 
 const TOKEN = 't'.repeat(32);
 
 function withMe(handler: MockHandler): Record<string, MockHandler> {
   return { ...shellRoutes(), 'GET /auth/me': handler };
 }
+
+describe('App root boundary', () => {
+  it('shows the full-page error instead of a white screen when rendering throws', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    mockApi(withMe(json(ME_ADMIN)));
+    crash.on = true;
+    try {
+      render(<App />);
+      expect(await screen.findByRole('alert')).toHaveTextContent('Не удалось загрузить приложение');
+      expect(screen.getByRole('button', { name: 'Повторить' })).toBeInTheDocument();
+    } finally {
+      crash.on = false;
+    }
+  });
+});
 
 describe('App routing', () => {
   it('redirects an anonymous visitor to login with the return path', async () => {

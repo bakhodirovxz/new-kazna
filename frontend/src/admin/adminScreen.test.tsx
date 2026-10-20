@@ -1,11 +1,23 @@
 import { screen, waitFor, within } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { MeOut, MenuOut } from '../api/types';
 import { useRoute } from '../router/store';
 import { ME_ADMIN, ME_AUDITOR, MENU_AUDITOR, MENU_FULL, shellRoutes } from '../test/fixtures';
 import { json, mockApi } from '../test/mockApi';
 import { renderWithProviders } from '../test/render';
 import { AdminScreen } from './AdminScreen';
+import type * as Registry from './registry';
+
+vi.mock('./registry', async () => {
+  const { lazy } = await import('react');
+  const actual = await vi.importActual<typeof Registry>('./registry');
+  return {
+    ADMIN_COMPONENTS: {
+      ...actual.ADMIN_COMPONENTS,
+      roles: lazy(() => Promise.reject(new Error('chunk'))),
+    },
+  };
+});
 
 function Harness({ me, menu }: { me: MeOut; menu: MenuOut }) {
   const route = useRoute();
@@ -34,6 +46,14 @@ describe('AdminScreen', () => {
     await waitFor(() => expect(window.location.hash).toBe('#admin/audit'));
     const side = await screen.findByRole('complementary', { name: 'Администрирование' });
     expect(within(side).getAllByRole('link').map((l) => l.textContent)).toEqual(['Журнал аудита']);
+  });
+
+  it('shows an error banner instead of a blank page when a lazy admin chunk fails', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    mockApi(shellRoutes());
+    renderWithProviders(<Harness me={ME_ADMIN} menu={MENU_FULL} />, { hash: '#admin/roles' });
+    expect(await screen.findByText('Не удалось загрузить страницу')).toBeInTheDocument();
+    expect(screen.getByRole('complementary', { name: 'Администрирование' })).toBeInTheDocument();
   });
 
   it('shows no access for a known admin page without permission', async () => {

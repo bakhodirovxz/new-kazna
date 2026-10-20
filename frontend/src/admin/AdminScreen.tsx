@@ -6,6 +6,7 @@ import { buildHash, type Route } from '../router/hash';
 import { navigate } from '../router/store';
 import { SectionPlaceholder } from '../sections/SectionPlaceholder';
 import { AppFrame } from '../shell/AppFrame';
+import { PageBoundary } from '../shell/PageBoundary';
 import { PageHeader } from '../shell/PageHeader';
 import type { SideModel } from '../shell/SideMenu';
 import { StatusScreen } from '../shell/StatusScreen';
@@ -50,9 +51,12 @@ export function AdminScreen({ me, menu, route, tools }: { me: MeOut; menu: MenuO
       <PageHeader crumb={t('admin.title')} title={t(current.titleKey)} />
       <div className="view">
         {Page ? (
-          <Suspense fallback={<PageSkeleton />}>
-            <Page me={me} />
-          </Suspense>
+          // Modul darajasidagi lazy rad etilgan import'ni keshlaydi -> to'g'ri "qayta urinish" — to'liq qayta yuklash.
+          <PageBoundary key={current.id} onRetry={() => window.location.reload()}>
+            <Suspense fallback={<PageSkeleton />}>
+              <Page me={me} />
+            </Suspense>
+          </PageBoundary>
         ) : (
           <SectionPlaceholder title={t(current.titleKey)} />
         )}

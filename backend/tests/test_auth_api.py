@@ -228,6 +228,7 @@ def test_me_and_logout(client: TestClient, make_user: Callable[..., SeedUser]) -
     assert client.get("/api/v1/auth/me").json()["username"] == user.username
     r = client.post("/api/v1/auth/logout")
     assert r.status_code == 204
+    assert r.headers["Clear-Site-Data"] == '"cache"'
     assert client.get("/api/v1/auth/me").status_code == 401
 
 

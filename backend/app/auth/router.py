@@ -96,6 +96,7 @@ def logout(
             service.logout(db, sess.id, user.id, meta, now)
     response = Response(status_code=204)
     _clear_cookies(response)
+    response.headers["Clear-Site-Data"] = '"cache"'  # ASVS 8.2.1: vitrina javoblari private
     return response
 
 

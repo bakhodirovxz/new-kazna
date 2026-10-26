@@ -1,0 +1,253 @@
+import base64
+import os
+from collections.abc import Callable, Iterator
+from datetime import UTC, datetime, timedelta
+from pathlib import Path
+from typing import Any
+
+import pytest
+from cryptography import x509
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography.x509.oid import NameOID
+from fastapi.testclient import TestClient
+from sqlalchemy import text
+
+from app import cli, ops
+from app.core import keystore
+from app.core.config import get_settings
+from app.core.db import get_engine
+from app.main import create_app
+from tests.etl_helpers import RecordingNotifier
+from tests.helpers import SeedUser, login
+
+NOW = datetime(2026, 9, 25, 12, 0, tzinfo=UTC)
+
+
+def _result(**overrides: Any) -> ops.RestoreResult:
+    base: dict[str, Any] = {
+        "at": NOW, "result": "ok", "duration_seconds": 1800,
+        "backup": "20260925-200000F", "details": "core.users 5;",
+    }
+    return ops.RestoreResult(**{**base, **overrides})
+
+
+@pytest.fixture
+def clean_restore_setting() -> Iterator[None]:
+    yield
+    with get_engine("migrator").begin() as conn:
+        conn.execute(text("DELETE FROM core.settings WHERE key = :k"), {"k": ops.RESTORE_KEY})
+
+
+def _audit_count(action: str) -> int:
+    with get_engine("app").connect() as conn:
+        return int(conn.execute(
+            text(
+                "SELECT count(*) FROM core.audit_log "
+                "WHERE action = :a AND details->>'via' = 'cli'"
+            ),
+            {"a": action},
+        ).scalar_one())
+
+
+def _cert(tmp_path: Path, days: int) -> Path:
+    key = ec.generate_private_key(ec.SECP256R1())
+    name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "ugk.test")])
+    cert = (
+        x509.CertificateBuilder().subject_name(name).issuer_name(name).public_key(key.public_key())
+        .serial_number(x509.random_serial_number())
+        .not_valid_before(NOW - timedelta(days=1)).not_valid_after(NOW + timedelta(days=days))
+        .sign(key, hashes.SHA256())
+    )
+    path = tmp_path / f"cert-{days}.pem"
+    path.write_bytes(cert.public_bytes(serialization.Encoding.PEM))
+    return path
+
+
+def test_record_restore_test_versions(clean_restore_setting: None) -> None:
+    with get_engine("app").begin() as conn:
+        assert ops.record_restore_test(conn, _result(result="fail")) == 1
+        assert ops.record_restore_test(conn, _result(duration_seconds=9000)) == 2
+        value = ops.last_restore_test(conn)
+    assert value is not None
+    assert value["result"] == "ok"
+    assert value["duration_seconds"] == 9000
+    assert value["rto_ok"] is False
+    assert value["backup"] == "20260925-200000F"
+
+
+def test_restore_setting_not_editable_via_api(
+    clean_restore_setting: None, make_user: Callable[..., SeedUser]
+) -> None:
+    with TestClient(create_app(), base_url="https://testserver") as client:
+        login(client, make_user("admin"))
+        response = client.put(
+            "/api/v1/admin/settings/last_restore_test", json={"value": {"result": "ok"}}
+        )
+    assert response.status_code == 404
+
+
+@pytest.mark.parametrize(
+    ("value", "codes"),
+    [
+        (None, {"restore_test_missing"}),
+        ({"at": NOW.isoformat(), "result": "ok", "rto_ok": True}, set()),
+        ({"at": NOW.isoformat(), "result": "fail", "rto_ok": True}, {"restore_test_failed"}),
+        ({"at": (NOW - timedelta(days=36)).isoformat(), "result": "ok", "rto_ok": True},
+         {"restore_test_overdue"}),
+        ({"at": NOW.isoformat(), "result": "ok", "rto_ok": False}, {"restore_test_rto"}),
+    ],
+)
+def test_check_restore_rules(value: dict[str, Any] | None, codes: set[str]) -> None:
+    assert {p.code for p in ops.check_restore(value, NOW)} == codes
+
+
+def test_ops_check_detects_clock_skew() -> None:
+    skewed = ops.ops_check(app_clock=lambda: datetime.now(UTC) + timedelta(minutes=10))
+    found = [p for p in skewed if p.code == "clock_skew"]
+    assert found and found[0].level == "critical"
+    assert "clock_skew" not in {p.code for p in ops.ops_check()}
+
+
+def test_ops_check_flags_audit_default_rows() -> None:
+    row = {"id": 9_000_000_001, "ts": datetime(2001, 1, 1, tzinfo=UTC)}
+    with get_engine("migrator").begin() as conn:
+        conn.execute(
+            text(
+                "INSERT INTO core.audit_log "
+                "(id, ts, action, result, chain_key_version, prev_hash, hash) "
+                "VALUES (:id, :ts, 'test.default', 'ok', 1, decode(repeat('00', 32), 'hex'), "
+                "decode(repeat('00', 32), 'hex'))"
+            ),
+            row,
+        )
+    try:
+        assert "audit_default_rows" in {p.code for p in ops.ops_check()}
+    finally:
+        with get_engine("migrator").begin() as conn:
+            conn.execute(text("DELETE FROM core.audit_log WHERE id = :id"), {"id": row["id"]})
+
+
+def test_ops_check_flags_stuck_etl_requests() -> None:
+    with get_engine("migrator").begin() as conn:
+        request_id = conn.execute(text(
+            "INSERT INTO core.etl_requests (source, mode, requested_by, requested_at) "
+            "VALUES ('synthetic', 'full', 0, now() - interval '2 hours') RETURNING id"
+        )).scalar_one()
+    try:
+        assert "etl_request_stuck" in {p.code for p in ops.ops_check()}
+    finally:
+        with get_engine("migrator").begin() as conn:
+            conn.execute(text("DELETE FROM core.etl_requests WHERE id = :i"), {"i": request_id})
+
+
+def test_ops_check_key_rotation_due() -> None:
+    with get_engine("migrator").begin() as conn:
+        key_id, created_at = conn.execute(text(
+            "SELECT id, created_at FROM core.crypto_keys "
+            "WHERE purpose = 'integration_creds' AND status = 'active'")).one()
+        conn.execute(text("UPDATE core.crypto_keys SET created_at = now() - interval '400 days' "
+                          "WHERE id = :i"), {"i": key_id})
+    try:
+        due = [p for p in ops.ops_check() if p.code == "key_rotation_due"]
+        assert any("integration_creds" in p.message for p in due)
+    finally:
+        with get_engine("migrator").begin() as conn:
+            conn.execute(text("UPDATE core.crypto_keys SET created_at = :c WHERE id = :i"),
+                         {"c": created_at, "i": key_id})
+
+
+def test_tls_expiry_warning(tmp_path: Path) -> None:
+    assert ops.check_tls(_cert(tmp_path, 90), NOW) == []
+    assert [p.level for p in ops.check_tls(_cert(tmp_path, 20), NOW)] == ["warning"]
+    assert [p.level for p in ops.check_tls(_cert(tmp_path, 5), NOW)] == ["critical"]
+
+
+MIN = timedelta(minutes=1)
+LONG_UP = NOW - timedelta(days=3)
+
+
+@pytest.mark.parametrize(
+    ("mode", "archived", "failed", "started", "status", "codes"),
+    [
+        # oxirgi urinish xato
+        ("on", NOW - 20 * MIN, NOW - 5 * MIN, LONG_UP, "alarm", {"wal_archiver_failed"}),
+        ("on", None, NOW - 5 * MIN, LONG_UP, "alarm", {"wal_archiver_failed"}),
+        # RPO'dan katta kechikish
+        ("on", NOW - 20 * MIN, None, LONG_UP, "alarm", {"wal_archiver_lag"}),
+        ("on", None, None, LONG_UP, "alarm", {"wal_archiver_lag"}),
+        # ko'p xato bo'lgan, lekin oxirgisi muvaffaqiyatli
+        ("on", NOW - 2 * MIN, NOW - 60 * MIN, LONG_UP, "ok", set()),
+        # yangi ishga tushgan server
+        ("on", None, None, NOW - 5 * MIN, "ok", set()),
+        # arxivlash o'chiq
+        ("off", None, NOW - 5 * MIN, LONG_UP, "skipped", set()),
+    ],
+)
+def test_check_archiver_rules(
+    mode: str, archived: datetime | None, failed: datetime | None, started: datetime,
+    status: str, codes: set[str],
+) -> None:
+    got_status, problems = ops.check_archiver(mode, archived, failed, started, NOW)
+    assert got_status == status
+    assert {p.code for p in problems} == codes
+
+
+def test_ops_check_reports_archiver_note_when_off() -> None:
+    notes: list[str] = []
+    ops.ops_check(notes=notes)
+    with get_engine("app").connect() as conn:
+        mode = conn.execute(text("SELECT current_setting('archive_mode')")).scalar_one()
+    assert bool(notes) == (mode == "off")
+
+
+def test_cli_restore_test_record_and_status(
+    clean_restore_setting: None, capsys: pytest.CaptureFixture[str]
+) -> None:
+    assert cli.main(["restore-test-status"]) == 1
+    assert cli.main(["restore-test-record", "--result", "ok", "--duration-seconds", "1200",
+                     "--backup", "20260925-200000F", "--details", "core.users 5;"]) == 0
+    assert cli.main(["restore-test-status"]) == 0
+    assert '"result": "ok"' in capsys.readouterr().out
+    with get_engine("app").connect() as conn:
+        recorded = conn.execute(text(
+            "SELECT count(*) FROM core.audit_log WHERE action = 'ops.restore_test.recorded'"
+        )).scalar_one()
+    assert recorded >= 1
+
+
+def test_cli_ops_check_notifies_only_on_problems(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    notifier = RecordingNotifier()
+    monkeypatch.setattr(cli, "build_notifier", lambda settings: notifier)
+    monkeypatch.setattr(ops, "ops_check", lambda **kwargs: [])
+    assert cli.main(["ops-check", "--notify"]) == 0
+    assert notifier.kinds == []
+
+    stale = [ops.Problem("stale_data", "warning", "Данные витрины устарели")]
+    monkeypatch.setattr(ops, "ops_check", lambda **kwargs: stale)
+    assert cli.main(["ops-check", "--notify", "--extra", "backup: unhealthy"]) == 1
+    assert notifier.kinds == ["ops_check"]
+    assert "backup: unhealthy" in notifier.items[0].body
+    assert cli.main(["ops-check", "--json"]) == 1
+    assert '"code": "stale_data"' in capsys.readouterr().out
+
+
+def test_cli_key_operations_are_audited(tmp_path: Path) -> None:
+    before = {a: _audit_count(a) for a in ("admin.key.rotated", "admin.key.rewrapped")}
+    assert cli.main(["rotate-key", "--purpose", "integration_creds"]) == 0
+    new_kek = os.urandom(32)
+    path = tmp_path / "kek"
+    path.write_text(base64.b64encode(new_kek).decode("ascii"), encoding="ascii")
+    assert cli.main(["rewrap-keys", "--new-kek-file", str(path)]) == 0
+    with get_engine("migrator").begin() as conn:
+        keystore.rewrap_all(conn, new_kek, get_settings().key_bytes("master_kek"))
+    keystore.invalidate_keyring()
+    assert _audit_count("admin.key.rotated") == before["admin.key.rotated"] + 1
+    assert _audit_count("admin.key.rewrapped") == before["admin.key.rewrapped"] + 1
+    with get_engine("app").connect() as conn:
+        details = conn.execute(text(
+            "SELECT details FROM core.audit_log WHERE action = 'admin.key.rewrapped' "
+            "AND result = 'ok' ORDER BY id DESC LIMIT 1")).scalar_one()
+    assert details["fingerprint"] == cli._kek_id(new_kek)

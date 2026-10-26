@@ -121,7 +121,7 @@ def _upsert(db: Session, spec: E2eUser, password_hash: str, now: datetime) -> Us
 
 
 def seed_e2e() -> int:
-    # Settings.env standarti "dev" — fail-open bo'lmasin: ENV aniq berilgan bo'lishi shart.
+    # ENV aniq berilgan bo'lishi shart (Settings standarti prod, lekin bu yerda env'ga tayanamiz).
     env = os.environ.get("ENV", "")
     if env not in ALLOWED_ENVS:
         shown = env or "belgilanmagan"

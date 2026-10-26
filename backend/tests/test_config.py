@@ -87,3 +87,8 @@ def test_smtp_to_with_header_injection_is_a_problem_and_is_dropped() -> None:
 
 def test_smtp_to_with_valid_addresses_has_no_problems() -> None:
     assert make(smtp_to="a@uge.uz, b@uge.uz").problems() == []
+
+
+def test_env_defaults_to_prod_when_unset(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("ENV", raising=False)
+    assert Settings().env == "prod"

@@ -41,7 +41,7 @@ class ConfigError(RuntimeError):
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(extra="ignore", case_sensitive=False)
 
-    env: Literal["dev", "test", "prod"] = "dev"
+    env: Literal["dev", "test", "prod"] = "prod"  # fail-closed: dev/test faqat aniq ENV bilan
     base_url: str = "https://localhost"
     argon2_profile: Literal["standard", "fast_test"] = "standard"
 

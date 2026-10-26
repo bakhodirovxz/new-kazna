@@ -9,6 +9,9 @@ cleanup        — eskirgan sessiya, 2FA challenge va staging qatorlarini o'chir
 etl-run        — ETL yuklash: --source synthetic|file --mode full|incremental [--no-retry]
                [--allow-full-replace] (file + full uchun majburiy)
 rollback-build — aktiv build'ni oldingisiga (yoki --build ID ga) qaytarish
+restore-test-record — tiklash testi natijasini yozish (scripts/restore_test.sh chaqiradi)
+restore-test-status — oxirgi tiklash testi: 0 — joyida, 1 — yo'q/xato/eskirgan
+ops-check      — ekspluatatsiya tekshiruvi: [--json] [--notify] [--tls-cert PATH] [--extra TEXT]
 
 `retire-keys` va `rewrap-keys` `wrapped_key` ustunini bo'shatadi/qayta yozadi — bu ustunga
 `ugk_app`ning yozish huquqi yo'q (crypto-shredding'dan himoya, spec 3.5), shuning uchun bu
@@ -31,16 +34,20 @@ from __future__ import annotations
 
 import argparse
 import base64
+import hashlib
 import hmac
+import json
 import sys
 from collections.abc import Iterator
 from contextlib import contextmanager
+from dataclasses import asdict
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from sqlalchemy import select, text
 from sqlalchemy.exc import IntegrityError
 
+from app import ops
 from app.audit.service import AuditAction, AuditEvent, record, verify_chain_snapshot
 from app.auth import passwords
 from app.auth.models import Position, User
@@ -57,7 +64,7 @@ from app.dwh import builds
 from app.etl.connectors import make_connector
 from app.etl.db import etl_transaction
 from app.etl.errors import FILE_FULL_REFUSED, EtlBusyError, safe_error
-from app.etl.notify import build_notifier
+from app.etl.notify import Notification, build_notifier
 from app.etl.retry import RETRY_DELAYS
 from app.etl.runner import ETL_LOCK, Runner
 from app.etl.types import Mode
@@ -127,6 +134,11 @@ def _etl_lock() -> Iterator[None]:
             yield
         finally:
             conn.execute(text("SELECT pg_advisory_unlock(hashtext(:k))"), {"k": ETL_LOCK})
+
+
+def _kek_id(kek: bytes) -> str:
+    """KEK'ning ochiq identifikatori (audit `mask()` o'tkazadi) — kalitni oshkor qilmaydi."""
+    return hashlib.sha256(b"ugk-kek-id|" + kek).hexdigest()[:16]
 
 
 def _rotate(purpose: Purpose) -> int:
@@ -219,7 +231,8 @@ def _rewrap(new_kek_file: Path) -> int:
         ring = keystore.load_keyring(conn, new_kek)
     keystore.set_keyring_for_process(ring)
     record(AuditEvent(
-        action=AuditAction.KEY_REWRAPPED, user_id=None, details={"count": count, "via": "cli"},
+        action=AuditAction.KEY_REWRAPPED, user_id=None,
+        details={"count": count, "fingerprint": _kek_id(new_kek), "via": "cli"},
     ))
     _out(f"{count} ta kalit qayta o'raldi. Endi master_kek sirini almashtirib, "
          "servislarni qayta ishga tushiring.")
@@ -281,6 +294,43 @@ def _rollback(build_id: int | None) -> int:
     return 0
 
 
+def _restore_record(result: str, duration: int, backup: str, details: str) -> int:
+    status: ops.RestoreStatus = "ok" if result == "ok" else "fail"
+    restore = ops.RestoreResult(at=datetime.now(UTC), result=status, duration_seconds=duration,
+                                backup=backup, details=details)
+    with get_engine("app").begin() as conn:
+        version = ops.record_restore_test(conn, restore)
+    record(AuditEvent(action=AuditAction.RESTORE_TEST_RECORDED, result=status,
+                      object_type="restore_test", object_id=backup[:64],
+                      details={"duration_seconds": duration, "rto_ok": restore.rto_ok,
+                               "version": version, "via": "cli"}))
+    _out(f"last_restore_test v{version}: {status}, {duration} s, zaxira {backup}")
+    return 0
+
+
+def _restore_status() -> int:
+    with get_engine("app").connect() as conn:
+        value = ops.last_restore_test(conn)
+    _out(json.dumps(value, ensure_ascii=False, indent=2) if value is not None else "null")
+    return 1 if ops.check_restore(value, datetime.now(UTC)) else 0
+
+
+def _ops_check(as_json: bool, notify: bool, tls_cert: Path | None, extra: list[str]) -> int:
+    problems = [ops.Problem("host", "critical", item) for item in extra]
+    notes: list[str] = []
+    problems.extend(ops.ops_check(tls_cert=tls_cert, notes=notes))
+    if as_json:
+        _out(json.dumps([asdict(p) for p in problems], ensure_ascii=False))
+    else:
+        _out(ops.report(problems))
+        for note in notes:
+            _out(note)
+    if notify and problems:
+        build_notifier(get_settings()).notify(Notification(
+            "ops_check", f"UGEKAZNA: замечаний — {len(problems)}", ops.report(problems)))
+    return 1 if problems else 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m app.cli")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -302,6 +352,17 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--allow-full-replace", action="store_true")
     p = sub.add_parser("rollback-build")
     p.add_argument("--build", type=int, default=None)
+    p = sub.add_parser("restore-test-record")
+    p.add_argument("--result", choices=["ok", "fail"], required=True)
+    p.add_argument("--duration-seconds", type=int, required=True)
+    p.add_argument("--backup", required=True)
+    p.add_argument("--details", default="")
+    sub.add_parser("restore-test-status")
+    p = sub.add_parser("ops-check")
+    p.add_argument("--json", action="store_true")
+    p.add_argument("--notify", action="store_true")
+    p.add_argument("--tls-cert", type=Path, default=None)
+    p.add_argument("--extra", action="append", default=[])
     args = parser.parse_args(argv)
 
     bootstrap_runtime()
@@ -319,6 +380,12 @@ def main(argv: list[str] | None = None) -> int:
         return _etl_run(args.source, args.mode, args.no_retry, args.allow_full_replace)
     if args.command == "rollback-build":
         return _rollback(args.build)
+    if args.command == "restore-test-record":
+        return _restore_record(args.result, args.duration_seconds, args.backup, args.details)
+    if args.command == "restore-test-status":
+        return _restore_status()
+    if args.command == "ops-check":
+        return _ops_check(args.json, args.notify, args.tls_cert, args.extra)
     return _cleanup()
 
 

@@ -76,6 +76,8 @@ services:
       # Korporativ TLS proksi: tizim to'plami + backend/certs/*.crt (Go SSL_CERT_DIR).
       SSL_CERT_DIR: /certs:/etc/ssl/certs
     volumes:
-      - "..:/src:ro"
+      # Faqat kerakli fayllar (butun repo — deploy/secrets, .env — uchinchi tomon image'iga berilmaydi).
+      - "../.trivyignore:/src/.trivyignore:ro"
+      - "../frontend/package-lock.json:/src/frontend/package-lock.json:ro"
       - "../build:/build"
       - "../backend/certs:/certs:ro"

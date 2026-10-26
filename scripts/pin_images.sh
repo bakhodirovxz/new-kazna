@@ -2,6 +2,11 @@
 # Base image'larni hozirgi digest'iga qotiradi va deploy/images.lock.env ni qayta yozadi.
 # Yangilash tartibi (docs/ops/install-upgrade.md, "Обновление базовых образов"):
 #   scripts/pin_images.sh → git diff deploy/images.lock.env → make check scan backup-selftest → commit.
+# Qayta ko'rish (2026-12-01 yoki CADDY_IMAGE yangilanganda): frontend/Dockerfile dagi `--replace golang.org/x/net=…`
+#   pin yangi caddy'dagi x/net dan eski bo'lmasligi kerak (`go version -m` yoki SBOM) — kerak bo'lmasa olib tashlang.
+# CPython, PostgreSQL, Redis, Caddy manbadan yig'ilgan: Trivy ularning CVE'sini image SBOM'idagi
+#   pkg:generic (sbom_runtime.py) versiyasi bo'yicha ko'radi; yangi reliz faqat shu skriptni qayta
+#   ishlatish (base re-pin) orqali keladi — takrorlash davri docs/ops da.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 IMAGES=(

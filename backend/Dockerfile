@@ -24,10 +24,12 @@ ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PATH="/opt/venv/bin:$PATH"
 # runtime'da tashqi HTTPS integratsiyasi yo'q. Faqat shunday integratsiya kerak bo'lganda
 # `--build-arg RUNTIME_EXTRA_CA=true` bilan yoqiladi (backend/certs/README.md'ga qarang).
 ARG RUNTIME_EXTRA_CA=false
-COPY certs/ /usr/local/share/ca-certificates/
 # Avval korporativ CA yoqiladi (apt HTTPS, proksi orqali) va base digest'idan keyingi xavfsizlik
 # tuzatishlari o'rnatiladi (Trivy HIGH); so'ng CA `RUNTIME_EXTRA_CA!=true` bo'lsa to'plamdan olib tashlanadi.
-RUN update-ca-certificates \
+# certs/ bind-mount: CA fayli faqat RUNTIME_EXTRA_CA=true da image'ga nusxalanadi.
+RUN --mount=type=bind,source=certs,target=/tmp/certs \
+    if ls /tmp/certs/*.crt >/dev/null 2>&1; then cp /tmp/certs/*.crt /usr/local/share/ca-certificates/; fi \
+ && update-ca-certificates \
  && sed -i 's|http://deb.debian.org|https://deb.debian.org|' /etc/apt/sources.list.d/debian.sources \
  && apt-get -o APT::Update::Error-Mode=any update \
  && apt-get upgrade -y --no-install-recommends \

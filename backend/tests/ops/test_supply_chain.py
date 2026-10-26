@@ -59,11 +59,15 @@ def _bom(path: Path, components: list[dict[str, Any]], fmt: str = "CycloneDX") -
     return path
 
 
+def _generic(name: str, version: str) -> dict[str, Any]:
+    return {"name": name, "version": version, "purl": f"pkg:generic/{name}@{version}"}
+
+
 def test_check_sbom_accepts_valid(tmp_path: Path) -> None:
     check_sbom = load_script("scripts/check_sbom.py", "check_sbom")
     ok = _bom(
         tmp_path / "ugekazna-backend.cdx.json",
-        [{"name": "fastapi"}, {"name": "argon2-cffi"},
+        [{"name": "fastapi"}, {"name": "argon2-cffi"}, _generic("python", "3.12.15"),
          {"name": "opt/venv", "components": [{"name": "cryptography"}]}],
     )
     assert check_sbom.check(ok) == []
@@ -81,3 +85,57 @@ def test_check_sbom_rejects_invalid(tmp_path: Path) -> None:
     assert any("komponent" in e for e in errors)
     assert check_sbom.main([str(missing)]) == 1
     assert check_sbom.main([]) == 2
+
+
+def test_check_sbom_group_and_shape(tmp_path: Path) -> None:
+    check_sbom = load_script("scripts/check_sbom.py", "check_sbom")
+    scoped = _bom(
+        tmp_path / "frontend-npm.cdx.json",
+        [{"group": "@types", "name": "react"}, {"name": "react-dom"}],
+    )
+    assert any("react" in e for e in check_sbom.check(scoped))  # @types/react != react
+    # apk virtual `postgresql` (noarch) PG16 runtime komponentini almashtirmaydi.
+    db = _bom(
+        tmp_path / "ugekazna-db.cdx.json",
+        [{"name": "pgbackrest"}, {"name": "postgresql", "version": "20261026"}],
+    )
+    assert any("pkg:generic/postgresql" in e for e in check_sbom.check(db))
+    notobj = tmp_path / "ugekazna-redis.cdx.json"
+    notobj.write_text("[]", encoding="utf-8")
+    assert check_sbom.check(notobj) == [f"{notobj.name}: JSON ob'ekt emas"]
+
+
+def test_sbom_runtime_adds_components(tmp_path: Path) -> None:
+    sbom_runtime = load_script("scripts/sbom_runtime.py", "sbom_runtime")
+    check_sbom = load_script("scripts/check_sbom.py", "check_sbom")
+    path = _bom(tmp_path / "ugekazna-redis.cdx.json", [{"name": "musl"}])
+    assert sbom_runtime.main([str(path), "redis=7.4.12"]) == 0
+    assert sbom_runtime.main([str(path), "redis=7.4.13"]) == 0  # almashtiriladi, ko'paymaydi
+    assert check_sbom.check(path) == []
+    redis = [c for c in json.loads(path.read_text("utf-8"))["components"] if c["name"] == "redis"]
+    assert [c["version"] for c in redis] == ["7.4.13"]
+    assert sbom_runtime.main([str(path), "redis="]) == 1  # bo'sh env — yiqiladi
+    assert sbom_runtime.main([]) == 2
+
+
+def test_lock_keys_match_consumers() -> None:
+    lock = set(_lock())
+    build = repo_path("scripts/build_images.sh").read_text(encoding="utf-8")
+    # REDIS_IMAGE Dockerfile'ga berilmaydi (faqat qayta teglanadi).
+    for key in lock - {"REDIS_IMAGE"}:
+        assert f'--build-arg "{key}=${key}"' in build, key
+    assert '"ugekazna-redis:$VERSION"' in build
+    pin = repo_path("scripts/pin_images.sh").read_text(encoding="utf-8")
+    assert set(re.findall(r'^\s+"([A-Z_]+)=', pin, re.M)) == lock
+
+
+def test_release_builds_from_clean_export() -> None:
+    text = repo_path("scripts/release.sh").read_text(encoding="utf-8")
+    assert "git archive HEAD | tar -x" in text
+    # scan/build faqat eksport ichida; ishchi daraxtdagi scripts/scan.sh chaqirilmaydi.
+    assert '(cd "$SRC" && scripts/scan.sh "$VERSION")' in text
+    assert not re.search(r"^scripts/scan\.sh", text, re.M)
+    assert "git ls-tree -r --name-only HEAD" in text  # eksport == HEAD o'z-o'zini tekshirish
+    # Yetishmayotgan majburiy yo'l — xato (fail-closed), ogohlantirish emas.
+    assert "! -e \"$SRC/$path\"" in text
+    assert re.search(r"XATO: \$path[^\n]*\n\s+exit 1", text)

@@ -14,17 +14,24 @@ from typing import Any
 
 # Fayl nomi (".cdx.json" siz) → albatta bo'lishi kerak bo'lgan komponentlar (kichik harf).
 REQUIRED: dict[str, set[str]] = {
-    "ugekazna-backend": {"fastapi", "cryptography", "argon2-cffi"},
-    "ugekazna-db": {"pgbackrest"},
-    "ugekazna-web": set(),
-    "ugekazna-redis": set(),
+    # `pkg:generic/<nom>` — scripts/sbom_runtime.py qo'shgan runtime (CPython, PostgreSQL, Redis, Caddy):
+    # rasmiy image'lar ularni manbadan quradi, Trivy paket metama'lumotini ko'rmaydi.
+    "ugekazna-backend": {"fastapi", "cryptography", "argon2-cffi", "pkg:generic/python"},
+    "ugekazna-db": {"pgbackrest", "pkg:generic/postgresql"},
+    "ugekazna-web": {"pkg:generic/caddy"},
+    "ugekazna-redis": {"pkg:generic/redis"},
     "frontend-npm": {"react", "react-dom"},
 }
 
 
 def _names(components: list[dict[str, Any]]) -> Iterator[str]:
     for component in components:
-        yield str(component.get("name", "")).lower()
+        name = str(component.get("name", "")).lower()
+        group = str(component.get("group", "")).lower()
+        yield f"{group}/{name}" if group else name  # "@types/react" "react" ni qoplamaydi
+        purl = str(component.get("purl", ""))
+        if purl.startswith("pkg:generic/"):
+            yield purl.split("@", 1)[0]
         yield from _names(component.get("components", []))
 
 
@@ -33,6 +40,8 @@ def check(path: Path) -> list[str]:
         data = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError) as exc:
         return [f"{path.name}: o'qib bo'lmadi ({exc})"]
+    if not isinstance(data, dict):
+        return [f"{path.name}: JSON ob'ekt emas"]
     errors: list[str] = []
     if data.get("bomFormat") != "CycloneDX":
         errors.append(f"{path.name}: bomFormat CycloneDX emas")

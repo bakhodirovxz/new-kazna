@@ -6,15 +6,20 @@ ARG POSTGRES_IMAGE=postgres:16-alpine
 # hadolint ignore=DL3006
 FROM ${POSTGRES_IMAGE}
 
-COPY postgres/certs/ /tmp/certs/
-# Korporativ CA faqat `apk add` vaqtida ishonchli: oxirgi image'da asl to'plam tiklanadi.
+# Korporativ CA faqat `apk add` vaqtida ishonchli va faqat bind-mount orqali (qatlamga tushmaydi);
+# oxirgi image'da asl to'plam tiklanadi.
+# `postgresql` virtual paketi: pgbackrest `postgresql` ga bog'liq, lekin server bizda PG16 (/usr/local);
+# virtual paket PG18 serverini (postgresql18, postgresql18-client) tortishni oldini oladi (faqat libpq
+# kutubxonasi o'rnatiladi; ish vaqtida /usr/local/lib dagi PG16 libpq yuklanadi). SBOM'dagi
+# `postgresql` (noarch, sana versiyali) — shu virtual paket, PG16 emas: PG16 `pkg:generic/postgresql` bilan.
 # gosu o'chiriladi: image USER 70:70 ostida ishlaydi (root yo'q), gosu ishlatilmaydi; uning Go stdlib'i eski (Trivy).
-RUN cp /etc/ssl/certs/ca-certificates.crt /tmp/ca-bundle.orig \
+RUN --mount=type=bind,source=postgres/certs,target=/tmp/certs \
+    cp /etc/ssl/certs/ca-certificates.crt /tmp/ca-bundle.orig \
  && if ls /tmp/certs/*.crt >/dev/null 2>&1; then cat /tmp/certs/*.crt >> /etc/ssl/certs/ca-certificates.crt; fi \
+ && apk add --no-cache --virtual postgresql musl \
  && apk add --no-cache pgbackrest jq \
  && cp /tmp/ca-bundle.orig /etc/ssl/certs/ca-certificates.crt \
- && rm -rf /tmp/certs /tmp/ca-bundle.orig \
- && rm -f /usr/local/bin/gosu \
+ && rm -f /tmp/ca-bundle.orig /usr/local/bin/gosu \
  && install -d -o postgres -g postgres -m 0750 /var/lib/pgbackrest \
  && install -d -m 0755 /etc/pgbackrest /etc/postgresql/profiles
 

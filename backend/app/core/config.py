@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Literal
 from urllib.parse import quote
 
-from pydantic import SecretStr
+from pydantic import PositiveInt, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 SECRETS_DIR = Path("/run/secrets")
@@ -54,7 +54,8 @@ class Settings(BaseSettings):
     db_etl_password: SecretStr = SecretStr("")
     db_migrator_user: str = "ugk_migrator"
     db_migrator_password: SecretStr = SecretStr("")
-    db_pool_size: int = 10
+    # DB_POOL_SIZE: jarayondagi bir vaqtdagi sessiyali so'rovlar (core/db.py `_db_slot`); pool 2x.
+    db_pool_size: PositiveInt = 10
     db_statement_timeout_ms: int = 5000
 
     redis_host: str = "redis"

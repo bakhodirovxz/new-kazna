@@ -5,10 +5,13 @@ Sinxron SQLAlchemy: endpointlar `def`, Starlette ularni threadpool'da bajaradi.
 
 from __future__ import annotations
 
-from collections.abc import Iterator
+import asyncio
+from collections.abc import AsyncIterator, Iterator
 from functools import lru_cache
 from typing import Annotated
+from weakref import WeakKeyDictionary
 
+import anyio
 from fastapi import Depends
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Engine
@@ -30,6 +33,8 @@ def get_engine(role: DbRole = "app") -> Engine:
         f"-c statement_timeout={timeout} "
         "-c idle_in_transaction_session_timeout=60000 -c TimeZone=UTC"
     )
+    # Pool = 2 x DB_POOL_SIZE: so'rov sessiyasi (1) + uning ichidagi audit `record()` yoki
+    # keyring yangilanishi (1) — `_db_slot` bir vaqtda DB_POOL_SIZE ta so'rovni qo'yadi.
     return create_engine(
         settings.pg_url(role),
         pool_size=settings.db_pool_size,
@@ -53,7 +58,31 @@ def new_session() -> Session:
     return _session_factory()()
 
 
-def get_db() -> Iterator[Session]:
+_slots: WeakKeyDictionary[asyncio.AbstractEventLoop, anyio.Semaphore] = WeakKeyDictionary()
+
+
+def _db_slots() -> anyio.Semaphore:
+    # Event loop bo'yicha: TestClient (context'siz) har so'rovga yangi loop ochadi.
+    loop = asyncio.get_running_loop()
+    slots = _slots.get(loop)
+    if slots is None:
+        slots = _slots[loop] = anyio.Semaphore(get_settings().db_pool_size)
+    return slots
+
+
+async def _db_slot() -> AsyncIterator[None]:
+    """Sessiyali so'rovlarni DB_POOL_SIZE bilan cheklaydi (Task 9 perf, pool/threadpool deadlock).
+
+    Sessiya ulanishni `get_ctx`da oladi va keyingi threadpool sakrashlarini (endpoint, teardown)
+    kutganda ham ushlab turadi. Cheklovsiz: thread'lar pool'da ulanish kutadi, ulanish egalari
+    thread kutadi — `pool_timeout`gacha qotadi. Bu yerda navbat async: thread ham, ulanish ham
+    band qilinmaydi, qo'yilgan so'rovga esa pool'da doim joy bor.
+    """
+    async with _db_slots():
+        yield
+
+
+def get_db(_slot: Annotated[None, Depends(_db_slot, scope="function")]) -> Iterator[Session]:
     """FastAPI dependency: so'rov uchun bitta sessiya, oxirida commit yoki rollback."""
     db = new_session()
     try:

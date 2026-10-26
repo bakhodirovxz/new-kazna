@@ -196,9 +196,9 @@ def _state(**kw: Any) -> ops.ArchiverState:
          {"wal_archiver_lag"}),
         # grace oynasi ichida (RPO < 18 min < RPO + grace) -> ok
         ({"last_archived": NOW - 18 * MIN, "current_wal": _wal(13)}, "ok", set()),
-        # hech qachon arxivlanmagan, ishlash vaqti uzoq va tugallangan segment bor
+        # statistika bo'sh (avariya/yangi start): kechikish xulosa qilinmaydi
         ({"last_archived": None, "last_archived_wal": None, "current_wal": _wal(5)},
-         "alarm", {"wal_archiver_lag"}),
+         "ok", set()),
         # ko'p xato bo'lgan, lekin oxirgisi muvaffaqiyatli
         ({"last_failed": NOW - 60 * MIN}, "ok", set()),
         # yangi ishga tushgan server
@@ -224,6 +224,33 @@ def test_check_archiver_timeline_switch_is_note_not_alarm() -> None:
     status, problems, notes = ops.check_archiver(st)
     assert (status, problems) == ("ok", [])
     assert notes and "timeline" in notes[0]
+
+
+@pytest.mark.parametrize("last", ["00000003.history", "00000002.partial", "garbage"])
+def test_check_archiver_non_segment_name_is_note_not_error(last: str) -> None:
+    st = _state(last_archived_wal=last, last_archived=NOW - 25 * MIN, current_wal=_wal(20))
+    status, problems, notes = ops.check_archiver(st)
+    assert (status, problems) == ("ok", [])
+    assert notes
+
+
+def test_check_archiver_empty_stats_gives_note() -> None:
+    st = _state(last_archived=None, last_archived_wal=None, current_wal=_wal(9))
+    _, _, notes = ops.check_archiver(st)
+    assert any("stats empty" in n for n in notes)
+
+
+def test_ops_check_does_not_bootstrap(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    def boom() -> None:
+        raise AssertionError("bootstrap_runtime must not run for ops-check")
+
+    monkeypatch.setattr(cli, "bootstrap_runtime", boom)
+    monkeypatch.setattr(cli, "build_notifier", lambda settings: RecordingNotifier())
+    cli.main(["ops-check", "--json"])
+    assert '"problems"' in capsys.readouterr().out
+    cli.main(["restore-test-status"])
 
 
 def test_ops_check_reports_archiver_note_when_off() -> None:
@@ -292,6 +319,7 @@ BAD_INPUTS = [
     ["--duration-seconds", "-5", "--backup", "20260925-200000F"],
     ["--duration-seconds", "9999999", "--backup", "20260925-200000F"],
     ["--duration-seconds", "10", "--backup", "evil; rm -rf"],
+    ["--duration-seconds", "10", "--backup", "20260925-200000F\n"],
     ["--duration-seconds", "10", "--backup", "20260925-200000F", "--details", "a\x07b"],
     ["--duration-seconds", "10", "--backup", "20260925-200000F", "--details", "x" * 2001],
 ]
@@ -322,9 +350,9 @@ def test_cli_restore_test_fail_path(clean_restore_setting: None) -> None:
     assert cli.main(["restore-test-status"]) == 1
     with get_engine("app").connect() as conn:
         outcome = conn.execute(text(
-            "SELECT details->>'outcome' FROM core.audit_log "
-            "WHERE action = 'ops.restore_test.recorded' ORDER BY id DESC LIMIT 1")).scalar_one()
-    assert outcome == "fail"
+            "SELECT details->>'outcome', result FROM core.audit_log "
+            "WHERE action = 'ops.restore_test.recorded' ORDER BY id DESC LIMIT 1")).one()
+    assert tuple(outcome) == ("fail", "fail")
 
 
 def test_cli_restore_test_record_and_status(

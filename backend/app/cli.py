@@ -28,8 +28,8 @@ muhim: avval haqiqiy mutatsiya va uning committi (`with engine.begin(): ...` blo
 muvaffaqiyatli tugaydi), SO'NGGINA audit yozuvi ("ok" natija bilan). Xato bo'lsa — audit
 "fail" natija bilan yoziladi (kalit materialisiz, faqat maqsad/xato turi) va istisno qayta
 ko'tariladi (chiqish kodi nolga teng bo'lmaydi). `restore-test-record` ham shunday:
-avval yozuv committi, so'ngra audit; audit `result` — OPERATSIYA natijasi (yozildi), tiklash
-testining natijasi esa `details.outcome` da.
+avval yozuv committi, so'ngra audit; audit `result` va `details.outcome` — testning
+natijasi (ok|fail).
 
 `ops-check` va `restore-test-status` `bootstrap_runtime()` DAN OLDIN ishlaydi: ular faqat
 o'qiydi (kalit zanjiri kerak emas), bootstrap esa audit partitsiyalarini oldindan yaratib
@@ -108,7 +108,7 @@ def _duration(value: str) -> int:
 
 
 def _backup_label(value: str) -> str:
-    if not BACKUP_LABEL_RE.match(value):
+    if not BACKUP_LABEL_RE.fullmatch(value):
         raise argparse.ArgumentTypeError(
             "--backup pgBackRest yorlig'i (yoki 'none') bo'lishi kerak")
     return value
@@ -335,7 +335,7 @@ def _restore_record(result: str, duration: int, backup: str, details: str) -> in
                                 backup=backup, details=details)
     with get_engine("app").begin() as conn:
         version = ops.record_restore_test(conn, restore)
-    record(AuditEvent(action=AuditAction.RESTORE_TEST_RECORDED,
+    record(AuditEvent(action=AuditAction.RESTORE_TEST_RECORDED, result=status,
                       object_type="restore_test", object_id=backup[:64],
                       details={"outcome": status, "duration_seconds": duration,
                                "rto_ok": restore.rto_ok, "version": version, "via": "cli"}))

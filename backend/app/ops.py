@@ -11,6 +11,7 @@ Bu kalit `DEFAULT_SETTINGS` da yo'q — admin API uni ko'rsatmaydi va tahrirlay 
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -149,6 +150,9 @@ class ArchiverState:
     now: datetime  # DB soati
 
 
+WAL_NAME_RE = re.compile(r"[0-9A-F]{24}")
+
+
 def _segno(wal: str, segment_bytes: int) -> tuple[int, int]:
     """WAL fayl nomi (24 hex) -> (timeline, mutlaq segment raqami)."""
     per_log = 0x100000000 // segment_bytes
@@ -193,8 +197,15 @@ def _completed_unarchived(st: ArchiverState, notes: list[str]) -> bool:
         return False
     cur_tl, cur = _segno(st.current_wal, st.segment_bytes)
     if st.last_archived_wal is None:
-        return cur > 1  # segment 1 — yagona (hali yozilayotgan) segment
-    last_tl, last = _segno(st.last_archived_wal.split(".")[0], st.segment_bytes)
+        # Statistika avariyada nollanadi: undan kechikish xulosa qilinmaydi (zaxira yoshi qoplaydi).
+        notes.append("wal_archiver: archiver stats empty (fresh start or crash reset); "
+                     "WAL safety covered by backup age")
+        return False
+    name = st.last_archived_wal.split(".")[0]
+    if not WAL_NAME_RE.fullmatch(name):  # masalan 00000003.history
+        notes.append("wal_archiver: timeline changed, lag check skipped")
+        return False
+    last_tl, last = _segno(name, st.segment_bytes)
     if cur_tl != last_tl:
         notes.append("wal_archiver: timeline changed, lag check skipped")
         return False

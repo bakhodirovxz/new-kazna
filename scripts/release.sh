@@ -17,7 +17,15 @@ mkdir -p "$OUT/images" "$OUT/sbom"
 docker save -o "$OUT/images/ugekazna-images-$VERSION.tar" \
   "ugekazna-backend:$VERSION" "ugekazna-web:$VERSION" "ugekazna-db:$VERSION" "ugekazna-redis:$VERSION"
 cp build/sbom/*.cdx.json "$OUT/sbom/"
-git archive --format=tar HEAD deploy scripts docs/security docs/ops Makefile | tar -x -C "$OUT"
+PATHS=()
+for path in deploy scripts docs/security docs/ops Makefile; do
+  if git cat-file -e "HEAD:$path" 2>/dev/null; then
+    PATHS+=("$path")
+  else
+    echo "OGOHLANTIRISH: $path HEAD'da yo'q, paketga kirmaydi" >&2
+  fi
+done
+git archive --format=tar HEAD "${PATHS[@]}" | tar -x -C "$OUT"
 printf 'UGK_VERSION=%s\n' "$VERSION" > "$OUT/deploy/release.env"
 git rev-parse HEAD > "$OUT/COMMIT"
 (cd "$OUT" && find . -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS)

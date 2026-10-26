@@ -8,7 +8,12 @@
 set -eu
 . "${UGK_PGBR_ENV:-/usr/local/bin/ugk-pgbackrest-env}"
 PGDATA="${PGDATA:-/var/lib/postgresql/data}"
-if [ -n "$(ls -A "$PGDATA" 2>/dev/null)" ]; then
+# Fail-closed: katalog yo'q yoki o'qilmasa "bo'sh" deb hisoblanmaydi.
+if [ ! -d "$PGDATA" ] || [ ! -r "$PGDATA" ] || [ ! -x "$PGDATA" ]; then
+  echo "ugk-restore: $PGDATA mavjud emas yoki o'qib bo'lmaydi — tiklash rad etildi" >&2
+  exit 3
+fi
+if [ -n "$(ls -A "$PGDATA")" ]; then
   echo "ugk-restore: $PGDATA bo'sh emas — tiklash rad etildi" >&2
   exit 3
 fi

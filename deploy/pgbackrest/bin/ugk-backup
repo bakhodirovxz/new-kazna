@@ -35,8 +35,10 @@ info_json() {
   pgbackrest --stanza="$STANZA" --output=json info
 }
 
+# Quvur pgbackrest xatosini yashiradi — avval o'zgaruvchiga, keyin jq (info xatosi — chiqish kodi != 0).
 last_backup_stop() {
-  info_json | jq -r '[.[0].backup[]?.timestamp.stop] | max // 0'
+  json="$(info_json)" || return 1
+  printf '%s' "$json" | jq -r '[.[0].backup[]?.timestamp.stop] | max // 0'
 }
 
 run_backup() {
@@ -63,7 +65,8 @@ health() {
     echo "oxirgi zaxira xato bilan tugagan"
     return 1
   fi
-  age=$(( $(date -u +%s) - $(last_backup_stop) ))
+  stop="$(last_backup_stop)" || { echo "pgbackrest info xato bilan tugadi"; return 1; }
+  age=$(( $(date -u +%s) - stop ))
   if [ "$age" -gt "$BACKUP_MAX_AGE_SECONDS" ]; then
     echo "oxirgi muvaffaqiyatli zaxira ${age} s oldin"
     return 1
@@ -73,7 +76,8 @@ health() {
 
 loop() {
   prepare
-  if [ "$BACKUP_INITIAL_FULL" = yes ] && [ "$(last_backup_stop)" = 0 ]; then
+  stop="$(last_backup_stop)"
+  if [ "$BACKUP_INITIAL_FULL" = yes ] && [ "$stop" = 0 ]; then
     run_backup full || true
   fi
   last_slot=""
@@ -94,6 +98,6 @@ case "${1:-loop}" in
   health) health ;;
   due) due_type "${2:?HHMM}" ;;
   info) ugk_cipher_conf; info_json ;;
-  latest) ugk_cipher_conf; info_json | jq -r '.[0].backup[-1].label // empty' ;;
+  latest) ugk_cipher_conf; json="$(info_json)"; printf '%s' "$json" | jq -r '.[0].backup[-1].label // empty' ;;
   *) echo "ugk-backup: noma'lum buyruq: $1" >&2; exit 2 ;;
 esac

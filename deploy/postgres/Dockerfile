@@ -3,12 +3,16 @@
 # Build konteksti — deploy/ (deploy/.dockerignore faqat postgres/ va pgbackrest/ ni o'tkazadi):
 #   docker build -f deploy/postgres/Dockerfile --build-arg POSTGRES_IMAGE=... -t ugekazna-db:<v> deploy
 ARG POSTGRES_IMAGE=postgres:16-alpine
+# hadolint ignore=DL3006
 FROM ${POSTGRES_IMAGE}
 
 COPY postgres/certs/ /tmp/certs/
-RUN if ls /tmp/certs/*.crt >/dev/null 2>&1; then cat /tmp/certs/*.crt >> /etc/ssl/certs/ca-certificates.crt; fi \
+# Korporativ CA faqat `apk add` vaqtida ishonchli: oxirgi image'da asl to'plam tiklanadi.
+RUN cp /etc/ssl/certs/ca-certificates.crt /tmp/ca-bundle.orig \
+ && if ls /tmp/certs/*.crt >/dev/null 2>&1; then cat /tmp/certs/*.crt >> /etc/ssl/certs/ca-certificates.crt; fi \
  && apk add --no-cache pgbackrest jq \
- && rm -rf /tmp/certs \
+ && cp /tmp/ca-bundle.orig /etc/ssl/certs/ca-certificates.crt \
+ && rm -rf /tmp/certs /tmp/ca-bundle.orig \
  && install -d -o postgres -g postgres -m 0750 /var/lib/pgbackrest \
  && install -d -m 0755 /etc/pgbackrest /etc/postgresql/profiles
 

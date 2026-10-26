@@ -1,18 +1,27 @@
 #!/bin/sh
 # DB konteyneri kirish nuqtasi: xotira profilini tanlash va pgBackRest shifr parolini tmpfs'ga
 # yozish (archive_command uchun), so'ng rasmiy docker-entrypoint.sh (initdb, 00/01 skriptlar).
+# Fail-closed: shifr siri yo'q/bo'sh/ko'p qatorli bo'lsa DB ishga tushmaydi (WAL arxivsiz qolmasin).
+# Ongli o'chirish: UGK_ARCHIVE=off (faqat smoke/CI) — archive_mode=off bilan ishga tushadi.
 set -eu
 profile="${UGK_PG_PROFILE:-8gb}"
 case "$profile" in
   ci|8gb|16gb) ;;
   *) echo "ugk-db-entrypoint: noma'lum UGK_PG_PROFILE=$profile (ci|8gb|16gb)" >&2; exit 1 ;;
 esac
-umask 077
-cp "/etc/postgresql/profiles/$profile.conf" /tmp/pg-profile.conf
-. "${UGK_PGBR_ENV:-/usr/local/bin/ugk-pgbackrest-env}"
-if [ -r /run/secrets/pgbackrest_cipher_pass ]; then
-  ugk_cipher_conf
-else
-  echo "ugk-db-entrypoint: pgbackrest_cipher_pass yo'q — WAL arxivlanmaydi" >&2
+if [ "${1:-}" = postgres ]; then
+  case " $* " in
+    *" config_file="*) ;;
+    *) echo "ugk-db-entrypoint: postgres config_file= siz ishga tushirilmaydi" >&2; exit 1 ;;
+  esac
 fi
+umask 077
+. "${UGK_PGBR_ENV:-/usr/local/bin/ugk-pgbackrest-env}"
+if [ "${UGK_ARCHIVE:-on}" = off ]; then
+  echo "ugk-db-entrypoint: UGK_ARCHIVE=off — WAL arxivlanmaydi" >&2
+  if [ "${1:-}" = postgres ]; then set -- "$@" -c archive_mode=off; fi
+else
+  ugk_cipher_conf || exit 1
+fi
+cp "/etc/postgresql/profiles/$profile.conf" /tmp/pg-profile.conf
 exec docker-entrypoint.sh "$@"

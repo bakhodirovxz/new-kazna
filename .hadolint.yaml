@@ -4,9 +4,6 @@ ignored:
   # DL3018: apk paket versiyasini qotirish. Base image digest bilan qotirilgan
   # (deploy/images.lock.env); Alpine reliz repozitoriyasi faqat xavfsizlik tuzatishlarini beradi.
   - DL3018
-  # DL3006: `FROM ${..._IMAGE}` — tegi ARG standartida, prod'da digest scripts/build_images.sh orqali
-  # (test_dockerfiles_use_pinned_args, test_base_images_pinned_by_digest).
-  - DL3006
 trustedRegistries:
   - docker.io
   - mcr.microsoft.com

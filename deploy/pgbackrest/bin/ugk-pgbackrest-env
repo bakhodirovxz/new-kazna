@@ -1,15 +1,22 @@
 # shellcheck shell=sh
 # Source qilinadi (ugk-db-entrypoint, ugk-backup, ugk-restore). Shifr parolini env'ga emas,
 # tmpfs'dagi 0600 include fayliga yozadi — `docker inspect` va /proc/*/environ'da ko'rinmaydi.
+# Sir bo'sh yoki ko'p qatorli bo'lsa — xato (ko'p qatorli qiymat include faylga qo'shimcha kalit
+# kiritishi mumkin). Sinovlarda yo'li UGK_CIPHER_SECRET bilan almashtiriladi.
 ugk_cipher_conf() {
-  if [ ! -r /run/secrets/pgbackrest_cipher_pass ]; then
-    echo "ugk: /run/secrets/pgbackrest_cipher_pass o'qilmadi" >&2
+  _secret="${UGK_CIPHER_SECRET:-/run/secrets/pgbackrest_cipher_pass}"
+  if [ ! -r "$_secret" ]; then
+    echo "ugk: pgbackrest_cipher_pass o'qilmadi" >&2
+    return 1
+  fi
+  _pass="$(cat "$_secret")"
+  if [ -z "$_pass" ] || [ "$(printf '%s' "$_pass" | wc -l)" -ne 0 ]; then
+    echo "ugk: pgbackrest_cipher_pass bo'sh yoki ko'p qatorli" >&2
     return 1
   fi
   (
     umask 077
     mkdir -p /tmp/pgbackrest/conf.d /tmp/pgbackrest/lock /tmp/pgbackrest/spool
-    printf '[global]\nrepo1-cipher-pass=%s\n' "$(cat /run/secrets/pgbackrest_cipher_pass)" \
-      > /tmp/pgbackrest/conf.d/cipher.conf
+    printf '[global]\nrepo1-cipher-pass=%s\n' "$_pass" > /tmp/pgbackrest/conf.d/cipher.conf
   )
 }

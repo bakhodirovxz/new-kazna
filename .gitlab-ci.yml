@@ -1,0 +1,40 @@
+# UGEKAZNA CI (spec 10). Runner: Linux, shell executor, Docker Engine + Compose v2.24+, make, git, python3
+# (teg: docker-shell). Hamma tekshiruv Docker'da. GitHub Actions bilan bir xil make target'lar.
+# Haftalik qayta skan: CI/CD → Schedules (masalan, "0 3 * * 1").
+stages: [check, e2e, scan]
+
+variables:
+  GIT_DEPTH: "0"          # gitleaks butun tarixni skanerlaydi
+  GIT_STRATEGY: clone
+
+default:
+  tags: [docker-shell]
+  interruptible: true
+
+check:
+  stage: check
+  timeout: 1h
+  script:
+    - make check
+
+e2e:
+  stage: e2e
+  timeout: 45m
+  script:
+    - make e2e-ci
+  artifacts:
+    when: on_failure
+    expire_in: 14 days
+    paths:
+      - frontend/e2e/playwright-report/
+
+scan:
+  stage: scan
+  timeout: 1h
+  script:
+    - make scan
+  artifacts:
+    when: always
+    expire_in: 90 days
+    paths:
+      - build/sbom/

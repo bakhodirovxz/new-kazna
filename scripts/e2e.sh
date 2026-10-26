@@ -8,4 +8,4 @@ cd "$(dirname "$0")/.."
 
 docker compose -f deploy/compose.yml exec -T api python -m app.devtools seed-e2e
 docker compose -f deploy/compose.frontend.yml run --rm e2e \
-  sh -c 'npm ci && npx tsc --noEmit -p . && npx playwright test "$@"' e2e "$@"
+  sh -c 'npm ci --ignore-scripts && npx tsc --noEmit -p . && npx playwright test "$@"' e2e "$@"

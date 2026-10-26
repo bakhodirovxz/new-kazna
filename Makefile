@@ -2,7 +2,7 @@
 COMPOSE := docker compose -f deploy/compose.yml
 TEST    := docker compose -f deploy/compose.test.yml run --rm test
 
-.PHONY: secrets lock build up down logs create-admin retire-keys rewrap-keys test lint typecheck etl-run seed-synthetic rollback-build fe-install fe-check web e2e
+.PHONY: secrets lock build up down logs create-admin retire-keys rewrap-keys test lint typecheck etl-run seed-synthetic rollback-build fe-install fe-check web e2e e2e-ci
 
 secrets: ## Sirlarni yaratish (mavjudlariga tegmaydi)
 	python3 scripts/gen_secrets.py
@@ -67,6 +67,9 @@ web: ## frontend'ni qayta qurish va Caddy'ni yangilash
 
 e2e: ## Playwright E2E (dev stack ishlab turishi kerak)
 	./scripts/e2e.sh
+
+e2e-ci: ## CI: toza dev stack + Playwright E2E (faqat bir martalik checkout; dev'da make e2e)
+	scripts/e2e_ci.sh
 
 .PHONY: check-backend
 check-backend: ## ruff + mypy + bandit + pip-audit + pytest (qamrov 85%/95%)

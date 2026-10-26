@@ -1,0 +1,14 @@
+{
+  "_comment": "page — sahifa ochilishidagi parallel so'rovlar (qobiq), filter — filtr almashtirishdagi so'rovlar. Bo'lim endpointlari paydo bo'lganda shu ro'yxatlarga qo'shing, masalan \"/api/v1/kazna/svod?br={br}&per={per}\" ({br} — foydalanuvchi doirasidagi filial, {per} — davr).",
+  "page": [
+    "/api/v1/auth/me",
+    "/api/v1/meta/menu",
+    "/api/v1/meta/branches",
+    "/api/v1/meta/periods",
+    "/api/v1/meta/freshness"
+  ],
+  "filter": [
+    "/api/v1/meta/branches",
+    "/api/v1/meta/freshness"
+  ]
+}

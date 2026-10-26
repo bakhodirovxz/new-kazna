@@ -1,0 +1,26 @@
+# k6 yuklama testi (scripts/load_test.sh). Dev stack'ning `ugekazna_edge` tarmog'ida https://caddy ga
+# ulanadi; TLS dev Caddy'ning ichki CA'si bilan TO'LIQ tekshiriladi (build/loadtest/caddy-root.crt).
+name: ugekazna-load
+
+services:
+  k6:
+    image: grafana/k6:0.54.0
+    # build/loadtest host foydalanuvchisiga tegishli (Linux) — skript UGK_UID/UGK_GID ni eksport qiladi.
+    user: "${UGK_UID:-12345}:${UGK_GID:-12345}"
+    working_dir: /scripts
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    environment:
+      BASE_URL: ${UGK_LOAD_BASE_URL:-https://caddy}
+      SESSIONS_FILE: /work/sessions.json
+      DURATION: ${UGK_LOAD_DURATION:-3m}
+      SSL_CERT_FILE: /work/caddy-root.crt
+    volumes:
+      - ../loadtest/k6:/scripts:ro
+      - ../build/loadtest:/work
+    networks: [edge]
+
+networks:
+  edge:
+    external: true
+    name: ${UGK_LOAD_NETWORK:-ugekazna_edge}

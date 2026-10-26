@@ -1,15 +1,20 @@
 """Faqat dev/test muhiti uchun yordamchi buyruqlar.
 
     python -m app.devtools seed-e2e
+    python -m app.devtools seed-load --users 100
 
 `seed-e2e` Playwright E2E testlari uchun ma'lum parol va ma'lum TOTP sirli
 foydalanuvchilarni yaratadi yoki holatini qayta tiklaydi (idempotent). ENV dev/test
 bo'lmasa hech narsa qilmaydi va 2 kodi bilan chiqadi — prod'da bu hisoblar paydo bo'lmaydi.
+
+`seed-load` yuklama testi (k6) uchun `load_NNN` foydalanuvchilarini yaratadi/tiklaydi va har biriga
+TAYYOR sessiya ochadi (login'siz); natija — stdout'dagi oxirgi qator, JSON ro'yxat.
 """
 
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import sys
 from dataclasses import dataclass
@@ -18,7 +23,7 @@ from datetime import UTC, datetime
 from sqlalchemy import delete, select, update
 from sqlalchemy.orm import Session
 
-from app.auth import passwords
+from app.auth import passwords, sessions
 from app.auth.models import BackupCode, Position, PositionBranch, Role, User, UserSession
 from app.auth.service import totp_aad
 from app.bootstrap import bootstrap_runtime
@@ -138,11 +143,81 @@ def seed_e2e() -> int:
     return 0
 
 
+LOAD_PREFIX = "load_"
+LOAD_MAX_USERS = 500
+# Har 3-foydalanuvchi — filial iqtisodchisi (RLS va scope keshi ham yuklansin).
+LOAD_BRANCH_EVERY = 3
+
+
+def load_users(count: int) -> list[E2eUser]:
+    users: list[E2eUser] = []
+    for i in range(1, count + 1):
+        username = f"{LOAD_PREFIX}{i:03d}"
+        full_name = f"Нагрузочный {i:03d}"
+        if i % LOAD_BRANCH_EVERY == 0:
+            branch = 2 + (i // LOAD_BRANCH_EVERY) % 15
+            users.append(
+                E2eUser(
+                    username,
+                    full_name,
+                    "economist_filiala",
+                    totp=True,
+                    must_change=False,
+                    branch_ids=(branch,),
+                )
+            )
+        else:
+            users.append(E2eUser(username, full_name, "rukovodstvo", totp=True, must_change=False))
+    return users
+
+
+def seed_load(count: int) -> list[dict[str, object]]:
+    """Yuklama testi foydalanuvchilari va tayyor sessiyalar (docs/ops/load-test.md, Ruling)."""
+    bootstrap_runtime()
+    now = datetime.now(UTC)
+    password_hash = passwords.hash_password(E2E_PASSWORD)
+    out: list[dict[str, object]] = []
+    with new_session() as db:
+        for spec in load_users(count):
+            user = _upsert(db, spec, password_hash, now)
+            new = sessions.create(db, user.id, "127.0.0.1", "k6-loadtest", now)
+            out.append(
+                {
+                    "username": spec.username,
+                    "token": new.token,
+                    "csrf": new.csrf,
+                    "branches": list(spec.branch_ids),
+                }
+            )
+        db.commit()
+    return out
+
+
+def _load_count(value: str) -> int:
+    count = int(value)
+    if not 1 <= count <= LOAD_MAX_USERS:
+        raise argparse.ArgumentTypeError(f"1..{LOAD_MAX_USERS} oralig'ida bo'lishi kerak")
+    return count
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m app.devtools")
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("seed-e2e", help="E2E foydalanuvchilarini yaratish/tiklash (faqat dev/test)")
-    parser.parse_args(argv)
+    load = sub.add_parser(
+        "seed-load", help="yuklama testi foydalanuvchilari va sessiyalari (faqat dev/test)"
+    )
+    load.add_argument("--users", type=_load_count, default=100)
+    args = parser.parse_args(argv)
+    if args.command == "seed-load":
+        # seed_e2e bilan bir xil: Settings standartiga emas, aniq berilgan ENV'ga tayanamiz.
+        env = os.environ.get("ENV", "")
+        if env not in ALLOWED_ENVS:
+            shown = env or "belgilanmagan"
+            _out(f"Rad etildi: seed-load faqat aniq ENV=dev/test muhitida ishlaydi (ENV={shown})")
+            return 2
+        sys.stdout.write(json.dumps(seed_load(args.users), ensure_ascii=False) + "\n")
+        return 0
     return seed_e2e()
 
 

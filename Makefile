@@ -106,3 +106,7 @@ prod-config: ## compose.prod.yml sintaksisi (docker compose config, bo'sh sinov 
 .PHONY: test-caddy
 test-caddy: ## Caddyfile.prod xatti-harakati (probe'lar, TLS, sarlavhalar, 1 MB, SPA, force-browsing)
 	scripts/tests/caddy_prod_test.sh
+
+.PHONY: load-test
+load-test: ## k6 yuklama testi: dev stack + sintetik ma'lumot (≈ 11 daqiqa; UGK_LOAD_DURATION=20s — tez)
+	scripts/load_test.sh

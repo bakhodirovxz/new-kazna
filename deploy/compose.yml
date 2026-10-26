@@ -107,7 +107,7 @@ services:
       - ../backend/app:/app/app:ro
     tmpfs: [/tmp]
     command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload",
-              "--proxy-headers", "--forwarded-allow-ips", "*", "--no-server-header", "--no-access-log"]
+              "--proxy-headers", "--forwarded-allow-ips", "172.31.251.0/24", "--no-server-header", "--no-access-log"]
     # `edge`da EMAS — faqat `backend` (DB/Redis) va `front` (faqat caddy bilan, ikkalasi
     # ham `internal: true`). Caddy hostga `edge` orqali chiqadi, api hech qachon shu
     # tarmoqqa tegmaydi (kamroq blast radius).
@@ -170,6 +170,8 @@ networks:
     internal: true
   front:
     internal: true
+    ipam:
+      config: [{subnet: 172.31.251.0/24}]
   edge: {}
 
 volumes:

@@ -122,9 +122,10 @@ services:
     environment: *backend-env
     secrets: [db_app_password, redis_password, master_kek, blind_index_key, session_pepper]
     tmpfs: ["/tmp:uid=10001,gid=10001,mode=0700"]
-    # Faqat caddy ulanadi (`web` internal tarmog'i) — X-Forwarded-For'ga ishonish xavfsiz.
+    # X-Forwarded-For'ga faqat `web` tarmog'i (caddy) ishonadi; `backend`dagi boshqa servislar (worker...)
+    # api:8000 ga to'g'ridan ulana oladi, ularning sarlavhasi hisobga olinmaydi.
     command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4",
-              "--proxy-headers", "--forwarded-allow-ips", "*", "--no-server-header", "--no-access-log"]
+              "--proxy-headers", "--forwarded-allow-ips", "172.31.250.0/24", "--no-server-header", "--no-access-log"]
     mem_limit: 1536m
     cpus: 2
     networks: [backend, web]
@@ -216,7 +217,7 @@ services:
     secrets: [pgbackrest_cipher_pass]
     volumes:
       - db_data:/var/lib/postgresql/data:ro
-      - pg_run:/var/run/postgresql
+      - pg_run:/var/run/postgresql:ro
       - pgbackrest_repo:/var/lib/pgbackrest
     tmpfs: ["/tmp:uid=70,gid=70,mode=0700"]
     mem_limit: 512m
@@ -235,6 +236,8 @@ networks:
   edge: {}
   web:
     internal: true
+    ipam:
+      config: [{subnet: 172.31.250.0/24}]
   backend:
     internal: true
   egress: {}

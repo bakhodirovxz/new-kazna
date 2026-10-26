@@ -26,11 +26,15 @@ EMPTY_OPTIONAL = ("smtp_password",)
 
 
 def _write(path: Path, value: str) -> None:
+    if path.is_symlink():
+        raise SystemExit(f"symlink rad etildi: {path}")
     if path.exists():
         sys.stdout.write(f"  mavjud, o'tkazib yuborildi: {path.name}\n")
         return
-    path.write_text(value, encoding="ascii")
-    os.chmod(path, 0o600)
+    # O_EXCL | O_NOFOLLOW: fayl hech qachon 0600'dan keng huquq bilan paydo bo'lmaydi.
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0), 0o600)
+    with os.fdopen(fd, "w", encoding="ascii") as handle:
+        handle.write(value)
     sys.stdout.write(f"  yaratildi: {path.name}\n")
 
 

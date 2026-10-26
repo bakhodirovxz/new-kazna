@@ -2,6 +2,8 @@ import os
 import stat
 from pathlib import Path
 
+import pytest
+
 from tests.ops.repo import load_script
 
 EXPECTED = {
@@ -21,6 +23,18 @@ def test_generates_all_secrets_once(tmp_path: Path) -> None:
 
 def test_existing_secrets_are_not_overwritten(tmp_path: Path) -> None:
     gen = load_script("scripts/gen_secrets.py", "gen_secrets")
-    (tmp_path / "pgbackrest_cipher_pass").write_text("keep", encoding="ascii")
+    for name in EXPECTED:
+        (tmp_path / name).write_text("keep", encoding="ascii")
     gen.main(tmp_path)
-    assert (tmp_path / "pgbackrest_cipher_pass").read_text(encoding="ascii") == "keep"
+    for name in EXPECTED:
+        assert (tmp_path / name).read_text(encoding="ascii") == "keep", name
+
+
+def test_symlink_target_is_refused(tmp_path: Path) -> None:
+    gen = load_script("scripts/gen_secrets.py", "gen_secrets")
+    victim = tmp_path / "victim"
+    (tmp_path / "secrets").mkdir()
+    (tmp_path / "secrets" / "master_kek").symlink_to(victim)  # dangling
+    with pytest.raises(SystemExit):
+        gen.main(tmp_path / "secrets")
+    assert not victim.exists()

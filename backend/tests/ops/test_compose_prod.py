@@ -126,3 +126,19 @@ def test_prod_env_example_documents_all_variables() -> None:
     example = repo_path("deploy/prod.env.example").read_text(encoding="utf-8")
     documented = set(re.findall(r"^([A-Z0-9_]+)=", example, re.M))
     assert used <= documented, sorted(used - documented)
+
+
+def test_api_trusts_forwarded_only_from_web_subnet(compose: dict[str, Any]) -> None:
+    command = compose["services"]["api"]["command"]
+    trusted = command[command.index("--forwarded-allow-ips") + 1]
+    subnet = compose["networks"]["web"]["ipam"]["config"][0]["subnet"]
+    assert trusted != "*" and trusted == subnet
+
+
+def test_backup_socket_mount_is_read_only(compose: dict[str, Any]) -> None:
+    assert "pg_run:/var/run/postgresql:ro" in compose["services"]["backup"]["volumes"]
+
+
+def test_dev_compose_has_init() -> None:
+    dev = yaml.safe_load(repo_path("deploy/compose.yml").read_text(encoding="utf-8"))
+    assert dev["x-hardening"]["init"] is True

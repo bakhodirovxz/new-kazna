@@ -4,6 +4,8 @@
 # Xavfsizlik sarlavhalari, `//` yo'naltirish va handle_errors — Caddyfile.dev bilan bir xil (3-reja ruling'lari).
 {
 	admin off
+	# SNI'siz (IP bo'yicha) ulanish ham haqiqiy sertifikatni oladi.
+	default_sni {$UGK_DOMAIN}
 	auto_https disable_redirects
 	http_port 8080
 	https_port 8443
@@ -28,9 +30,21 @@
 	}
 }
 
-# HTTP → HTTPS (host'da 80 → konteyner 8080). Manzilda port yo'q — host'dagi 443.
-http://{$UGK_DOMAIN} {
+# HTTP → HTTPS (host'da 80 → konteyner 8080). Har qanday Host/IP uchun (catch-all): yo'naltirish
+# DOIMO sozlangan domenga ({$UGK_DOMAIN}), mijoz bergan Host'ga emas. Manzilda port yo'q — host'dagi 443.
+http:// {
+	import security_headers
 	redir https://{$UGK_DOMAIN}{uri} 308
+}
+
+# Notanish Host (IP bo'yicha skaner, soxta Host) — bo'sh 200 emas, 421 + sarlavhalar.
+https:// {
+	tls /run/secrets/tls_cert /run/secrets/tls_key {
+		protocols tls1.2 tls1.3
+	}
+	import security_headers
+	header Cache-Control "no-store"
+	respond 421
 }
 
 # Konteyner healthcheck'i uchun (compose.prod.yml: wget http://127.0.0.1:8081/health).
@@ -75,23 +89,23 @@ http://:8081 {
 	header /api/* ?Content-Disposition "attachment; filename=\"api.json\""
 
 	# Force-browsing (Kiberxavfsizlik markazi 05-29-02/5323): nuqta bilan boshlanuvchi har qanday
-	# segment (.git, .env, .DS_Store ...) — 404, SPA fallback'dan oldin. /.well-known/ istisno.
+	# segment (.git, .env, .DS_Store ...) — 404, SPA fallback'dan oldin. /.well-known/<nom> istisno.
 	@dotseg {
-		# orig_uri: Caddy yo'lni tozalashdan OLDINGI holat (/%2e%2e/ ham tutiladi).
-		expression {http.request.orig_uri.path}.matches('(?i)(^|/)([.]|%2e)')
-		not path /.well-known/*
+		# orig_uri: Caddy yo'lni tozalashdan OLDINGI holat (/%2e%2e/ ham tutiladi). Teskari slash (\, %5c) — taqiq.
+		expression {http.request.orig_uri.path}.matches('(?i)(^|/)([.]|%2e)') || {http.request.orig_uri.path}.matches('\\x5c')
+		# Faqat bitta darajali /.well-known/<nom> (nuqtasiz) istisno.
+		not expression {http.request.orig_uri.path}.matches('^/[.]well-known/[^/.][^/]*$')
 	}
 	handle @dotseg {
-		respond 404
+		error 404
 	}
 
 	# Probe'lar faqat ichki tarmoq uchun. `handle` bloklari o'zaro istisno va yo'l uzunligi
 	# bo'yicha saralanadi — alohida handle, `/api/*` proksisidan oldin.
-	handle /api/v1/healthz {
-		respond 404
-	}
-	handle /api/v1/readyz {
-		respond 404
+	# Regex orig_uri bo'yicha: healthz/, healthz;x, healthz%2f variantlari ham yopiladi.
+	@probes expression {http.request.orig_uri.path}.matches('(?i)^/api/v1/(healthz|readyz)([/;]|$)')
+	handle @probes {
+		error 404
 	}
 
 	handle /api/* {

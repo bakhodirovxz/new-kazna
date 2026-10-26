@@ -5,6 +5,7 @@ name: ugekazna-caddytest
 
 services:
   certgen:
+    build: {context: ../../backend, args: {INSTALL_DEV: "true"}}
     image: ugekazna-backend:dev
     user: "0:0"
     command: ["python", "/scripts/gen_selfsigned_tls.py", "--out", "/certs", "--name", "ugk.test",
@@ -19,6 +20,8 @@ services:
     volumes: ["./stub_api.py:/tests/stub_api.py:ro"]
     networks:
       web:
+        aliases: [api]
+      dev:
         aliases: [api]
 
   caddy:
@@ -47,6 +50,26 @@ services:
       certgen: {condition: service_completed_successfully}
       stub: {condition: service_started}
 
+  # Caddyfile.dev (A7.R: force-browsing dev'da ham yopiq) — dev stack'ka bog'liq emas.
+  caddydev:
+    image: ugekazna-web:caddytest
+    cap_add: [NET_BIND_SERVICE]
+    tmpfs: ["/data", "/config"]
+    volumes: ["../caddy/Caddyfile.dev:/etc/caddy/Caddyfile:ro"]
+    networks:
+      dev:
+        aliases: [caddy]
+    depends_on: [caddy, stub]
+
+  probedev:
+    image: ugekazna-backend:dev
+    command: ["python", "/tests/probe_caddy.py"]
+    environment:
+      PROBE_TARGET: dev
+    volumes: ["./probe_caddy.py:/tests/probe_caddy.py:ro"]
+    networks: [dev]
+    depends_on: [caddydev]
+
   probe:
     image: ugekazna-backend:dev
     command: ["python", "/tests/probe_caddy.py"]
@@ -61,3 +84,4 @@ volumes:
 
 networks:
   web: {}
+  dev: {}

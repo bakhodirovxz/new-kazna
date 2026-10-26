@@ -23,11 +23,18 @@ def test_caddy_prod_basics() -> None:
 
 def test_probes_blocked_before_api_proxy() -> None:
     text = _caddy()
-    api = text.index("handle /api/*")
-    for probe in ("/api/v1/healthz", "/api/v1/readyz"):
-        match = re.search(r"handle " + re.escape(probe) + r" \{\s*respond 404\s*\}", text)
-        assert match, probe
-        assert match.start() < api, probe
+    match = re.search(r"handle @probes \{\s*error 404\s*\}", text)
+    assert match
+    assert "healthz|readyz" in text
+    assert match.start() < text.index("handle /api/*")
+
+
+def test_unknown_host_and_no_sni_hardened() -> None:
+    text = _caddy()
+    assert "default_sni {$UGK_DOMAIN}" in text
+    http = r"^http:// \{\s*import security_headers\s*redir https://\{\$UGK_DOMAIN\}"
+    assert re.search(http, text, re.M)
+    assert re.search(r"^https:// \{.*?respond 421", text, re.S | re.M)
 
 
 def test_security_headers_match_backend() -> None:
@@ -51,7 +58,8 @@ def test_dotfile_matcher_before_spa_in_dev_and_prod() -> None:
     for name in ("Caddyfile.prod", "Caddyfile.dev"):
         text = repo_path(f"deploy/caddy/{name}").read_text(encoding="utf-8")
         assert "orig_uri.path}.matches" in text, name
-        assert "not path /.well-known/*" in text, name
+        assert "[.]well-known/[^/.]" in text, name
+        assert "x5c" in text, name
         assert text.index("handle @dotseg") < text.index("handle /api/*"), name
         assert text.index("handle @dotseg") < text.index("file_server"), name
 

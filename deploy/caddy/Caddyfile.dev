@@ -35,14 +35,15 @@ localhost, caddy {
 	redir @dupslash / 308
 
 	# Force-browsing (Kiberxavfsizlik markazi 05-29-02/5323): nuqta bilan boshlanuvchi har qanday
-	# segment (.git, .env, .DS_Store ...) — 404, SPA fallback'dan oldin. /.well-known/ istisno.
+	# segment (.git, .env, .DS_Store ...) — 404, SPA fallback'dan oldin. /.well-known/<nom> istisno.
 	@dotseg {
-		# orig_uri: Caddy yo'lni tozalashdan OLDINGI holat (/%2e%2e/ ham tutiladi).
-		expression {http.request.orig_uri.path}.matches('(?i)(^|/)([.]|%2e)')
-		not path /.well-known/*
+		# orig_uri: Caddy yo'lni tozalashdan OLDINGI holat (/%2e%2e/ ham tutiladi). Teskari slash (\, %5c) — taqiq.
+		expression {http.request.orig_uri.path}.matches('(?i)(^|/)([.]|%2e)') || {http.request.orig_uri.path}.matches('\\x5c')
+		# Faqat bitta darajali /.well-known/<nom> (nuqtasiz) istisno.
+		not expression {http.request.orig_uri.path}.matches('^/[.]well-known/[^/.][^/]*$')
 	}
 	handle @dotseg {
-		respond 404
+		error 404
 	}
 
 	# Probe'lar faqat ichki tarmoq uchun. `handle`lar birinchi mos kelgan direktivada

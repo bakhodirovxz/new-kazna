@@ -64,3 +64,18 @@ services:
     entrypoint: ["/bin/hadolint"]
     command: ["--config", "/src/.hadolint.yaml", "backend/Dockerfile", "frontend/Dockerfile",
               "deploy/postgres/Dockerfile"]
+
+  trivy:
+    <<: *tool
+    image: aquasec/trivy:0.57.1
+    # build/ host foydalanuvchisiga tegishli (Linux CI) — skriptlar UGK_UID/UGK_GID ni eksport qiladi.
+    user: "${UGK_UID:-0}:${UGK_GID:-0}"
+    environment:
+      HOME: /tmp
+      TRIVY_CACHE_DIR: /build/.trivy-cache
+      # Korporativ TLS proksi: tizim to'plami + backend/certs/*.crt (Go SSL_CERT_DIR).
+      SSL_CERT_DIR: /certs:/etc/ssl/certs
+    volumes:
+      - "..:/src:ro"
+      - "../build:/build"
+      - "../backend/certs:/certs:ro"

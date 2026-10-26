@@ -1,0 +1,3 @@
+# Trivy istisnolari (spec 10). Har qator: CVE-ID; ustidagi izohda — sabab, ta'sir tahlili va
+# qayta ko'rib chiqish sanasi. Faqat tuzatishi hali yo'q yoki bizni ta'sir qilmaydigan zaifliklar
+# (tuzatilmaganlar --ignore-unfixed bilan baribir o'tkaziladi). Har yozuv docs/security/sast-exceptions.md da.

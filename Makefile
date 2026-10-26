@@ -85,3 +85,13 @@ hooks: ## pre-commit hook'ni ulash
 .PHONY: db-smoke
 db-smoke: ## DB image smoke-testi (profil, kengaytmalar, rollar, pgBackRest)
 	scripts/tests/db_image_smoke.sh
+
+VERSION ?= $(shell git describe --tags --always --dirty)
+
+.PHONY: pin-images scan release
+pin-images: ## base image'larni joriy digest'ga qotirish (deploy/images.lock.env)
+	scripts/pin_images.sh
+scan: ## prod image'lar + Trivy (HIGH/CRITICAL) + CycloneDX SBOM: make scan [VERSION=...]
+	scripts/scan.sh $(VERSION)
+release: ## reliz paketi: make release VERSION=1.0.0
+	scripts/release.sh $(VERSION)

@@ -8,11 +8,13 @@ FROM ${POSTGRES_IMAGE}
 
 COPY postgres/certs/ /tmp/certs/
 # Korporativ CA faqat `apk add` vaqtida ishonchli: oxirgi image'da asl to'plam tiklanadi.
+# gosu o'chiriladi: image USER 70:70 ostida ishlaydi (root yo'q), gosu ishlatilmaydi; uning Go stdlib'i eski (Trivy).
 RUN cp /etc/ssl/certs/ca-certificates.crt /tmp/ca-bundle.orig \
  && if ls /tmp/certs/*.crt >/dev/null 2>&1; then cat /tmp/certs/*.crt >> /etc/ssl/certs/ca-certificates.crt; fi \
  && apk add --no-cache pgbackrest jq \
  && cp /tmp/ca-bundle.orig /etc/ssl/certs/ca-certificates.crt \
  && rm -rf /tmp/certs /tmp/ca-bundle.orig \
+ && rm -f /usr/local/bin/gosu \
  && install -d -o postgres -g postgres -m 0750 /var/lib/pgbackrest \
  && install -d -m 0755 /etc/pgbackrest /etc/postgresql/profiles
 

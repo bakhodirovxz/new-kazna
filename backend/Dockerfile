@@ -1,6 +1,9 @@
 # syntax=docker/dockerfile:1.7
+# Standart teg — dev uchun; prod build'da deploy/images.lock.env dagi digest beriladi (scripts/build_images.sh).
+ARG PYTHON_IMAGE=python:3.12-slim-bookworm
 # ── 1-bosqich: bog'liqliklar ────────────────────────────────────────
-FROM python:3.12-slim-bookworm AS builder
+# hadolint ignore=DL3006
+FROM ${PYTHON_IMAGE} AS builder
 ENV PYTHONDONTWRITEBYTECODE=1 PIP_NO_CACHE_DIR=1 PIP_DISABLE_PIP_VERSION_CHECK=1
 COPY certs/ /usr/local/share/ca-certificates/
 RUN update-ca-certificates
@@ -13,7 +16,8 @@ RUN python -m venv /opt/venv \
  && /opt/venv/bin/pip install --no-cache-dir --require-hashes --no-deps -r "$REQ"
 
 # ── 2-bosqich: ishchi image ─────────────────────────────────────────
-FROM python:3.12-slim-bookworm AS runtime
+# hadolint ignore=DL3006
+FROM ${PYTHON_IMAGE} AS runtime
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PATH="/opt/venv/bin:$PATH"
 # Korporativ TLS-inspeksiya CA'sini RUNTIME image'ga ishonchli deb belgilash ixtiyoriy
 # (build-arg, sukut bo'yicha `false`) — bugun (10.0.90.52) 1C oddiy HTTP orqali ishlaydi,
@@ -21,10 +25,17 @@ ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PATH="/opt/venv/bin:$PATH"
 # `--build-arg RUNTIME_EXTRA_CA=true` bilan yoqiladi (backend/certs/README.md'ga qarang).
 ARG RUNTIME_EXTRA_CA=false
 COPY certs/ /usr/local/share/ca-certificates/
-RUN if [ "$RUNTIME_EXTRA_CA" != "true" ]; then \
+# Avval korporativ CA yoqiladi (apt HTTPS, proksi orqali) va base digest'idan keyingi xavfsizlik
+# tuzatishlari o'rnatiladi (Trivy HIGH); so'ng CA `RUNTIME_EXTRA_CA!=true` bo'lsa to'plamdan olib tashlanadi.
+RUN update-ca-certificates \
+ && sed -i 's|http://deb.debian.org|https://deb.debian.org|' /etc/apt/sources.list.d/debian.sources \
+ && apt-get -o APT::Update::Error-Mode=any update \
+ && apt-get upgrade -y --no-install-recommends \
+ && rm -rf /var/lib/apt/lists/* \
+ && if [ "$RUNTIME_EXTRA_CA" != "true" ]; then \
       find /usr/local/share/ca-certificates/ -name '*.crt' -delete; \
     fi \
- && update-ca-certificates \
+ && update-ca-certificates --fresh \
  && groupadd --gid 10001 ugk \
  && useradd --uid 10001 --gid 10001 --no-create-home --shell /usr/sbin/nologin ugk
 ENV SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt

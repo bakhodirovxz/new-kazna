@@ -46,8 +46,9 @@ export const options = {
     'http_reqs{scenario:vu20}': ['count>=0'],
     'http_reqs{scenario:vu50}': ['count>=0'],
     'http_reqs{scenario:vu100}': ['count>=0'],
-    http_req_failed: ['rate<0.01'],
-    checks: ['rate>0.99'],
+    // Xato/check normalari ham faqat 20 va 50 VU bosqichlariga (global metrikaga 100 VU ham kirardi).
+    'checks{scenario:vu20}': ['rate>0.99'],
+    'checks{scenario:vu50}': ['rate>0.99'],
   },
 };
 

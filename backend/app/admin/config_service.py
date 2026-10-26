@@ -41,12 +41,14 @@ def _rule(row: Any) -> AlertRuleOut:
 
 
 def list_alert_rules(db: Session) -> list[AlertRuleOut]:
+    # nosemgrep: avoid-sqlalchemy-text
     rows = db.execute(text(f"SELECT {_RULE_COLS} FROM core.alert_rules WHERE is_current "
                            "ORDER BY section, code")).all()
     return [_rule(r) for r in rows]
 
 
 def alert_rule_history(db: Session, code: str) -> list[AlertRuleOut]:
+    # nosemgrep: avoid-sqlalchemy-text
     rows = db.execute(text(f"SELECT {_RULE_COLS} FROM core.alert_rules WHERE code = :c "
                            "ORDER BY version DESC"), {"c": code}).all()
     if not rows:
@@ -56,6 +58,7 @@ def alert_rule_history(db: Session, code: str) -> list[AlertRuleOut]:
 
 def update_alert_rule(db: Session, actor: AuthContext, code: str, data: AlertRuleUpdate,
                       meta: ClientMeta) -> AlertRuleOut:
+    # nosemgrep: avoid-sqlalchemy-text
     row = db.execute(text(f"SELECT {_RULE_COLS} FROM core.alert_rules "
                           "WHERE code = :c AND is_current FOR UPDATE"), {"c": code}).first()
     if row is None:
@@ -93,6 +96,7 @@ _FIN_COLS = "scenario, year, key, value, version, updated_by, updated_at"
 
 
 def list_fin_assumptions(db: Session, scenario: str | None) -> list[FinAssumptionOut]:
+    # nosemgrep: avoid-sqlalchemy-text
     rows = db.execute(text(
         f"SELECT {_FIN_COLS} FROM core.fin_assumptions WHERE is_current "
         "AND (CAST(:s AS text) IS NULL OR scenario = :s) ORDER BY scenario, year, key"),
@@ -135,6 +139,7 @@ def update_fin_assumptions(db: Session, actor: AuthContext, data: FinAssumptions
 
 def _setting_row(db: Session, key: str, lock: bool = False) -> Any:
     suffix = " FOR UPDATE" if lock else ""
+    # nosemgrep: avoid-sqlalchemy-text
     return db.execute(text("SELECT key, value, version, updated_by, updated_at FROM core.settings "
                            f"WHERE key = :k AND is_current{suffix}"), {"k": key}).first()
 

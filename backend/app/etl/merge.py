@@ -481,15 +481,21 @@ def merge_target(conn: Connection, name: str, *, load_id: int, source: str, step
 
     # Fix r2, R2-4: bitta partiya uchun bitta materiallashtirish — pastdagi barcha hisob va
     # yozuvlar shu jadvaldan, stg.rows'ni qayta skanlamay olinadi.
+    # nosemgrep: avoid-sqlalchemy-text
     conn.execute(text(f"DROP TABLE IF EXISTS pg_temp.{STAGE_TABLE}"))
     conn.execute(text(_stage_create_sql(conn, name)), params)
     # Fix r3 (Cheap): planner pastdagi so'rovlar (DISTINCT ON, WHERE ok, JOIN'lar) uchun
     # to'g'ri statistikaga ega bo'lishi uchun — vaqtinchalik jadvalda avtomatik ANALYZE yo'q.
+    # nosemgrep: avoid-sqlalchemy-text
     conn.execute(text(f"ANALYZE {STAGE_TABLE}"))
 
+    # nosemgrep: avoid-sqlalchemy-text
     errors = conn.execute(text(_ERROR_COUNT_SQL)).scalar_one()
+    # nosemgrep: avoid-sqlalchemy-text
     conn.execute(text(_ERROR_INSERT_SQL), params)
+    # nosemgrep: avoid-sqlalchemy-text
     warnings = conn.execute(text(_WARNING_COUNT_SQL)).scalar_one()
+    # nosemgrep: avoid-sqlalchemy-text
     conn.execute(text(_WARNING_INSERT_SQL), params)
 
     deleted = 0

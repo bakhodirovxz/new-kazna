@@ -20,8 +20,10 @@ echo "OK: ochiq test qiymatlari istisno qilingan"
 
 # Token ish vaqtida yasaladi — repo'da haqiqiy ko'rinishdagi token saqlanmaydi.
 printf 'GITHUB_TOKEN = "ghp_%s"\n' "$(od -An -N18 -tx1 /dev/urandom | tr -d ' \n')" >> "$DIR/allowed.py"
-if "${RUN[@]}"; then
-  echo "XATO: gitleaks haqiqiy tokenni topmadi" >&2
+rc=0
+"${RUN[@]}" || rc=$?
+if [ "$rc" -ne 1 ]; then
+  echo "XATO: gitleaks chiqish kodi $rc (kutilgan: 1 — token topildi)" >&2
   exit 1
 fi
 echo "OK: haqiqiy token topildi"

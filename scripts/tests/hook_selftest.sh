@@ -13,8 +13,10 @@ trap cleanup EXIT
 
 printf 'GITHUB_TOKEN = "ghp_%s"\n' "$(od -An -N18 -tx1 /dev/urandom | tr -d ' \n')" > "$F"
 git add -f "$F"
-if .githooks/pre-commit; then
-  echo "XATO: hook sirli o'zgarishni o'tkazib yubordi" >&2
+rc=0
+.githooks/pre-commit || rc=$?
+if [ "$rc" -ne 1 ]; then
+  echo "XATO: hook chiqish kodi $rc (kutilgan: 1 — gitleaks sirni topdi)" >&2
   exit 1
 fi
 echo "OK: hook sirli commit'ni to'xtatdi"

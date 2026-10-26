@@ -54,7 +54,6 @@ services:
         export REQUESTS_CA_BUNDLE=/tmp/ca.pem SSL_CERT_FILE=/tmp/ca.pem;
         exec semgrep scan --error --metrics=off --disable-version-check
         --config p/owasp-top-ten --config p/python --config p/typescript --config p/react
-        --exclude-rule python.sqlalchemy.security.audit.avoid-sqlalchemy-text.avoid-sqlalchemy-text
         backend/app frontend/src
 
   hadolint:

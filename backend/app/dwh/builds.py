@@ -64,6 +64,7 @@ def mark_failed(conn: Connection, build_id: int) -> bool:
         return False
     for aggregate in AGGREGATES:
         # Jadval nomi reyestrdan (whitelist).
+        # nosemgrep: avoid-sqlalchemy-text
         conn.execute(text(f"DELETE FROM mart.{aggregate.table} WHERE build_id = :b"),
                      {"b": build_id})
     return True

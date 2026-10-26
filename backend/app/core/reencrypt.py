@@ -115,10 +115,12 @@ def reencrypt(
     for col in _columns(purpose, role):
         version = _VERSION_SQL.format(col=col.column)
         # Identifikatorlar faqat REGISTRY'dan olinadi — foydalanuvchi kiritmaydi.
+        # nosemgrep: avoid-sqlalchemy-text
         select_sql = text(
             f"SELECT {col.pk}, {col.column} FROM {col.table} "  # noqa: S608
             f"WHERE {col.column} IS NOT NULL AND {version} <> :v LIMIT :n FOR UPDATE"
         )
+        # nosemgrep: avoid-sqlalchemy-text
         update_sql = text(f"UPDATE {col.table} SET {col.column} = :b WHERE {col.pk} = :pk")  # noqa: S608
         while True:
             rows = conn.execute(select_sql, {"v": active, "n": batch}).all()
@@ -137,6 +139,7 @@ def versions_in_use(conn: Connection, purpose: Purpose) -> set[int]:
         version = _VERSION_SQL.format(col=col.column)
         used |= set(
             conn.execute(
+                # nosemgrep: avoid-sqlalchemy-text
                 text(f"SELECT DISTINCT {version} FROM {col.table} WHERE {col.column} IS NOT NULL")  # noqa: S608
             ).scalars()
         )

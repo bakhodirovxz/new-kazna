@@ -94,6 +94,7 @@ def _rows(
     db: Session, where: str, params: dict[str, Any], limit: int, offset: int
 ) -> list[AuditOut]:
     bind = {**params, "limit": limit, "offset": offset}
+    # nosemgrep: avoid-sqlalchemy-text
     result = db.execute(text(_SELECT.format(where=where)), bind)
     return [
         AuditOut(
@@ -117,6 +118,7 @@ def list_audit(
     where, params = filters.sql()  # R1-3: bitta marta hisoblanadi, count va _rows shuni ishlatadi
     # `where` is built only from fixed clause literals in Filters.sql() (never from raw
     # user input) and all values are bound params, so this is not an injection vector.
+    # nosemgrep: avoid-sqlalchemy-text
     count_sql = text(f"SELECT count(*) FROM core.audit_log a WHERE {where}")  # noqa: S608
     total = db.execute(count_sql, params).scalar_one()
     items = _rows(db, where, params, page_size, (page - 1) * page_size)

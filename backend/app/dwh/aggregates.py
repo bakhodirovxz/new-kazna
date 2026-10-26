@@ -72,6 +72,7 @@ def build_all(conn: Connection, build_id: int, params: BuildParams) -> dict[str,
     bound = params.bind(build_id)
     out: dict[str, int] = {}
     for aggregate in AGGREGATES:
+        # nosemgrep: avoid-sqlalchemy-text
         carried = conn.execute(text(_CARRY_FORWARD.format(table=aggregate.table)),
                                bound).rowcount
         out[aggregate.table] = carried + sum(

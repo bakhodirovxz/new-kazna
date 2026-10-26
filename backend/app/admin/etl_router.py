@@ -42,6 +42,7 @@ def list_runs(
     page_size: Annotated[int, Query(ge=1, le=500)] = 50,
 ) -> Page[EtlRunOut]:
     total = db.execute(text("SELECT count(*) FROM core.etl_run")).scalar_one()
+    # nosemgrep: avoid-sqlalchemy-text
     rows = db.execute(text(f"SELECT {_RUN_COLS} FROM core.etl_run ORDER BY id DESC "
                            "LIMIT :l OFFSET :o"),
                       {"l": page_size, "o": (page - 1) * page_size}).all()
@@ -51,6 +52,7 @@ def list_runs(
 
 @router.get("/etl/runs/{run_id}")
 def run_detail(run_id: int, ctx: EtlAdmin, db: DB) -> EtlRunDetail:
+    # nosemgrep: avoid-sqlalchemy-text
     row = db.execute(text(f"SELECT {_RUN_COLS} FROM core.etl_run WHERE id = :r"),
                      {"r": run_id}).first()
     if row is None:

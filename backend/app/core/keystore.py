@@ -40,6 +40,7 @@ def _verify_kek(conn: Connection, kek: bytes, purpose: Purpose | None = None) ->
     if purpose is not None:
         query += " AND purpose = :p"
         params["p"] = purpose.value
+    # nosemgrep: avoid-sqlalchemy-text
     row = conn.execute(text(query + " LIMIT 1"), params).scalar()
     if row is not None:
         unwrap_key(kek, bytes(row))

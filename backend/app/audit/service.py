@@ -265,6 +265,7 @@ def verify_chain(conn: Connection) -> ChainReport:
     last_id: int | None = None
     checked = 0
     result = conn.execution_options(stream_results=True, yield_per=1000).execute(
+        # nosemgrep: avoid-sqlalchemy-text
         text(f"{_SELECT} ORDER BY id")
     )
     for row in result.mappings():

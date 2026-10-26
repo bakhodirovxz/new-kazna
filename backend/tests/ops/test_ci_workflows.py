@@ -60,7 +60,8 @@ def test_sbom_kept_90_days() -> None:
 
 
 def test_e2e_jobs_are_serialized() -> None:
-    assert _load(".github/workflows/ci.yml")["jobs"]["e2e"]["concurrency"]["group"] == "e2e"
+    # GitHub-hosted runner: har job yangi VM, umumiy Docker holati yo'q — faqat GitLab.
+    assert "concurrency" not in _load(".github/workflows/ci.yml")["jobs"]["e2e"]
     assert _load(".gitlab-ci.yml")["e2e"]["resource_group"] == "e2e"
 
 

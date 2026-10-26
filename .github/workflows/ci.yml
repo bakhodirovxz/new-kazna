@@ -30,9 +30,6 @@ jobs:
 
   e2e:
     needs: check
-    # Runner'da bitta ugekazna stack: e2e joblar ketma-ket (e2e_ci.sh down -v qiladi).
-    concurrency:
-      group: e2e
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:

@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Backend sifat darvozalari (spec 10) — hammasi Docker'da, deploy/compose.test.yml orqali.
 # Chegaralar: ruff, mypy --strict, bandit (-ll -ii), pip-audit, pytest qamrovi 85% / 95%.
+# Faqat dev checkout'dan: test konteyneri repo'ni (deploy/secrets bo'lsa, u ham) read-only mount qiladi.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 TEST=(docker compose -f deploy/compose.test.yml run --rm -T test)

@@ -49,3 +49,13 @@ def test_main_exit_codes(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> 
     out = capsys.readouterr().out
     assert "FAIL app/auth" in out
     assert "XATO" in out
+
+
+def test_main_unreadable_report_is_data_error(tmp_path: Path) -> None:
+    bad = tmp_path / "bad.json"
+    bad.write_text("{not json", encoding="utf-8")
+    assert main([str(tmp_path / "missing.json"), "--total", "85"]) == 2
+    assert main([str(bad), "--total", "85"]) == 2
+    empty = tmp_path / "empty.json"
+    empty.write_text("{}", encoding="utf-8")
+    assert main([str(empty), "--total", "85"]) == 2

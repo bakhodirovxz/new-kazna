@@ -66,10 +66,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--total", type=float, required=True)
     parser.add_argument("--package", type=_package, action="append", default=[])
     args = parser.parse_args(argv)
-    report = json.loads(args.report.read_text(encoding="utf-8"))
     try:
+        report = json.loads(args.report.read_text(encoding="utf-8"))
         results = evaluate(report, args.total, dict(args.package))
-    except ValueError as exc:
+    except (OSError, KeyError, ValueError) as exc:  # JSONDecodeError — ValueError
         sys.stdout.write(f"XATO: {exc}\n")
         return 2
     for r in results:

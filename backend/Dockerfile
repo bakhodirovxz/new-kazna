@@ -10,7 +10,7 @@ COPY requirements.txt requirements-dev.txt ./
 ARG INSTALL_DEV=false
 RUN python -m venv /opt/venv \
  && if [ "$INSTALL_DEV" = "true" ]; then REQ=requirements-dev.txt; else REQ=requirements.txt; fi \
- && /opt/venv/bin/pip install --require-hashes --no-deps -r "$REQ"
+ && /opt/venv/bin/pip install --no-cache-dir --require-hashes --no-deps -r "$REQ"
 
 # ── 2-bosqich: ishchi image ─────────────────────────────────────────
 FROM python:3.12-slim-bookworm AS runtime

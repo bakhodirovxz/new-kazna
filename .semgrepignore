@@ -1,0 +1,8 @@
+# Semgrep'dan chiqariladiganlar (spec 10). Bu fayl standart ro'yxat o'rnini bosadi.
+node_modules/
+backend/tests/
+frontend/src/test/
+frontend/e2e/
+frontend/src/api/schema.d.ts
+*.test.ts
+*.test.tsx

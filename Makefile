@@ -71,3 +71,13 @@ e2e: ## Playwright E2E (dev stack ishlab turishi kerak)
 .PHONY: check-backend
 check-backend: ## ruff + mypy + bandit + pip-audit + pytest (qamrov 85%/95%)
 	scripts/check_backend.sh
+
+.PHONY: check check-repo check-frontend hooks
+check: ## barcha darvozalar: repo + backend + frontend (spec 10)
+	scripts/check.sh
+check-repo: ## gitleaks (butun tarix) + semgrep + hadolint
+	scripts/check_repo.sh
+check-frontend: ## tsc + eslint + vitest + npm audit
+	scripts/check_frontend.sh
+hooks: ## pre-commit hook'ni ulash
+	git config core.hooksPath .githooks

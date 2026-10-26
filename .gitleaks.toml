@@ -1,0 +1,26 @@
+# Gitleaks (spec 10): standart qoidalar + faqat hujjatlashtirilgan OCHIQ test qiymatlari istisno.
+# Istisno yo'l bo'yicha emas, aniq qiymat bo'yicha — shu fayllarga haqiqiy sir qo'yilsa ham topiladi
+# (scripts/tests/gitleaks_selftest.sh). Har qiymat docs/security/sast-exceptions.md da qayd etilgan.
+title = "ugekazna"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Ochiq test qiymatlari (prod'da Settings.problems() rad etadi)"
+regexes = [
+  # deploy/compose.test.yml va backend/app/core/config.py TEST_KEYS
+  '''AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=''',
+  '''ICEiIyQlJicoKSorLC0uLzAxMjM0NTY3ODk6Ozw9Pj8=''',
+  '''QEFCQ0RFRkdISUpLTE1OT1BRUlNUVVZXWFlaW1xdXl8=''',
+  # backend/app/devtools.py — E2E TOTP siri (RFC 6238 misol qiymati) va E2E paroli (faqat dev/test)
+  '''JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP''',
+  '''E2e-Sinov-Kalit-2026!''',
+  # frontend testlari / 3-reja hujjati: RFC 6238 test vektori va ochiq test parollari
+  '''GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ''',
+  '''Tmp-Parol-1234567''',
+  '''Old-Parol-2025!''',
+  '''Yangi-Mustahkam-77''',
+  # deploy/compose.test.yml — test DB/Redis parollari
+  '''^test-(superuser|migrator|app|etl|redis)$''',
+]

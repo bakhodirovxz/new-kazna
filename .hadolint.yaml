@@ -1,0 +1,9 @@
+# Hadolint (spec 10): ogohlantirish va undan yuqori — xato.
+failure-threshold: warning
+ignored:
+  # DL3018: apk paket versiyasini qotirish. Base image digest bilan qotirilgan
+  # (deploy/images.lock.env); Alpine reliz repozitoriyasi faqat xavfsizlik tuzatishlarini beradi.
+  - DL3018
+trustedRegistries:
+  - docker.io
+  - mcr.microsoft.com

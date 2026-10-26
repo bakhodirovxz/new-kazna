@@ -1,0 +1,66 @@
+# Xavfsizlik skanerlari Docker'da (host'ga hech narsa o'rnatilmaydi, spec 10).
+# Yo'llar shu faylga nisbatan — Windows (PowerShell/Git Bash) va Linux'da bir xil ishlaydi:
+#   docker compose -f deploy/compose.tools.yml run --rm -T <servis>
+name: ugekazna-tools
+
+x-tool: &tool
+  cap_drop: [ALL]
+  security_opt: ["no-new-privileges:true"]
+
+x-git-safe: &git-safe
+  # Bind-mount egasi konteyner foydalanuvchisidan farq qiladi — git "dubious ownership" bermasin.
+  GIT_CONFIG_COUNT: "1"
+  GIT_CONFIG_KEY_0: safe.directory
+  GIT_CONFIG_VALUE_0: "*"
+
+services:
+  gitleaks:
+    <<: *tool
+    image: zricethezav/gitleaks:v8.21.2
+    environment: *git-safe
+    volumes: ["..:/src:ro"]
+    command: ["git", "--config", "/src/.gitleaks.toml", "--redact", "--no-banner", "/src"]
+
+  gitleaks-staged:
+    <<: *tool
+    image: zricethezav/gitleaks:v8.21.2
+    environment: *git-safe
+    volumes: ["..:/src:ro"]
+    command: ["git", "--pre-commit", "--staged", "--config", "/src/.gitleaks.toml",
+              "--redact", "--no-banner", "/src"]
+
+  gitleaks-selftest:
+    <<: *tool
+    image: zricethezav/gitleaks:v8.21.2
+    volumes: ["..:/src:ro"]
+    command: ["dir", "--config", "/src/.gitleaks.toml", "--redact", "--no-banner",
+              "/src/build/gitleaks-selftest"]
+
+  semgrep:
+    <<: *tool
+    image: semgrep/semgrep:1.95.0
+    working_dir: /src
+    environment:
+      <<: *git-safe
+      SEMGREP_SEND_METRICS: "off"
+      SEMGREP_ENABLE_VERSION_CHECK: "0"
+    volumes:
+      - "..:/src:ro"
+      - "../backend/certs:/certs:ro"
+    entrypoint: ["sh", "-c"]
+    command:
+      - >-
+        cat /etc/ssl/certs/ca-certificates.crt /certs/*.crt > /tmp/ca.pem 2>/dev/null;
+        export REQUESTS_CA_BUNDLE=/tmp/ca.pem SSL_CERT_FILE=/tmp/ca.pem;
+        exec semgrep scan --error --metrics=off --disable-version-check
+        --config p/owasp-top-ten --config p/python --config p/typescript --config p/react
+        --exclude-rule python.sqlalchemy.security.audit.avoid-sqlalchemy-text.avoid-sqlalchemy-text
+        backend/app frontend/src
+
+  hadolint:
+    <<: *tool
+    image: hadolint/hadolint:v2.12.0
+    working_dir: /src
+    volumes: ["..:/src:ro"]
+    entrypoint: ["/bin/hadolint"]
+    command: ["--config", "/src/.hadolint.yaml", "backend/Dockerfile", "frontend/Dockerfile"]

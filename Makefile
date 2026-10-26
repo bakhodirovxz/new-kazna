@@ -81,3 +81,7 @@ check-frontend: ## tsc + eslint + vitest + npm audit
 	scripts/check_frontend.sh
 hooks: ## pre-commit hook'ni ulash
 	git config core.hooksPath .githooks
+
+.PHONY: db-smoke
+db-smoke: ## DB image smoke-testi (profil, kengaytmalar, rollar, pgBackRest)
+	scripts/tests/db_image_smoke.sh

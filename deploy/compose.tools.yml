@@ -62,4 +62,5 @@ services:
     working_dir: /src
     volumes: ["..:/src:ro"]
     entrypoint: ["/bin/hadolint"]
-    command: ["--config", "/src/.hadolint.yaml", "backend/Dockerfile", "frontend/Dockerfile"]
+    command: ["--config", "/src/.hadolint.yaml", "backend/Dockerfile", "frontend/Dockerfile",
+              "deploy/postgres/Dockerfile"]

@@ -1,0 +1,18 @@
+#!/bin/sh
+# DB konteyneri kirish nuqtasi: xotira profilini tanlash va pgBackRest shifr parolini tmpfs'ga
+# yozish (archive_command uchun), so'ng rasmiy docker-entrypoint.sh (initdb, 00/01 skriptlar).
+set -eu
+profile="${UGK_PG_PROFILE:-8gb}"
+case "$profile" in
+  ci|8gb|16gb) ;;
+  *) echo "ugk-db-entrypoint: noma'lum UGK_PG_PROFILE=$profile (ci|8gb|16gb)" >&2; exit 1 ;;
+esac
+umask 077
+cp "/etc/postgresql/profiles/$profile.conf" /tmp/pg-profile.conf
+. "${UGK_PGBR_ENV:-/usr/local/bin/ugk-pgbackrest-env}"
+if [ -r /run/secrets/pgbackrest_cipher_pass ]; then
+  ugk_cipher_conf
+else
+  echo "ugk-db-entrypoint: pgbackrest_cipher_pass yo'q — WAL arxivlanmaydi" >&2
+fi
+exec docker-entrypoint.sh "$@"

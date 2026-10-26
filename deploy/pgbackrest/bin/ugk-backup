@@ -1,0 +1,99 @@
+#!/bin/sh
+# pgBackRest rejalashtiruvchisi va bir martalik zaxira (spec 11, TZ 9). Vaqtlar UTC, HHMM.
+#   ugk-backup loop               — doimiy: jadval bo'yicha full/diff (backup servisi)
+#   ugk-backup once full|diff|incr — hozir bitta zaxira (make backup)
+#   ugk-backup health             — healthcheck: oxirgi zaxira xatosiz va BACKUP_MAX_AGE_SECONDS dan yangi
+#   ugk-backup due HHMM           — shu daqiqada qaysi zaxira kerak: full|diff|none
+#   ugk-backup info               — pgbackrest info (JSON)
+#   ugk-backup latest             — oxirgi zaxira yorlig'i (yo'q bo'lsa bo'sh satr)
+set -eu
+. "${UGK_PGBR_ENV:-/usr/local/bin/ugk-pgbackrest-env}"
+
+STANZA=ugk
+: "${BACKUP_FULL_AT:=2000}"
+: "${BACKUP_DIFF_AT:=0200 0800 1400}"
+: "${BACKUP_MAX_AGE_SECONDS:=25200}"
+: "${BACKUP_INITIAL_FULL:=yes}"
+STATE=/tmp/ugk-backup
+mkdir -p "$STATE"
+
+log() {
+  printf '{"ts":"%s","event":"%s","detail":"%s"}\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$1" "${2:-}"
+}
+
+due_type() {
+  for t in $BACKUP_FULL_AT; do
+    if [ "$1" = "$t" ]; then echo full; return 0; fi
+  done
+  for t in $BACKUP_DIFF_AT; do
+    if [ "$1" = "$t" ]; then echo diff; return 0; fi
+  done
+  echo none
+}
+
+info_json() {
+  pgbackrest --stanza="$STANZA" --output=json info
+}
+
+last_backup_stop() {
+  info_json | jq -r '[.[0].backup[]?.timestamp.stop] | max // 0'
+}
+
+run_backup() {
+  log backup_started "$1"
+  if pgbackrest --stanza="$STANZA" --type="$1" backup; then
+    rm -f "$STATE/failed"
+    log backup_ok "$1"
+    return 0
+  fi
+  date -u +%s > "$STATE/failed"
+  log backup_failed "$1"
+  return 1
+}
+
+prepare() {
+  ugk_cipher_conf
+  until pg_isready -q -h /var/run/postgresql -U postgres; do sleep 2; done
+  pgbackrest --stanza="$STANZA" stanza-create
+  pgbackrest --stanza="$STANZA" check
+}
+
+health() {
+  if [ -f "$STATE/failed" ]; then
+    echo "oxirgi zaxira xato bilan tugagan"
+    return 1
+  fi
+  age=$(( $(date -u +%s) - $(last_backup_stop) ))
+  if [ "$age" -gt "$BACKUP_MAX_AGE_SECONDS" ]; then
+    echo "oxirgi muvaffaqiyatli zaxira ${age} s oldin"
+    return 1
+  fi
+  echo "ok: oxirgi zaxira ${age} s oldin"
+}
+
+loop() {
+  prepare
+  if [ "$BACKUP_INITIAL_FULL" = yes ] && [ "$(last_backup_stop)" = 0 ]; then
+    run_backup full || true
+  fi
+  last_slot=""
+  while :; do
+    slot="$(date -u +%H%M)"
+    kind="$(due_type "$slot")"
+    if [ "$kind" != none ] && [ "$slot" != "$last_slot" ]; then
+      run_backup "$kind" || true
+      last_slot="$slot"
+    fi
+    sleep 20
+  done
+}
+
+case "${1:-loop}" in
+  loop) loop ;;
+  once) ugk_cipher_conf; run_backup "${2:?full|diff|incr}" ;;
+  health) health ;;
+  due) due_type "${2:?HHMM}" ;;
+  info) ugk_cipher_conf; info_json ;;
+  latest) ugk_cipher_conf; info_json | jq -r '.[0].backup[-1].label // empty' ;;
+  *) echo "ugk-backup: noma'lum buyruq: $1" >&2; exit 2 ;;
+esac

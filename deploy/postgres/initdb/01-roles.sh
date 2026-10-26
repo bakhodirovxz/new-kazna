@@ -26,6 +26,8 @@ done
   printf '\\set app_pw %s\n' "$APP_PW"
   printf '\\set etl_pw %s\n' "$ETL_PW"
   cat <<'SQL'
+SET log_statement = 'none';
+SET log_min_duration_statement = -1;
 CREATE ROLE ugk_migrator LOGIN PASSWORD :'migrator_pw';
 CREATE ROLE ugk_app LOGIN NOBYPASSRLS PASSWORD :'app_pw';
 CREATE ROLE ugk_etl LOGIN NOBYPASSRLS PASSWORD :'etl_pw';

@@ -1,0 +1,5 @@
+# deploy/ — DB image build konteksti. Faqat kerakli papkalar: sirlar (deploy/secrets) hech qachon
+# kontekstga tushmasin.
+*
+!postgres
+!pgbackrest

@@ -1,0 +1,26 @@
+#!/bin/sh
+# Zaxiradan tiklash — faqat BO'SH data katalogiga (spec 11; TZ 10, qabul mezoni 6).
+#   ugk-restore                      — oxirgi zaxira + WAL oxirigacha (--type=default)
+#   ugk-restore --type=time --target="2026-09-25 10:00:00+05"   — vaqt nuqtasiga (PITR)
+#   ugk-restore --set=20260925-200000F                          — aniq zaxira
+# Standart: tiklangan klasterda arxivlash O'CHIQ (--archive-mode=off) — tiklash testi prod
+# repo'ga WAL yubormasligi uchun. Prod avariya tiklashida: UGK_RESTORE_KEEP_ARCHIVING=yes.
+set -eu
+. "${UGK_PGBR_ENV:-/usr/local/bin/ugk-pgbackrest-env}"
+PGDATA="${PGDATA:-/var/lib/postgresql/data}"
+if [ -n "$(ls -A "$PGDATA" 2>/dev/null)" ]; then
+  echo "ugk-restore: $PGDATA bo'sh emas — tiklash rad etildi" >&2
+  exit 3
+fi
+ugk_cipher_conf
+has_type=no
+for arg in "$@"; do
+  case "$arg" in --type=*) has_type=yes ;; esac
+done
+if [ "$has_type" = no ]; then
+  set -- --type=default "$@"
+fi
+if [ "${UGK_RESTORE_KEEP_ARCHIVING:-no}" != yes ]; then
+  set -- --archive-mode=off "$@"
+fi
+exec pgbackrest --stanza=ugk --pg1-path="$PGDATA" "$@" restore

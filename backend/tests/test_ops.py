@@ -1,4 +1,5 @@
 import base64
+import json
 import os
 from collections.abc import Callable, Iterator
 from datetime import UTC, datetime, timedelta
@@ -164,33 +165,65 @@ def test_tls_expiry_warning(tmp_path: Path) -> None:
 
 
 MIN = timedelta(minutes=1)
-LONG_UP = NOW - timedelta(days=3)
+SEG = 16 * 1024 * 1024
+
+
+def _wal(segno: int, timeline: int = 1) -> str:
+    return f"{timeline:08X}{segno // 256:08X}{segno % 256:08X}"
+
+
+def _state(**kw: Any) -> ops.ArchiverState:
+    base: dict[str, Any] = {
+        "archive_mode": "on", "archive_timeout": 15 * MIN, "last_archived_wal": _wal(10),
+        "last_archived": NOW - 2 * MIN, "last_failed": None, "current_wal": _wal(11),
+        "segment_bytes": SEG, "started": NOW - timedelta(days=3), "now": NOW,
+    }
+    return ops.ArchiverState(**{**base, **kw})
 
 
 @pytest.mark.parametrize(
-    ("mode", "archived", "failed", "started", "status", "codes"),
+    ("kw", "status", "codes"),
     [
         # oxirgi urinish xato
-        ("on", NOW - 20 * MIN, NOW - 5 * MIN, LONG_UP, "alarm", {"wal_archiver_failed"}),
-        ("on", None, NOW - 5 * MIN, LONG_UP, "alarm", {"wal_archiver_failed"}),
-        # RPO'dan katta kechikish
-        ("on", NOW - 20 * MIN, None, LONG_UP, "alarm", {"wal_archiver_lag"}),
-        ("on", None, None, LONG_UP, "alarm", {"wal_archiver_lag"}),
+        ({"last_archived": NOW - 20 * MIN, "last_failed": NOW - 5 * MIN}, "alarm",
+         {"wal_archiver_failed"}),
+        ({"last_archived": None, "last_archived_wal": None, "last_failed": NOW - MIN},
+         "alarm", {"wal_archiver_failed"}),
+        # bo'sh DB: eski arxiv, lekin arxivlanmagan tugallangan segment yo'q -> ok
+        ({"last_archived": NOW - timedelta(hours=5), "current_wal": _wal(11)}, "ok", set()),
+        # tugallangan arxivlanmagan segmentlar RPO + grace'dan eski -> alarm
+        ({"last_archived": NOW - 25 * MIN, "current_wal": _wal(13)}, "alarm",
+         {"wal_archiver_lag"}),
+        # grace oynasi ichida (RPO < 18 min < RPO + grace) -> ok
+        ({"last_archived": NOW - 18 * MIN, "current_wal": _wal(13)}, "ok", set()),
+        # hech qachon arxivlanmagan, ishlash vaqti uzoq va tugallangan segment bor
+        ({"last_archived": None, "last_archived_wal": None, "current_wal": _wal(5)},
+         "alarm", {"wal_archiver_lag"}),
         # ko'p xato bo'lgan, lekin oxirgisi muvaffaqiyatli
-        ("on", NOW - 2 * MIN, NOW - 60 * MIN, LONG_UP, "ok", set()),
+        ({"last_failed": NOW - 60 * MIN}, "ok", set()),
         # yangi ishga tushgan server
-        ("on", None, None, NOW - 5 * MIN, "ok", set()),
+        ({"last_archived": None, "last_archived_wal": None, "current_wal": _wal(5),
+          "started": NOW - 5 * MIN}, "ok", set()),
+        # replika (joriy WAL yo'q)
+        ({"last_archived": NOW - timedelta(hours=5), "current_wal": None}, "ok", set()),
+        # archive_timeout RPO'dan katta yoki o'chiq
+        ({"archive_timeout": 30 * MIN}, "alarm", {"archive_timeout_invalid"}),
+        ({"archive_timeout": timedelta(0)}, "alarm", {"archive_timeout_invalid"}),
         # arxivlash o'chiq
-        ("off", None, NOW - 5 * MIN, LONG_UP, "skipped", set()),
+        ({"archive_mode": "off", "last_failed": NOW - 5 * MIN}, "skipped", set()),
     ],
 )
-def test_check_archiver_rules(
-    mode: str, archived: datetime | None, failed: datetime | None, started: datetime,
-    status: str, codes: set[str],
-) -> None:
-    got_status, problems = ops.check_archiver(mode, archived, failed, started, NOW)
+def test_check_archiver_rules(kw: dict[str, Any], status: str, codes: set[str]) -> None:
+    got_status, problems, _ = ops.check_archiver(_state(**kw))
     assert got_status == status
     assert {p.code for p in problems} == codes
+
+
+def test_check_archiver_timeline_switch_is_note_not_alarm() -> None:
+    st = _state(last_archived=NOW - 25 * MIN, current_wal=_wal(20, timeline=2))
+    status, problems, notes = ops.check_archiver(st)
+    assert (status, problems) == ("ok", [])
+    assert notes and "timeline" in notes[0]
 
 
 def test_ops_check_reports_archiver_note_when_off() -> None:
@@ -198,7 +231,100 @@ def test_ops_check_reports_archiver_note_when_off() -> None:
     ops.ops_check(notes=notes)
     with get_engine("app").connect() as conn:
         mode = conn.execute(text("SELECT current_setting('archive_mode')")).scalar_one()
-    assert bool(notes) == (mode == "off")
+    assert any("skipped" in n for n in notes) == (mode == "off")
+
+
+def test_ops_check_flags_missing_next_partition() -> None:
+    far = datetime.now(UTC) + timedelta(days=400)
+    assert "audit_partition_missing" in {p.code for p in ops.ops_check(now=far)}
+
+
+def test_ops_check_flags_stuck_running_request() -> None:
+    with get_engine("migrator").begin() as conn:
+        request_id = conn.execute(text(
+            "INSERT INTO core.etl_requests (source, mode, requested_by, requested_at, status) "
+            "VALUES ('synthetic', 'full', 0, now() - interval '12 hours', 'running') "
+            "RETURNING id"
+        )).scalar_one()
+    try:
+        assert "etl_request_stuck" in {p.code for p in ops.ops_check()}
+    finally:
+        with get_engine("migrator").begin() as conn:
+            conn.execute(text("DELETE FROM core.etl_requests WHERE id = :i"), {"i": request_id})
+
+
+def test_ops_check_tls_cert_through_cli(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr(cli, "build_notifier", lambda settings: RecordingNotifier())
+    # _cert() NOW (2026-09-25) ga nisbatan; haqiqiy soatga nisbatan muddati o'tgan -> critical
+    assert cli.main(["ops-check", "--tls-cert", str(_cert(tmp_path, 3))]) == 1
+    assert "tls_cert_expiring" in capsys.readouterr().out
+
+
+def test_cli_ops_check_reports_when_db_is_down(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    notifier = RecordingNotifier()
+    monkeypatch.setattr(cli, "build_notifier", lambda settings: notifier)
+
+    def boom(**kwargs: Any) -> list[ops.Problem]:
+        raise ConnectionError("postgresql://user:secret@10.0.0.5/db unreachable")
+
+    monkeypatch.setattr(ops, "ops_check", boom)
+    assert cli.main(["ops-check", "--notify", "--extra", "db: unhealthy"]) == 1
+    assert notifier.kinds == ["ops_check"]
+    body = notifier.items[0].body
+    assert "ops_check_error" in body
+    assert "ConnectionError" in body
+    assert "db: unhealthy" in body
+    assert "secret" not in body
+    assert "secret" not in capsys.readouterr().out
+
+
+def test_cli_ops_check_json_has_notes(capsys: pytest.CaptureFixture[str]) -> None:
+    cli.main(["ops-check", "--json"])
+    out = json.loads(capsys.readouterr().out)
+    assert set(out) == {"problems", "notes"}
+
+
+BAD_INPUTS = [
+    ["--duration-seconds", "-5", "--backup", "20260925-200000F"],
+    ["--duration-seconds", "9999999", "--backup", "20260925-200000F"],
+    ["--duration-seconds", "10", "--backup", "evil; rm -rf"],
+    ["--duration-seconds", "10", "--backup", "20260925-200000F", "--details", "a\x07b"],
+    ["--duration-seconds", "10", "--backup", "20260925-200000F", "--details", "x" * 2001],
+]
+
+
+@pytest.mark.parametrize("args", BAD_INPUTS)
+def test_cli_restore_test_record_rejects_bad_input(
+    clean_restore_setting: None, args: list[str]
+) -> None:
+    with pytest.raises(SystemExit) as exc:
+        cli.main(["restore-test-record", "--result", "ok", *args])
+    assert exc.value.code == 2
+    with get_engine("app").connect() as conn:
+        assert ops.last_restore_test(conn) is None
+
+
+def test_cli_restore_test_record_accepts_incremental_label_and_none(
+    clean_restore_setting: None,
+) -> None:
+    for label in ("20260925-200000F_20260926-020000D", "none"):
+        assert cli.main(["restore-test-record", "--result", "fail", "--duration-seconds", "0",
+                         "--backup", label]) == 0
+
+
+def test_cli_restore_test_fail_path(clean_restore_setting: None) -> None:
+    assert cli.main(["restore-test-record", "--result", "fail", "--duration-seconds", "100",
+                     "--backup", "20260925-200000F"]) == 0
+    assert cli.main(["restore-test-status"]) == 1
+    with get_engine("app").connect() as conn:
+        outcome = conn.execute(text(
+            "SELECT details->>'outcome' FROM core.audit_log "
+            "WHERE action = 'ops.restore_test.recorded' ORDER BY id DESC LIMIT 1")).scalar_one()
+    assert outcome == "fail"
 
 
 def test_cli_restore_test_record_and_status(

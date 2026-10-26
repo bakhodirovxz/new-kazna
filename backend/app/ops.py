@@ -28,9 +28,11 @@ RESTORE_KEY = "last_restore_test"
 RESTORE_MAX_AGE = timedelta(days=35)
 RTO_SECONDS = 7200
 RPO = timedelta(minutes=15)  # 04b: core.settings'ga ko'chirilishi mumkin
+ARCHIVER_GRACE = timedelta(minutes=5)  # archive_timeout + archive-push davomiyligi uchun zaxira
 DEK_MAX_AGE = timedelta(days=365)
 CLOCK_SKEW_MAX = timedelta(seconds=60)
 ETL_REQUEST_STUCK = timedelta(minutes=30)
+ETL_RUNNING_STUCK = timedelta(hours=6)
 TLS_WARN = timedelta(days=30)
 TLS_CRITICAL = timedelta(days=7)
 
@@ -134,25 +136,69 @@ def check_tls(path: Path, now: datetime) -> list[Problem]:
     return []
 
 
-def check_archiver(
-    archive_mode: str,
-    last_archived: datetime | None,
-    last_failed: datetime | None,
-    started: datetime,
-    now: datetime,
-) -> tuple[ArchiverStatus, list[Problem]]:
+@dataclass(frozen=True, slots=True)
+class ArchiverState:
+    archive_mode: str
+    archive_timeout: timedelta
+    last_archived_wal: str | None
+    last_archived: datetime | None
+    last_failed: datetime | None
+    current_wal: str | None  # None — replika (pg_current_wal_lsn mavjud emas)
+    segment_bytes: int
+    started: datetime
+    now: datetime  # DB soati
+
+
+def _segno(wal: str, segment_bytes: int) -> tuple[int, int]:
+    """WAL fayl nomi (24 hex) -> (timeline, mutlaq segment raqami)."""
+    per_log = 0x100000000 // segment_bytes
+    return int(wal[:8], 16), int(wal[8:16], 16) * per_log + int(wal[16:24], 16)
+
+
+def check_archiver(st: ArchiverState) -> tuple[ArchiverStatus, list[Problem], list[str]]:
     """WAL arxivatori (RPO). `failed_count` ga qarab signal BERILMAYDI: stanza-create'dan oldingi
-    boshlang'ich xatolar kutilgan va qayta uriniladi — faqat OXIRGI urinish xato bo'lsa."""
-    if archive_mode == "off":
-        return "skipped", []
-    if last_failed is not None and (last_archived is None or last_failed > last_archived):
-        return "alarm", [Problem("wal_archiver_failed", "critical",
-                                 "Последняя попытка архивации WAL завершилась ошибкой")]
-    # Сервер, работающий меньше RPO, ещё не мог успеть заархивировать сегмент.
-    if now - started > RPO and (last_archived is None or now - last_archived > RPO):
-        return "alarm", [Problem("wal_archiver_lag", "critical",
-                                 "WAL не архивировался дольше 15 минут — RPO под угрозой")]
-    return "ok", []
+    boshlang'ich xatolar kutilgan. Kechikish — "bo'sh turgan vaqt" emas, balki arxivlanmagan
+    TUGALLANGAN segmentlar mavjudligi (joriy yozilayotgan segment arxivga yaroqsiz) va oxirgi
+    arxivdan RPO + ARCHIVER_GRACE o'tganligi."""
+    if st.archive_mode == "off":
+        return "skipped", [], []
+    problems: list[Problem] = []
+    notes: list[str] = []
+    rpo_min = int(RPO.total_seconds() // 60)
+    if not timedelta(0) < st.archive_timeout <= RPO:
+        problems.append(Problem(
+            "archive_timeout_invalid", "warning",
+            f"archive_timeout должен быть в пределах 1 с — {rpo_min} мин (RPO), "
+            f"сейчас {int(st.archive_timeout.total_seconds())} с"))
+    if st.last_failed is not None and (
+        st.last_archived is None or st.last_failed > st.last_archived
+    ):
+        problems.append(Problem("wal_archiver_failed", "critical",
+                                "Последняя попытка архивации WAL завершилась ошибкой"))
+        return "alarm", problems, notes
+    pending = _completed_unarchived(st, notes)
+    limit = RPO + ARCHIVER_GRACE
+    # Sozlangan RPO'dan kam ishlagan server hali segment arxivlashga ulgurmagan.
+    since = st.last_archived if st.last_archived is not None else st.started
+    if pending and st.now - since > limit:
+        problems.append(Problem(
+            "wal_archiver_lag", "critical",
+            f"Есть неархивированные завершённые сегменты WAL, последняя архивация более "
+            f"{int(limit.total_seconds() // 60)} мин назад — RPO {rpo_min} мин под угрозой"))
+    return ("alarm" if problems else "ok"), problems, notes
+
+
+def _completed_unarchived(st: ArchiverState, notes: list[str]) -> bool:
+    if st.current_wal is None:
+        return False
+    cur_tl, cur = _segno(st.current_wal, st.segment_bytes)
+    if st.last_archived_wal is None:
+        return cur > 1  # segment 1 — yagona (hali yozilayotgan) segment
+    last_tl, last = _segno(st.last_archived_wal.split(".")[0], st.segment_bytes)
+    if cur_tl != last_tl:
+        notes.append("wal_archiver: timeline changed, lag check skipped")
+        return False
+    return cur - last > 1
 
 
 def _next_month(now: datetime) -> str:
@@ -188,28 +234,45 @@ def ops_check(
             problems.append(Problem("stale_data", "warning",
                                     f"Данные витрины не обновлялись более {state.max_age_hours} ч"))
         stuck = int(conn.execute(text(
-            "SELECT count(*) FROM core.etl_requests "
-            "WHERE status = 'pending' AND requested_at < :t"
-        ), {"t": now - ETL_REQUEST_STUCK}).scalar_one())
+            "SELECT count(*) FROM core.etl_requests WHERE "
+            "(status = 'pending' AND requested_at < :p) "
+            "OR (status = 'running' AND requested_at < :r)"
+        ), {"p": now - ETL_REQUEST_STUCK, "r": now - ETL_RUNNING_STUCK}).scalar_one())
         if stuck:
-            problems.append(Problem("etl_request_stuck", "warning",
-                                    f"Запросов загрузки в очереди дольше 30 минут: {stuck}"))
+            minutes = int(ETL_REQUEST_STUCK.total_seconds() // 60)
+            problems.append(Problem(
+                "etl_request_stuck", "warning",
+                f"Запросов загрузки в очереди дольше {minutes} минут "
+                f"(или в работе дольше {int(ETL_RUNNING_STUCK.total_seconds() // 3600)} ч): "
+                f"{stuck}"))
         problems.extend(check_restore(last_restore_test(conn), now))
         rows = conn.execute(text(
             "SELECT purpose, created_at FROM core.crypto_keys "
             "WHERE status = 'active' ORDER BY purpose"))
         for purpose, created_at in rows:
             if now - created_at > DEK_MAX_AGE:
-                problems.append(Problem("key_rotation_due", "warning",
-                                        f"Ключ {purpose}: активная версия старше 365 дней"))
-        mode, archived, failed, started = conn.execute(text(
-            "SELECT current_setting('archive_mode'), a.last_archived_time, a.last_failed_time, "
-            "pg_postmaster_start_time() FROM pg_stat_archiver a"
+                problems.append(Problem(
+                    "key_rotation_due", "warning",
+                    f"Ключ {purpose}: активная версия старше {DEK_MAX_AGE.days} дней"))
+        row = conn.execute(text(
+            "SELECT current_setting('archive_mode'), "
+            "extract(epoch FROM current_setting('archive_timeout')::interval), "
+            "a.last_archived_wal, a.last_archived_time, a.last_failed_time, "
+            "CASE WHEN pg_is_in_recovery() THEN NULL "
+            "ELSE pg_walfile_name(pg_current_wal_lsn()) END, "
+            "pg_size_bytes(current_setting('wal_segment_size')), "
+            "pg_postmaster_start_time(), clock_timestamp() FROM pg_stat_archiver a"
         )).one()
-        status, found = check_archiver(mode, archived, failed, started, now)
+        arch = ArchiverState(
+            archive_mode=row[0], archive_timeout=timedelta(seconds=float(row[1])),
+            last_archived_wal=row[2], last_archived=row[3], last_failed=row[4],
+            current_wal=row[5], segment_bytes=int(row[6]), started=row[7], now=row[8])
+        status, found, found_notes = check_archiver(arch)
         problems.extend(found)
-        if status == "skipped" and notes is not None:
-            notes.append("wal_archiver: skipped (archive_mode=off)")
+        if notes is not None:
+            notes.extend(found_notes)
+            if status == "skipped":
+                notes.append("wal_archiver: skipped (archive_mode=off)")
         db_now: datetime = conn.execute(text("SELECT clock_timestamp()")).scalar_one()
     skew = abs(db_now - app_clock())
     if skew > CLOCK_SKEW_MAX:

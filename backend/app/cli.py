@@ -27,7 +27,13 @@ Har bir kalit-mutatsiya buyrug'ida (`rotate-key`, `retire-keys`, `rewrap-keys`) 
 muhim: avval haqiqiy mutatsiya va uning committi (`with engine.begin(): ...` bloki
 muvaffaqiyatli tugaydi), SO'NGGINA audit yozuvi ("ok" natija bilan). Xato bo'lsa — audit
 "fail" natija bilan yoziladi (kalit materialisiz, faqat maqsad/xato turi) va istisno qayta
-ko'tariladi (chiqish kodi nolga teng bo'lmaydi).
+ko'tariladi (chiqish kodi nolga teng bo'lmaydi). `restore-test-record` ham shunday:
+avval yozuv committi, so'ngra audit; audit `result` — OPERATSIYA natijasi (yozildi), tiklash
+testining natijasi esa `details.outcome` da.
+
+`ops-check` va `restore-test-status` `bootstrap_runtime()` DAN OLDIN ishlaydi: ular faqat
+o'qiydi (kalit zanjiri kerak emas), bootstrap esa audit partitsiyalarini oldindan yaratib
+`audit_partition_missing` ni yashirardi va DB o'chiq bo'lsa ogohlantirishdan oldin yiqilardi.
 """
 
 from __future__ import annotations
@@ -37,6 +43,7 @@ import base64
 import hashlib
 import hmac
 import json
+import re
 import sys
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -71,6 +78,12 @@ from app.etl.types import Mode
 from app.maintenance import cleanup_sessions, cleanup_staging
 
 MIN_GRACE_MINUTES = 10
+MAX_RESTORE_SECONDS = 7 * 24 * 3600
+# pgBackRest yorlig'i: to'liq `YYYYMMDD-HHMMSSF`, diff/incr `<to'liq>_YYYYMMDD-HHMMSS[DI]`;
+# `none` — bo'sh repo (restore_test.sh 3-kod) uchun.
+BACKUP_LABEL_RE = re.compile(r"^(none|\d{8}-\d{6}F(_\d{8}-\d{6}[DI])?)$")
+CONTROL_RE = re.compile(r"[\x00-\x08\x0b-\x1f\x7f]")
+MAX_DETAILS = 2000
 
 
 def _out(message: str) -> None:
@@ -84,6 +97,28 @@ def _grace_minutes(value: str) -> int:
             f"--grace-minutes >= {MIN_GRACE_MINUTES} bo'lishi kerak"
         )
     return n
+
+
+def _duration(value: str) -> int:
+    n = int(value)
+    if not 0 <= n <= MAX_RESTORE_SECONDS:
+        raise argparse.ArgumentTypeError(
+            f"--duration-seconds 0..{MAX_RESTORE_SECONDS} bo'lishi kerak")
+    return n
+
+
+def _backup_label(value: str) -> str:
+    if not BACKUP_LABEL_RE.match(value):
+        raise argparse.ArgumentTypeError(
+            "--backup pgBackRest yorlig'i (yoki 'none') bo'lishi kerak")
+    return value
+
+
+def _details(value: str) -> str:
+    if len(value) > MAX_DETAILS or CONTROL_RE.search(value):
+        raise argparse.ArgumentTypeError(
+            f"--details {MAX_DETAILS} belgidan oshmasligi va boshqaruv belgilarisiz bo'lishi kerak")
+    return value
 
 
 def _create_admin(username: str, full_name: str) -> int:
@@ -300,10 +335,10 @@ def _restore_record(result: str, duration: int, backup: str, details: str) -> in
                                 backup=backup, details=details)
     with get_engine("app").begin() as conn:
         version = ops.record_restore_test(conn, restore)
-    record(AuditEvent(action=AuditAction.RESTORE_TEST_RECORDED, result=status,
+    record(AuditEvent(action=AuditAction.RESTORE_TEST_RECORDED,
                       object_type="restore_test", object_id=backup[:64],
-                      details={"duration_seconds": duration, "rto_ok": restore.rto_ok,
-                               "version": version, "via": "cli"}))
+                      details={"outcome": status, "duration_seconds": duration,
+                               "rto_ok": restore.rto_ok, "version": version, "via": "cli"}))
     _out(f"last_restore_test v{version}: {status}, {duration} s, zaxira {backup}")
     return 0
 
@@ -318,9 +353,13 @@ def _restore_status() -> int:
 def _ops_check(as_json: bool, notify: bool, tls_cert: Path | None, extra: list[str]) -> int:
     problems = [ops.Problem("host", "critical", item) for item in extra]
     notes: list[str] = []
-    problems.extend(ops.ops_check(tls_cert=tls_cert, notes=notes))
+    try:
+        problems.extend(ops.ops_check(tls_cert=tls_cert, notes=notes))
+    except Exception as exc:  # DB o'chiq bo'lsa ham xabar ketishi shart; xom matn yo'q (DSN)
+        problems.append(ops.Problem("ops_check_error", "critical", safe_error(exc)))
     if as_json:
-        _out(json.dumps([asdict(p) for p in problems], ensure_ascii=False))
+        _out(json.dumps({"problems": [asdict(p) for p in problems], "notes": notes},
+                        ensure_ascii=False))
     else:
         _out(ops.report(problems))
         for note in notes:
@@ -354,9 +393,9 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--build", type=int, default=None)
     p = sub.add_parser("restore-test-record")
     p.add_argument("--result", choices=["ok", "fail"], required=True)
-    p.add_argument("--duration-seconds", type=int, required=True)
-    p.add_argument("--backup", required=True)
-    p.add_argument("--details", default="")
+    p.add_argument("--duration-seconds", type=_duration, required=True)
+    p.add_argument("--backup", type=_backup_label, required=True)
+    p.add_argument("--details", type=_details, default="")
     sub.add_parser("restore-test-status")
     p = sub.add_parser("ops-check")
     p.add_argument("--json", action="store_true")
@@ -365,6 +404,10 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--extra", action="append", default=[])
     args = parser.parse_args(argv)
 
+    if args.command == "restore-test-status":
+        return _restore_status()
+    if args.command == "ops-check":
+        return _ops_check(args.json, args.notify, args.tls_cert, args.extra)
     bootstrap_runtime()
     if args.command == "create-admin":
         return _create_admin(args.username, args.full_name)
@@ -382,10 +425,6 @@ def main(argv: list[str] | None = None) -> int:
         return _rollback(args.build)
     if args.command == "restore-test-record":
         return _restore_record(args.result, args.duration_seconds, args.backup, args.details)
-    if args.command == "restore-test-status":
-        return _restore_status()
-    if args.command == "ops-check":
-        return _ops_check(args.json, args.notify, args.tls_cert, args.extra)
     return _cleanup()
 
 

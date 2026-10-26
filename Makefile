@@ -98,3 +98,7 @@ scan: ## prod image'lar + Trivy (HIGH/CRITICAL) + CycloneDX SBOM: make scan [VER
 	scripts/scan.sh $(VERSION)
 release: ## reliz paketi: make release VERSION=1.0.0
 	scripts/release.sh $(VERSION)
+
+.PHONY: prod-config
+prod-config: ## compose.prod.yml sintaksisi (docker compose config, bo'sh sinov sirlari bilan)
+	scripts/prod_config.sh

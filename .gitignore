@@ -31,3 +31,7 @@ frontend/e2e/playwright-report/
 
 # build natijalari (SBOM, image tar'lar, reliz, selftest, yuklama hisobotlari)
 build/
+
+# prod host'ga xos fayllar
+deploy/prod.env
+deploy/release.env

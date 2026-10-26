@@ -1,7 +1,7 @@
 """deploy/secrets/ ichida barcha sirlarni yaratadi. Mavjud fayllarga tegmaydi.
 
 Ishlatish:  python scripts/gen_secrets.py [papka]
-Prod (Linux): keyin  chown root:10001 deploy/secrets/* && chmod 0440 deploy/secrets/*
+Prod (Linux): keyin  sudo scripts/secrets_perms.sh <papka>
 """
 
 from __future__ import annotations
@@ -19,6 +19,7 @@ PASSWORDS = (
     "db_app_password",
     "db_etl_password",
     "redis_password",
+    "pgbackrest_cipher_pass",
 )
 # Ichki SMTP relay parolsiz bo'lsa bo'sh qoladi; kerak bo'lsa operator to'ldiradi.
 EMPTY_OPTIONAL = ("smtp_password",)

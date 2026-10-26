@@ -13,8 +13,12 @@ Haqiqiy fayllar `deploy/secrets/` da (git'ga tushmaydi). Yaratish: `python scrip
 | blind_index_key | base64, 32 bayt — shifrlangan maydon qidiruvi |
 | session_pepper | base64, 32 bayt — token HMAC'lari |
 | smtp_password | ichki SMTP relay paroli (ixtiyoriy, bo'sh bo'lishi mumkin) — faqat worker |
+| pgbackrest_cipher_pass | pgBackRest repo AES-256 paroli — mavjud repo uchun O'ZGARTIRIB BO'LMAYDI |
+| tls_cert.pem | korporativ TLS sertifikati (PEM, to'liq zanjir: server + oraliq CA) |
+| tls_key.pem | shu sertifikatning yopiq kaliti (PEM, parolsiz) |
 
-Prod (Linux): `chown root:10001 deploy/secrets/* && chmod 0440 deploy/secrets/*`.
+Prod (Linux): `sudo scripts/secrets_perms.sh <sirlar papkasi>` — `root:10001` (userns-remap bo'lsa
+`root:<subgid bazasi + 10001>`), fayllar `0440`, papka `0750`. Batafsil: `docs/ops/install-upgrade.md`.
 `master_kek` zaxirasi boshqa joyda (seyf/HSM) saqlanadi — u yo'qolsa shifrlangan ma'lumot tiklanmaydi.
 
 ## `migrate` va `api` sirlari farqi

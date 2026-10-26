@@ -50,3 +50,23 @@ def test_github_token_is_read_only() -> None:
     assert workflow["permissions"] == {"contents": "read"}
     triggers = workflow.get("on", workflow.get(True))  # YAML 1.1: `on` → True
     assert {"push", "pull_request", "schedule"} <= set(triggers)
+
+
+def test_sbom_kept_90_days() -> None:
+    steps = _load(".github/workflows/ci.yml")["jobs"]["scan"]["steps"]
+    upload = next(s for s in steps if str(s.get("uses", "")).startswith("actions/upload-artifact@"))
+    assert upload["with"]["retention-days"] == 90
+    assert _load(".gitlab-ci.yml")["scan"]["artifacts"]["expire_in"] == "90 days"
+
+
+def test_e2e_jobs_are_serialized() -> None:
+    assert _load(".github/workflows/ci.yml")["jobs"]["e2e"]["concurrency"]["group"] == "e2e"
+    assert _load(".gitlab-ci.yml")["e2e"]["resource_group"] == "e2e"
+
+
+def test_e2e_ci_refuses_existing_state() -> None:
+    script = repo_path("scripts/e2e_ci.sh").read_text(encoding="utf-8")
+    guards = script.split("trap cleanup EXIT")[0]  # qo'riqchilar trap'dan OLDIN
+    assert "[ -e deploy/secrets ]" in guards
+    assert "docker volume inspect ugekazna_db_data" in guards
+    assert "unset COMPOSE_PROJECT_NAME" in guards

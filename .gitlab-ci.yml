@@ -19,6 +19,7 @@ check:
 
 e2e:
   stage: e2e
+  resource_group: e2e   # bitta ugekazna stack: e2e_ci.sh down -v qiladi
   timeout: 45m
   script:
     - make e2e-ci

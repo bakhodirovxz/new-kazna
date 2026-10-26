@@ -70,6 +70,14 @@ export async function expectVisibleFocusRing(page: Page, clipSelector?: string):
 /** Axe: ochiq Drawer/BottomSheet kabi holatlarda ham — har kenglikda 0 buzilish. */
 export async function expectNoAxeViolations(page: Page): Promise<void> {
   // Overlay animatsiyasi tugamaguncha rang yarim shaffof — contrast soxta buzilish beradi.
-  await page.evaluate(() => Promise.all(document.getAnimations().map((a) => a.finished)));
+  // Cheksiz (spinner/skeleton) animatsiyalar kutilmaydi; bekor qilinganlari reject beradi — allSettled.
+  await page.evaluate(() =>
+    Promise.allSettled(
+      document
+        .getAnimations()
+        .filter((a) => a.effect?.getComputedTiming().iterations !== Infinity)
+        .map((a) => a.finished),
+    ),
+  );
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
 }

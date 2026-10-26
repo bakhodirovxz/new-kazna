@@ -28,3 +28,6 @@ Thumbs.db
 frontend/coverage/
 frontend/e2e/test-results/
 frontend/e2e/playwright-report/
+
+# build natijalari (SBOM, image tar'lar, reliz, selftest, yuklama hisobotlari)
+build/

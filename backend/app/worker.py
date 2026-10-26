@@ -40,7 +40,7 @@ from app.etl.types import Mode, SourceConnector
 from app.maintenance import cleanup_sessions, cleanup_staging
 
 log = get_logger("ugekazna.worker")
-HEARTBEAT = Path("/tmp/worker-heartbeat")  # noqa: S108 — tmpfs, faqat healthcheck uchun
+HEARTBEAT = Path("/tmp/worker-heartbeat")  # noqa: S108 — tmpfs, faqat healthcheck  # nosec B108
 _NEVER: Any = object()
 _alerted_for: Any = _NEVER
 

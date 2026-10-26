@@ -277,8 +277,8 @@ def test_apscheduler_logger_never_prints_tracebacks(
     try:
         try:
             raise ValueError("secret 123456789")
-        except ValueError:
-            raise RuntimeError("later") from None
+        except ValueError as exc:
+            raise RuntimeError("later") from exc
     except RuntimeError:
         logging.getLogger("apscheduler.executors.default").exception("Job raised")
     err = capsys.readouterr().err

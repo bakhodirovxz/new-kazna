@@ -12,15 +12,15 @@ filterwarnings = ["error::DeprecationWarning"]
 [tool.ruff]
 line-length = 100
 target-version = "py312"
-src = ["app", "tests"]
+src = ["app", "tests", "tools"]
 
 [tool.ruff.lint]
 select = ["E", "W", "F", "I", "N", "UP", "B", "A", "C4", "DTZ", "T20", "SIM", "RUF", "S"]
 ignore = ["S101", "B008", "RUF001", "RUF002", "RUF003"]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/*" = ["S105", "S106", "S311", "S608"]
-"migrations/*" = ["E501"]
+"tests/*" = ["S105", "S106", "S108", "S311", "S603", "S607", "S608"]
+"migrations/*" = ["E501", "S608"]
 "app/etl/synthetic/*" = ["S311"]
 # SQL identifikatorlari faqat kod ichidagi reyestrlardan (whitelist) olinadi.
 "app/etl/merge.py" = ["S608"]
@@ -29,7 +29,7 @@ ignore = ["S101", "B008", "RUF001", "RUF002", "RUF003"]
 "app/admin/etl_router.py" = ["S608"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["app", "tests"]
+known-first-party = ["app", "tests", "tools"]
 
 [tool.mypy]
 python_version = "3.12"

@@ -53,8 +53,14 @@ services:
       BLIND_INDEX_KEY: ICEiIyQlJicoKSorLC0uLzAxMjM0NTY3ODk6Ozw9Pj8=
       SESSION_PEPPER: QEFCQ0RFRkdISUpLTE1OT1BRUlNUVVZXWFlaW1xdXl8=
       COVERAGE_FILE: /tmp/.coverage
+      # Linux CI'da /app host foydalanuvchisiga tegishli — keshlar tmpfs'ga (uid 10001 yoza oladi).
+      MYPY_CACHE_DIR: /tmp/.mypy_cache
+      RUFF_CACHE_DIR: /tmp/.ruff_cache
+      # Repo darajasidagi testlar (backend/tests/ops) deploy/, scripts/, docs/ ni shu yerdan o'qiydi.
+      UGK_REPO: /repo
     volumes:
       - ../backend:/app
+      - ..:/repo:ro
     tmpfs:
       - /tmp
     depends_on:

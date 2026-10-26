@@ -67,3 +67,7 @@ web: ## frontend'ni qayta qurish va Caddy'ni yangilash
 
 e2e: ## Playwright E2E (dev stack ishlab turishi kerak)
 	./scripts/e2e.sh
+
+.PHONY: check-backend
+check-backend: ## ruff + mypy + bandit + pip-audit + pytest (qamrov 85%/95%)
+	scripts/check_backend.sh

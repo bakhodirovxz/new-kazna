@@ -145,7 +145,8 @@ def main() -> int:
 
     force_browse()
 
-    for probe in ("/api/v1/healthz/", "/api/v1/healthz;x", "/api/v1/healthz%2f", "/api/v1/readyz/"):
+    for probe in ("/api/v1/healthz/", "/api/v1/healthz;x", "/api/v1/healthz%2f", "/api/v1/readyz/",
+                  "/api/v1//healthz", "/api//v1/healthz", "/api/v1//readyz"):
         status, _, fbody = https("GET", probe)
         expect(f"probe variant {probe}", status == 404 and not fbody.startswith(b"stub"), status)
 

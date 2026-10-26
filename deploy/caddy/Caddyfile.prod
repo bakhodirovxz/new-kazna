@@ -102,8 +102,8 @@ http://:8081 {
 
 	# Probe'lar faqat ichki tarmoq uchun. `handle` bloklari o'zaro istisno va yo'l uzunligi
 	# bo'yicha saralanadi — alohida handle, `/api/*` proksisidan oldin.
-	# Regex orig_uri bo'yicha: healthz/, healthz;x, healthz%2f variantlari ham yopiladi.
-	@probes expression {http.request.orig_uri.path}.matches('(?i)^/api/v1/(healthz|readyz)([/;]|$)')
+	# Regex orig_uri bo'yicha: healthz/, healthz;x, healthz%2f, //healthz variantlari ham yopiladi.
+	@probes expression {http.request.orig_uri.path}.matches('(?i)^/+api/+v1/+(healthz|readyz)([/;]|$)')
 	handle @probes {
 		error 404
 	}

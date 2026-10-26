@@ -1,0 +1,131 @@
+# UGEKAZNA prod (spec 2, 3.7). Korporativ sertifikat — Docker secrets (tls_cert, tls_key); ACME yo'q.
+# Konteyner non-root (uid 10001): HTTPS 8443, HTTP 8080 (host'da 443/80 ga ulanadi),
+# ichki health — 127.0.0.1:8081 (tashqaridan yopiq). Domen — UGK_DOMAIN (deploy/prod.env).
+# Xavfsizlik sarlavhalari, `//` yo'naltirish va handle_errors — Caddyfile.dev bilan bir xil (3-reja ruling'lari).
+{
+	admin off
+	auto_https disable_redirects
+	http_port 8080
+	https_port 8443
+	servers {
+		protocols h1 h2
+	}
+}
+
+# Oddiy javoblar va handle_errors (Caddy'ning o'z xatolari: 404 asset, 413, 502) uchun umumiy.
+(security_headers) {
+	header {
+		Strict-Transport-Security "max-age=63072000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "no-referrer"
+		Permissions-Policy "accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=()"
+		Cross-Origin-Opener-Policy "same-origin"
+		Cross-Origin-Resource-Policy "same-origin"
+		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; connect-src 'self'; font-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
+		-Server
+		-Via
+	}
+}
+
+# HTTP → HTTPS (host'da 80 → konteyner 8080). Manzilda port yo'q — host'dagi 443.
+http://{$UGK_DOMAIN} {
+	redir https://{$UGK_DOMAIN}{uri} 308
+}
+
+# Konteyner healthcheck'i uchun (compose.prod.yml: wget http://127.0.0.1:8081/health).
+http://:8081 {
+	bind 127.0.0.1
+	handle /health {
+		respond "ok" 200
+	}
+	handle {
+		respond 404
+	}
+}
+
+{$UGK_DOMAIN} {
+	tls /run/secrets/tls_cert /run/secrets/tls_key {
+		protocols tls1.2 tls1.3
+		ciphers TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384 TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384 TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256 TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256 TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256 TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256
+		curves x25519 secp256r1 secp384r1
+	}
+
+	# Kirish jurnali JSON (Cookie/Authorization Caddy tomonidan yashiriladi).
+	log {
+		output stdout
+		format json
+	}
+
+	encode zstd gzip
+
+	request_body {
+		max_size 1MB
+	}
+
+	import security_headers
+
+	# '//evil.com/' kabi yo'llar SPA'ning location.pathname asosidagi navigatsiyasini
+	# cross-origin URL'ga aylantirishi mumkin — bosh slash'lar ko'p bo'lsa '/' ga (Caddyfile.dev).
+	@dupslash expression {http.request.uri.path}.startsWith('//')
+	redir @dupslash / 308
+
+	# ASVS 14.4.2: API javobi brauzerda sahifa sifatida ochilmasin. `?` — faqat backend o'zi
+	# Content-Disposition bermagan bo'lsa (CSV eksportning fayl nomi saqlanadi).
+	header /api/* ?Content-Disposition "attachment; filename=\"api.json\""
+
+	# Force-browsing (Kiberxavfsizlik markazi 05-29-02/5323): nuqta bilan boshlanuvchi har qanday
+	# segment (.git, .env, .DS_Store ...) — 404, SPA fallback'dan oldin. /.well-known/ istisno.
+	@dotseg {
+		# orig_uri: Caddy yo'lni tozalashdan OLDINGI holat (/%2e%2e/ ham tutiladi).
+		expression {http.request.orig_uri.path}.matches('(?i)(^|/)([.]|%2e)')
+		not path /.well-known/*
+	}
+	handle @dotseg {
+		respond 404
+	}
+
+	# Probe'lar faqat ichki tarmoq uchun. `handle` bloklari o'zaro istisno va yo'l uzunligi
+	# bo'yicha saralanadi — alohida handle, `/api/*` proksisidan oldin.
+	handle /api/v1/healthz {
+		respond 404
+	}
+	handle /api/v1/readyz {
+		respond 404
+	}
+
+	handle /api/* {
+		reverse_proxy api:8000
+	}
+
+	# Frontend: ugekazna-web image'idagi /srv (frontend/Dockerfile `web` bosqichi).
+	handle {
+		root * /srv
+
+		@assets path /assets/*
+		header @assets Cache-Control "public, max-age=31536000, immutable"
+
+		@notAssets not path /assets/*
+		header @notAssets Cache-Control "no-cache"
+
+		# Kengaytmali yo'l (/package.json, /src/main.tsx) yo'q bo'lsa — 404, index.html emas.
+		@spa {
+			not path /assets/*
+			not path_regexp \.[^/]+$
+			file {
+				try_files {path} /index.html
+			}
+		}
+		rewrite @spa {file_match.relative}
+
+		file_server
+	}
+
+	# Caddy'ning o'zi hosil qilgan xatolar (404 asset, 413, 502) ham sarlavhalarni oladi va
+	# immutable keshni bekor qiladi (Caddyfile.dev, 3-reja review).
+	handle_errors {
+		import security_headers
+		header Cache-Control "no-store"
+		respond "{err.status_code} {err.status_text}" {err.status_code}
+	}
+}

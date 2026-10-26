@@ -34,6 +34,17 @@ localhost, caddy {
 	@dupslash expression {http.request.uri.path}.startsWith('//')
 	redir @dupslash / 308
 
+	# Force-browsing (Kiberxavfsizlik markazi 05-29-02/5323): nuqta bilan boshlanuvchi har qanday
+	# segment (.git, .env, .DS_Store ...) — 404, SPA fallback'dan oldin. /.well-known/ istisno.
+	@dotseg {
+		# orig_uri: Caddy yo'lni tozalashdan OLDINGI holat (/%2e%2e/ ham tutiladi).
+		expression {http.request.orig_uri.path}.matches('(?i)(^|/)([.]|%2e)')
+		not path /.well-known/*
+	}
+	handle @dotseg {
+		respond 404
+	}
+
 	# Probe'lar faqat ichki tarmoq uchun. `handle`lar birinchi mos kelgan direktivada
 	# to'xtaydi (Caddy'da tartib muhim) — shu sabab bu blok `handle /api/*`dan OLDIN va
 	# o'zi ham `handle @probes { ... }` ichida bo'lishi kerak (yalang'och `respond @probes 404`
@@ -60,8 +71,10 @@ localhost, caddy {
 		header @notAssets Cache-Control "no-cache"
 
 		# SPA fallback: /assets/ dan tashqari yo'q yo'l -> index.html; yo'q asset -> 404.
+		# Kengaytmali yo'l (/package.json, /src/main.tsx) yo'q bo'lsa — 404, index.html emas.
 		@spa {
 			not path /assets/*
+			not path_regexp \.[^/]+$
 			file {
 				try_files {path} /index.html
 			}

@@ -102,3 +102,7 @@ release: ## reliz paketi: make release VERSION=1.0.0
 .PHONY: prod-config
 prod-config: ## compose.prod.yml sintaksisi (docker compose config, bo'sh sinov sirlari bilan)
 	scripts/prod_config.sh
+
+.PHONY: test-caddy
+test-caddy: ## Caddyfile.prod xatti-harakati (probe'lar, TLS, sarlavhalar, 1 MB, SPA, force-browsing)
+	scripts/tests/caddy_prod_test.sh

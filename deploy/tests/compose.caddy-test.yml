@@ -1,0 +1,63 @@
+# Caddyfile.prod xatti-harakati testi (scripts/tests/caddy_prod_test.sh). Port ochilmaydi —
+# probe konteyneri caddy'ga ichki `web` tarmog'ida ulanadi. Caddy — haqiqiy ugekazna-web image'i
+# (capability'siz binar + haqiqiy SPA), prod bilan bir xil hardening.
+name: ugekazna-caddytest
+
+services:
+  certgen:
+    image: ugekazna-backend:dev
+    user: "0:0"
+    command: ["python", "/scripts/gen_selfsigned_tls.py", "--out", "/certs", "--name", "ugk.test",
+              "--mode", "0444"]
+    volumes:
+      - certs:/certs
+      - ../../scripts:/scripts:ro
+
+  stub:
+    image: ugekazna-backend:dev
+    command: ["python", "/tests/stub_api.py"]
+    volumes: ["./stub_api.py:/tests/stub_api.py:ro"]
+    networks:
+      web:
+        aliases: [api]
+
+  caddy:
+    build:
+      context: ../../frontend
+      target: web
+      args:
+        CADDY_IMAGE: ${CADDY_IMAGE:-caddy:2-alpine}
+        CADDY_BUILDER_IMAGE: ${CADDY_BUILDER_IMAGE:-caddy:builder-alpine}
+    image: ugekazna-web:caddytest
+    user: "10001:10001"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    environment:
+      UGK_DOMAIN: ugk.test
+    tmpfs:
+      - "/tmp:uid=10001,gid=10001"
+      - "/data:uid=10001,gid=10001"
+      - "/config:uid=10001,gid=10001"
+    volumes:
+      - ../caddy/Caddyfile.prod:/etc/caddy/Caddyfile:ro
+      - certs:/run/secrets:ro
+    networks: [web]
+    depends_on:
+      certgen: {condition: service_completed_successfully}
+      stub: {condition: service_started}
+
+  probe:
+    image: ugekazna-backend:dev
+    command: ["python", "/tests/probe_caddy.py"]
+    volumes:
+      - ./probe_caddy.py:/tests/probe_caddy.py:ro
+      - certs:/certs:ro
+    networks: [web]
+    depends_on: [caddy]
+
+volumes:
+  certs: {}
+
+networks:
+  web: {}

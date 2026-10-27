@@ -250,13 +250,13 @@ def test_manual_balance_reaches_kazna_svod(
     assert svod["kpis"]["banks"] == 2
 
 
-def test_manual_balance_month_is_unverifiable_not_failed(manual_sc: ManualScenario) -> None:
+def test_manual_balance_excluded_only_in_its_month(manual_sc: ManualScenario) -> None:
     result = manual_sc.result
     assert result.status == "success", result.error  # "Разница" 300 publish'ni to'xtatmaydi
     detail = migrator_sql(
         "SELECT detail->'balance_identity' FROM core.etl_step WHERE run_id = :r "
         "AND name = 'quality'", r=result.run_id)[0][0]
     assert detail["ok"] is True
-    assert {"branch_id": manual_sc.branch_id, "month_id": 202608,
-            "reason": "manual_balance"} in detail["unverifiable"]
+    assert {"branch_id": manual_sc.branch_id, "month_id": 202608, "accounts": 1,
+            "reason": "manual_balance"} in detail["manual_excluded"]
     assert not [v for v in detail["violations"] if v["branch_id"] == manual_sc.branch_id]

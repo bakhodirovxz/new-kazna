@@ -28,6 +28,7 @@ from app.etl.synthetic.reference import (
     OBJECTS,
     OTHER_COUNTERPARTIES,
     POSITIONS,
+    PROCUREMENT_SUBJECTS,
     STOCK_CATEGORIES,
     SUPPLIER_CODES,
     SUPPLIERS,
@@ -68,9 +69,13 @@ def generate(model: SynthModel, window: Window, sink: StagingSink) -> dict[str, 
             ((b, k, bank) for b in BRANCHES for k, bank in enumerate(BANKS)), start=1)
     ])
     emit("dim_nomenclature", [
-        {"code": f"NOM-{n:03d}", "name": name, "category": STOCK_CATEGORIES[cat], "unit": unit,
-         "enbt_code": f"ЕНБТ-{cat + 1:02d}-{n:03d}"}
-        for n, (name, cat, unit, _price) in enumerate(NOMENCLATURE, start=1)
+        *({"code": f"NOM-{n:03d}", "name": name, "category": STOCK_CATEGORIES[cat], "unit": unit,
+           "enbt_code": f"ЕНБТ-{cat + 1:02d}-{n:03d}"}
+          for n, (name, cat, unit, _price) in enumerate(NOMENCLATURE, start=1)),
+        # S4: xarid predmetlari (fact_procurement.nom_code).
+        *({"code": f"PS-{n:02d}", "name": subject, "category": subject, "unit": "—",
+           "enbt_code": None}
+          for n, subject in enumerate(PROCUREMENT_SUBJECTS, start=1)),
     ])
     emit("dim_source", [{"code": c, "name": n, "kind": k} for c, n, k in FUNDS])
     emit("dim_object", [

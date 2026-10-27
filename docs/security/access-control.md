@@ -19,7 +19,7 @@
 пароль открывает сеанс сразу (`test_no_totp_login_creates_session_and_offers`), а система предлагает
 подключить 2FA (предложение возвращается после каждой смены пароля, в том числе сброса администратором) («Подключить» или «Позже»; отказ записывается как `auth.mfa_offer_dismissed`,
 `test_dismiss_is_audited_and_hides_offer`). Подключить позже можно в меню пользователя («Подключить
-2FA», `test_later_enrollment_for_logged_in_user`). Если `security.mfa_required` включена, подключение
+2FA», `test_later_enrollment_is_session_bound_and_keeps_absolute_expiry`). Если `security.mfa_required` включена, подключение
 снова обязательно при следующем входе каждого пользователя без TOTP
 (`test_required_keeps_mandatory_enrollment`). Изменение настроек безопасности и интеграций всегда
 требует текущего кода TOTP; пользователь без TOTP получает ответ `step_up_unavailable` (403) с

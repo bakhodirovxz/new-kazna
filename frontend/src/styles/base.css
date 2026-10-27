@@ -5,7 +5,7 @@
 }
 
 html {
-  font-size: clamp(16px, calc(10px + 0.45vw), 21px);
+  font-size: clamp(14px, calc(8px + 0.42vw), 17.5px); /* компактнее прежнего на ~12–15% */
   -webkit-text-size-adjust: 100%;
 }
 

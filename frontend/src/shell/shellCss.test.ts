@@ -3,12 +3,12 @@ import css from './shell.css?raw';
 
 /** Prototip: logo | bo'limlar (flex, wrap) | asboblar (flex:none) — D1: bo'limlar ≤ 2 qatorda. */
 describe('shell.css top bar', () => {
-  it('gives the sections column a wide flex basis from 1280px so tools wrap below instead of squeezing it', () => {
-    const wide = /@media \(min-width: 1280px\) \{([^@]*)\}\s*(?:@|\/\*|$)/.exec(css)?.[1] ?? '';
-    expect(wide).toMatch(/\.sections-nav \{[^}]*flex: 1 1 56rem;/);
+  it('keeps all sections in one row from 1280px (no wrap) and wraps them only below', () => {
+    expect(css).toMatch(/\.sections \{[^}]*flex: 1;[^}]*flex-wrap: nowrap;[^}]*min-width: 0;/);
+    expect(css).toMatch(/@media \(max-width: 1279\.98px\) \{\s*\.sections \{ flex-wrap: wrap; \}/);
   });
-  it('lets sections wrap and shrink; tools stay unshrinkable and right-aligned', () => {
-    expect(css).toMatch(/\.sections \{[^}]*flex: 1;[^}]*flex-wrap: wrap;[^}]*min-width: 0;/);
+  it('shows tool labels only on very wide screens; tools stay unshrinkable and right-aligned', () => {
+    expect(css).toMatch(/@media \(max-width: 2399\.98px\) \{\s*\.tool__label,/);
     expect(css).toMatch(/\.tools \{[^}]*flex: none;[^}]*margin-left: auto;/);
     expect(css).toMatch(/\.topbar \{[^}]*flex-wrap: wrap;/);
   });

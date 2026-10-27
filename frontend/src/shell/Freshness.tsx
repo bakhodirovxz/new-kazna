@@ -22,7 +22,7 @@ export function Freshness() {
     <div
       className={cx('fresh', data.stale && 'fresh--stale')}
       role="status"
-      title={data.stale ? t('fresh.staleTitle', { hours: data.max_age_hours }) : undefined}
+      title={data.stale ? t('fresh.staleTitle', { hours: data.max_age_hours }) : text}
     >
       <Icon name={data.stale ? 'alert' : 'clock'} />
       <span className="fresh__text">{text}</span>

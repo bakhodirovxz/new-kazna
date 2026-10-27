@@ -29,7 +29,7 @@
   --shadow-hover: 0 2px 4px rgba(19, 60, 120, 0.06), 0 20px 36px -22px rgba(19, 60, 120, 0.55);
   --radius-card: 1rem;
   --radius-ctl: 0.55rem;
-  --top-h: 5rem;
-  --side-w: 16.5rem;
+  --top-h: 3.9rem;
+  --side-w: 15rem;
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
 }

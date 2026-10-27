@@ -19,9 +19,9 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.6rem 1rem;
+  gap: 0.4rem 0.8rem;
   min-height: var(--top-h);
-  padding: 0.5rem 1.5rem;
+  padding: 0.35rem 1.1rem;
   color: #fff;
   background: linear-gradient(120deg, var(--top) 0%, var(--top-end) 100%);
   box-shadow: 0 2px 0 var(--top2), 0 10px 30px -22px rgba(11, 60, 140, 0.9);
@@ -32,52 +32,52 @@
 .logo {
   display: flex;
   align-items: center;
-  gap: 0.8rem;
+  gap: 0.6rem;
   flex: none;
-  margin-right: 0.4rem;
-  padding-right: 1rem;
+  margin-right: 0.2rem;
+  padding-right: 0.8rem;
   border-right: 1px solid rgba(255, 255, 255, 0.14);
   color: #fff;
   text-decoration: none;
 }
-.logo__mark { width: 3.2rem; height: 3.2rem; flex: none; }
+.logo__mark { width: 2.5rem; height: 2.5rem; flex: none; }
 .logo__text { display: flex; flex-direction: column; }
-.logo__word { font-size: 1.75rem; font-weight: 800; letter-spacing: -0.04em; line-height: 1; }
+.logo__word { font-size: 1.5rem; font-weight: 800; letter-spacing: -0.04em; line-height: 1; }
 .logo__word span { color: #7fe3f0; }
 .logo__tag { margin-top: 0.25rem; font-size: 0.76rem; opacity: 0.9; }
 
-.sections-nav { display: flex; flex: 1; min-width: 0; }
+.sections-nav { display: flex; flex: 1 1 auto; min-width: 0; }
 .sections {
   display: flex;
   flex: 1;
-  flex-wrap: wrap;
+  flex-wrap: nowrap; /* ≥1280: все 9 разделов в один ряд; ниже — перенос (см. media) */
   align-items: center;
-  gap: 0.35rem;
+  gap: 0.15rem;
   min-width: 0;
   margin: 0;
   padding: 0;
   list-style: none;
 }
-.sections .sep { flex: none; width: 1px; height: 1.8rem; margin: 0 0.4rem; background: rgba(255, 255, 255, 0.35); }
+.sections .sep { flex: none; width: 1px; height: 1.4rem; margin: 0 0.25rem; background: rgba(255, 255, 255, 0.35); }
 .sec {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  height: 3.2rem;
-  padding: 0 1rem;
-  border-radius: 0.7rem;
+  gap: 0.35rem;
+  height: 2.5rem;
+  padding: 0 0.65rem;
+  border-radius: 0.6rem;
   color: var(--top-ink);
-  font-size: 1.12rem;
+  font-size: 0.98rem;
   font-weight: 600;
   text-decoration: none;
   white-space: nowrap;
 }
-.sec .icon { width: 1.4rem; height: 1.4rem; flex: none; }
+.sec .icon { width: 1.15rem; height: 1.15rem; flex: none; }
 .sec:hover { background: rgba(255, 255, 255, 0.12); color: #fff; }
 .sec[aria-current='page'] { background: #fff; color: var(--brand); box-shadow: 0 8px 20px -12px rgba(0, 0, 0, 0.6); }
 .sec[aria-current='page']:focus-visible { outline-color: var(--focus-on-dark); outline-offset: 3px; }
 
-.tools { display: flex; align-items: center; gap: 0.4rem; flex: none; margin-left: auto; }
+.tools { display: flex; align-items: center; gap: 0.3rem; flex: none; margin-left: auto; }
 
 .layout { display: grid; grid-template-columns: var(--side-w) minmax(0, 1fr); align-items: start; }
 .layout--full { grid-template-columns: minmax(0, 1fr); }
@@ -86,7 +86,7 @@
   top: var(--top-offset, 5rem);
   height: calc(100vh - var(--top-offset, 5rem));
   overflow-y: auto;
-  padding: 1.3rem 0.9rem;
+  padding: 1rem 0.7rem;
   background: linear-gradient(180deg, #ffffff, #f7fbff);
   border-right: 1px solid var(--line);
   animation: ugk-side-in 0.22s ease-out;
@@ -112,10 +112,10 @@
   display: flex;
   align-items: center;
   gap: 0.7rem;
-  padding: 0.72rem 0.8rem;
+  padding: 0.55rem 0.7rem;
   border-radius: 0.5rem;
   color: var(--muted);
-  font-size: 1.02rem;
+  font-size: 0.98rem;
   font-weight: 500;
   text-decoration: none;
 }
@@ -143,14 +143,14 @@
   box-shadow: inset 3px 0 0 var(--brand2);
 }
 
-.main { display: flex; flex-direction: column; gap: 1rem; min-width: 0; padding: 1.4rem 1.8rem 2.2rem; outline: none; }
+.main { display: flex; flex-direction: column; gap: 1rem; min-width: 0; padding: 1.1rem 1.5rem 1.8rem; outline: none; }
 .head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 0.8rem 1.5rem; }
 .head__titles { display: flex; flex-direction: column; gap: 0.15rem; min-width: 0; }
 .head__menu { align-self: flex-start; margin-bottom: 0.5rem; }
 .crumb { font-size: 0.9rem; color: var(--muted); }
 .head h1 {
   margin: 0;
-  font-size: 2rem;
+  font-size: 1.75rem;
   font-weight: 700;
   line-height: 1.15;
   letter-spacing: -0.01em;
@@ -169,18 +169,18 @@
 .shell-skel .side--skel { display: flex; flex-direction: column; gap: 0.6rem; }
 .shell-skel .main { gap: 1.2rem; }
 
-/* D1: keng bazaviy kenglik — asboblar sig'masa 2-qatorga tushadi, bo'limlar torayib 5 qatorga cho'zilmaydi */
-@media (min-width: 1280px) {
-  .sections-nav { flex: 1 1 56rem; }
+/* D1: ≥1280 — навигация в один ряд; подписи инструментов появляются только на очень широких экранах */
+@media (max-width: 1450px) {
+  .sec { padding: 0 0.5rem; font-size: 0.94rem; gap: 0.3rem; }
+}
+@media (max-width: 1360px) {
+  .sec .icon { display: none; }
+}
+@media (max-width: 1279.98px) {
+  .sections { flex-wrap: wrap; }
 }
 @media (max-width: 2100px) {
-  .sec { padding: 0 0.85rem; font-size: 1.1rem; }
-}
-@media (max-width: 1750px) {
   .logo__tag { display: none; }
-}
-@media (max-width: 1450px) {
-  .sec { padding: 0 0.8rem; font-size: 1.05rem; }
 }
 @media (max-width: 1279.98px) {
   .topbar { gap: 0.5rem 0.8rem; padding: 0.5rem 1rem; }
@@ -217,8 +217,8 @@
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
-  height: 2.5rem;
-  padding: 0 0.7rem;
+  height: 2.2rem;
+  padding: 0 0.55rem;
   border: 1px solid rgba(160, 210, 255, 0.45);
   border-radius: 0.55rem;
   background: transparent;
@@ -307,9 +307,18 @@ kbd { padding: 0 0.35rem; border: 1px solid var(--line); border-bottom-width: 2p
 .srcbar.warn { border-left: 4px solid var(--neg); }
 @media print { .srcbar { box-shadow: none; } }
 
-@media (max-width: 1279.98px) {
+@media (max-width: 2399.98px) {
   .tool__label,
-  .usermenu__name,
+  .usermenu__name {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+}
+@media (max-width: 1699.98px) {
   .fresh__text {
     position: absolute;
     width: 1px;

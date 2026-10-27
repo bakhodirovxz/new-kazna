@@ -6,7 +6,8 @@ ekrandagi nomi METHOD_TITLES dan. Normativ kunlar — core.settings `zakupki.met
 
 from __future__ import annotations
 
-from app.core.setting_types import DEFAULT_METHOD_NORMS, METHODS  # noqa: F401
+from app.core.setting_types import DEFAULT_METHOD_NORMS as DEFAULT_METHOD_NORMS
+from app.core.setting_types import METHODS as METHODS
 
 IN_WORK: tuple[str, ...] = ("объявлен", "на оценке")
 DONE = "договор заключён"

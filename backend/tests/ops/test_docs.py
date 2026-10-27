@@ -14,7 +14,7 @@ SECURITY_DOCS = {
 }
 OPS_DOCS = {
     "README.md", "host-hardening.md", "install-upgrade.md", "backup-restore.md", "monitoring.md",
-    "load-test.md",
+    "load-test.md", "admin-guide.md", "user-guide.md",
 }
 STRIDE = ("Spoofing", "Tampering", "Repudiation", "Information disclosure", "Denial of service",
           "Elevation of privilege")
@@ -141,3 +141,21 @@ def test_host_hardening_covers_required_controls() -> None:
                    "auditd", "chrony", "unattended-upgrades", '"userns-remap"', '"live-restore"',
                    '"no-new-privileges"', "max-size", "ugk-admins", "SIEM"):
         assert needle in text, needle
+
+
+MD_LINK = re.compile(r"\]\(([^)#\s]+\.md)(?:#[^)]*)?\)")
+
+
+def test_relative_links_resolve() -> None:
+    missing = [
+        f"{doc.name}: {target}"
+        for doc in _docs()
+        for target in MD_LINK.findall(doc.read_text(encoding="utf-8"))
+        if not (doc.parent / target).exists()
+    ]
+    assert not missing, missing
+
+
+def test_user_guide_is_three_to_five_pages() -> None:
+    words = len(re.findall(r"\w+", (OPS / "user-guide.md").read_text(encoding="utf-8")))
+    assert 900 <= words <= 2600, words  # ~300-500 so'z sahifasiga -> 3-5 sahifa (TZ 10)

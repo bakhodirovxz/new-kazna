@@ -17,7 +17,7 @@ from app.auth.context import Ctx, require_perm
 from app.auth.permissions import Perm, Section, section_perm
 from app.core import ratelimit
 from app.core.db import DB
-from app.core.errors import ForbiddenError
+from app.core.errors import ForbiddenError, ValidationFailed
 from app.core.request_meta import Meta
 from app.sections.deps import PER_PATTERN, SQ, SectionQuery
 from app.sections.obzor import build_excel
@@ -26,6 +26,13 @@ from app.sections.xlsx import build_workbook
 
 XLSX_MEDIA = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 XLSX_LIMIT = ratelimit.Limit(events=10, window=60)
+# shortcut: o'zgarmas 30/min; sysconfig kaliti (U1) kerak bo'lsa — admin panelga chiqariladi.
+LOG_LIMIT = ratelimit.Limit(events=30, window=60)
+# Bo'lim -> sahifalar; ro'yxati yo'q bo'limlar (keyingi rejalar) faqat shakl bo'yicha tekshiriladi.
+SECTION_PAGES: dict[str, frozenset[str]] = {
+    "obzor": frozenset({"svod", "postup", "rasxod", "excel", "vnimanie"}),
+    "kazna": frozenset({"svod", "platezhi", "calendar", "dogovory", "celevye"}),
+}
 
 xlsx_router = APIRouter(prefix="/obzor", tags=["export"], dependencies=[
     Depends(require_perm(section_perm(Section.OBZOR), Perm.EXPORT_XLSX.value))])
@@ -38,7 +45,7 @@ class ExportLogIn(BaseModel):
     kind: Literal["csv", "png"]
     section: Section
     page: Annotated[str, Field(pattern=r"^[a-z]{2,20}$")]
-    card: Annotated[str, Field(min_length=1, max_length=120)]
+    card: Annotated[str, Field(min_length=1, max_length=120, pattern=r"^[^\x00-\x1f\x7f]+$")]
     br: Annotated[int | None, Field(ge=1)] = None
     per: Annotated[str | None, Field(pattern=PER_PATTERN)] = None
     rows: Annotated[int | None, Field(ge=0, le=1_000_000)] = None
@@ -75,6 +82,10 @@ def excel_xlsx(db: DB, q: SQ, ctx: Ctx, meta: Meta) -> Response:
 
 @log_router.post("/log", status_code=204, response_class=Response)
 def export_log(body: ExportLogIn, ctx: Ctx, meta: Meta) -> Response:
+    ratelimit.check("export_log", str(ctx.user_id), LOG_LIMIT)
+    pages = SECTION_PAGES.get(body.section.value)
+    if pages is not None and body.page not in pages:
+        raise ValidationFailed(fields=["page"])
     ctx.assert_branch(body.br)
     if section_perm(body.section) not in ctx.permissions:
         raise ForbiddenError()

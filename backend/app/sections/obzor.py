@@ -69,7 +69,7 @@ def stations(db: Session, q: SectionQuery, period: ReportPeriod) -> list[Station
         out.append(StationOut(
             branch_id=b.branch_id, code=b.code, name=b.name, short_name=b.short_name, kind=b.kind,
             capacity_mw=cash.opt(b.capacity_mw), lat=cash.opt(b.lat), lon=cash.opt(b.lon),
-            inflow=m.inflow if m else 0.0, outflow=m.outflow if m else 0.0,
+            inflow=m.inflow if m else None, outflow=m.outflow if m else None,
             closing=m.closing if m else None,
             receivable=d.receivable if d else None, payable=d.payable if d else None,
             overdue_payable=d.overdue_payable if d else None))

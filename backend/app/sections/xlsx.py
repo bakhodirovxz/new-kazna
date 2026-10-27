@@ -7,6 +7,7 @@ Matn kataklari (1C'dan kelgan nomlar ham) hech qachon formula sifatida saqlanmay
 from __future__ import annotations
 
 import io
+import re
 from typing import Any
 
 from openpyxl import Workbook
@@ -31,7 +32,14 @@ def _r1(value: float | None) -> float | None:
     return None if value is None else round(value, 1)
 
 
+# XML 1.0 da taqiqlangan boshqaruv belgilari (1C nomlarida uchrashi mumkin) — openpyxl
+# IllegalCharacterError bermasligi uchun olib tashlanadi.
+_ILLEGAL = re.compile(f"[{chr(0)}-{chr(8)}{chr(11)}{chr(12)}{chr(14)}-{chr(31)}]")
+
+
 def _put(ws: Worksheet, row: int, col: int, value: Any, *, bold: bool = False) -> None:
+    if isinstance(value, str):
+        value = _ILLEGAL.sub("", value)
     cell = ws.cell(row=row, column=col)
     cell.value = value
     if isinstance(value, str) and value.lstrip().startswith(FORMULA_PREFIXES):

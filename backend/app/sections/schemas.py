@@ -93,8 +93,8 @@ class StationOut(_Out):
     capacity_mw: float | None
     lat: float | None
     lon: float | None
-    inflow: float
-    outflow: float
+    inflow: float | None
+    outflow: float | None
     closing: float | None
     receivable: float | None
     payable: float | None

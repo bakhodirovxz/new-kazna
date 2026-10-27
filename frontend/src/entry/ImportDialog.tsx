@@ -125,6 +125,7 @@ export function ImportDialog({ entity, branch, onClose }: Props) {
             </Button>
           </div>
           {templateError ? <FormError error={templateError} /> : null}
+          <p className="entry-hint">{t('entry.import.hint')}</p>
           <Select label={t('entry.branch')} value={branchId} options={options} onChange={setPicked} required />
           <label className="entry-file">
             <span>{t('entry.import.file')}</span>

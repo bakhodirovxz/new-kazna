@@ -48,7 +48,7 @@ async function csrfToken(context: BrowserContext): Promise<string> {
 
 async function submitDrawer(page: Page): Promise<void> {
   await page.getByRole('dialog').getByRole('button', { name: 'Отправить на согласование' }).click();
-  await expect(page.getByText('Отправлено на согласование')).toBeVisible();
+  await expect(page.getByRole('status').filter({ hasText: /Отправлено на согласование: пакет №\d+/ })).toBeVisible();
   await expect(page.getByRole('dialog')).toHaveCount(0);
 }
 
@@ -137,7 +137,7 @@ test('kirituvchi hisob va qoldiq kiritadi, tasdiqlovchi tasdiqlaydi, nashr qilin
   // (sessiya cookie'si saqlanadi).
   await page.reload();
   await goto(page, 'vvod/kazna-balance');
-  await expect(page.getByRole('table', { name: 'Остатки на счетах' })).toContainText('1500,00');
+  await expect(page.getByRole('table', { name: 'Остатки на счетах' })).toContainText(/1\s500,00/);
   await page.getByRole('row').filter({ hasNotText: 'На согласовании' }).getByRole('button', { name: 'История изменений' }).first().click();
   await expect(page.getByRole('dialog', { name: 'История изменений' })).toContainText('Утверждено');
   await page.keyboard.press('Escape');

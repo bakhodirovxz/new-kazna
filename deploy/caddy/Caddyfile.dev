@@ -1,5 +1,11 @@
 {
 	admin off
+	servers {
+		timeouts {
+			read_header 10s
+			read_body 30s
+		}
+	}
 }
 
 # Xavfsizlik sarlavhalari: oddiy javoblar va handle_errors (Caddy'ning o'z xatolari) uchun umumiy.

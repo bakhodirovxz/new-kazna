@@ -128,8 +128,9 @@ export function RecordDrawer({ entity, record, branch, onClose, onSaved, onOpenE
       },
       {
         onSuccess: (batch) => {
-          toast.show(send ? t('entry.submitted') : t('entry.saved'), 'success');
-          onSaved?.(batch, send);
+          // bitta tasdiq: sahifa doimiy xabarini ko'rsatsa, toast qo'shilmaydi
+          if (onSaved) onSaved(batch, send);
+          else toast.show(send ? t('entry.submitted') : t('entry.saved'), 'success');
           onClose();
         },
         onError: (error) => {

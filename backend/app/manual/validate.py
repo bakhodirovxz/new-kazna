@@ -210,7 +210,7 @@ def _existing_refs(db: Session, entity: ManualEntity, f: FieldDef, codes: set[st
     return found
 
 
-def _dup_field(entity: ManualEntity) -> str:
+def dup_field(entity: ManualEntity) -> str:
     if entity.date_field is not None:
         return entity.date_field.name
     return entity.secrets[0].name if entity.secrets else entity.grain[-1].split(":")[0]
@@ -264,11 +264,11 @@ def check_items(
     for i, v in values.items():
         key = business_key(entity, v)
         if key in seen:
-            errors.append({"row": i, "field": _dup_field(entity), "code": "duplicate_record"})
+            errors.append({"row": i, "field": dup_field(entity), "code": "duplicate_record"})
         seen.add(key)
     if errors:
         return [], sorted(errors, key=lambda e: (e["row"], e["field"]))
     return [m for m in models if m is not None], []
 
 
-__all__ = ["ItemErrors", "assert_period_open", "check_items", "model_for", "to_values"]
+__all__ = ["ItemErrors", "assert_period_open", "check_items", "dup_field", "model_for", "to_values"]

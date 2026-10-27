@@ -10,7 +10,6 @@ import { ErrorBanner } from '../ui/ErrorBanner';
 import { TextInput } from '../ui/Field';
 import { PageSkeleton } from '../ui/Skeleton';
 import { Table, type Column } from '../ui/Table';
-import { useToast } from '../ui/Toast';
 import { useCreateBatch, useRecords, type EntryEntity, type EntryRecord } from './api';
 import { displayValue } from './fields';
 import { HistoryDrawer } from './HistoryDrawer';
@@ -33,7 +32,6 @@ interface Props {
 }
 
 export function EntityPage({ entity, filters }: Props) {
-  const toast = useToast();
   const records = useRecords(entity.id, { br: filters.br, per: filters.per });
   const remove = useCreateBatch();
   const [drawer, setDrawer] = useState<{ record: EntryRecord | null } | null>(null);
@@ -108,7 +106,6 @@ export function EntityPage({ entity, filters }: Props) {
       },
       {
         onSuccess: (batch) => {
-          toast.show(t('entry.submitted'), 'success');
           setNotice({ batchId: batch.batch_id, sent: true });
           setDeleting(null);
         },

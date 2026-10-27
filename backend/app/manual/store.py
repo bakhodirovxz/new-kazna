@@ -45,7 +45,7 @@ from app.manual.schemas import (
     ItemIn,
     Page,
 )
-from app.manual.validate import assert_period_open, check_items
+from app.manual.validate import assert_period_open, check_items, dup_field
 
 __all__ = [
     "ItemIn",
@@ -178,7 +178,7 @@ def _prior(db: Session, entry_id: int, version: int) -> Row | None:
     """Paketdan OLDINGI tasdiqlangan holat: bu versiyadan kichik eng so'nggi tasdiqlangan versiya
     (tasdiqlangach `approved_version` paketning o'ziga ko'chadi -- diff o'ziga solishtirilmasin)."""
     return db.execute(text(
-        "SELECT p.payload, p.masks FROM core.manual_entry p "
+        "SELECT p.payload, p.masks, p.deleted FROM core.manual_entry p "
         "JOIN core.manual_batch b ON b.batch_id = p.batch_id "
         "WHERE p.entry_id = :e AND p.version < :v AND b.status = 'approved' "
         "ORDER BY p.version DESC LIMIT 1"), {"e": entry_id, "v": version}).mappings().first()
@@ -188,6 +188,8 @@ def changes(db: Session, entity: ManualEntity, batch_id: int) -> list[ChangeOut]
     out = []
     for r in batch_entries(db, batch_id):
         prev = _prior(db, r["entry_id"], r["version"])
+        if prev is not None and prev["deleted"]:
+            prev = None  # o'chirilgan yozuvni tiklash -- «новая», o'zgarish emas
         op: Literal["add", "change", "delete"] = (
             "delete" if r["deleted"] else "add" if prev is None else "change")
         out.append(ChangeOut(
@@ -369,41 +371,57 @@ def _prepare(db: Session, entity: ManualEntity, branch_id: int, items: Sequence[
     return planned
 
 
+def _apply_one(db: Session, ctx: AuthContext, entity: ManualEntity, batch_id: int,
+               branch_id: int, p: _Planned) -> None:
+    if p.head is not None:
+        _insert_version(db, ctx, entity, head_id=p.head["entry_id"],
+                        version=p.head["version"] + 1, batch_id=batch_id,
+                        branch_id=branch_id, values=p.values, deleted=p.delete, prev=p.prev)
+        return
+    key = business_key(entity, p.values)
+    head_id = db.execute(text(
+        "INSERT INTO core.manual_head (entity, branch_id, business_key) "
+        "VALUES (:e, :b, :k) ON CONFLICT (entity, business_key) DO NOTHING "
+        "RETURNING entry_id"), {"e": entity.id, "b": branch_id, "k": key}).scalar_one_or_none()
+    version = 1
+    if head_id is None:
+        old = db.execute(text(
+            "SELECT entry_id, version, approved_version, pending_batch_id "
+            "FROM core.manual_head WHERE entity = :e AND business_key = :k FOR UPDATE"),
+            {"e": entity.id, "k": key}).mappings().first()
+        if old is None:  # begona filial yozuvi (RLS) -- mavjudligi oshkor qilinmaydi
+            raise ConflictError("duplicate_record")
+        if old["approved_version"] is not None or old["pending_batch_id"] is not None:
+            raise ConflictError("duplicate_record", entry_id=old["entry_id"])
+        head_id, version = old["entry_id"], old["version"] + 1  # tashlab ketilgan bosh
+    if entity.kind == "dim":
+        code = (entity.code_fn(p.values) if entity.code_fn
+                else f"{entity.code_prefix}-{head_id}")
+        try:
+            with db.begin_nested():
+                db.execute(text("UPDATE core.manual_head SET code = :c WHERE entry_id = :e"),
+                           {"c": code, "e": head_id})
+        except IntegrityError as exc:
+            raise ConflictError("duplicate_record") from exc
+    _insert_version(db, ctx, entity, head_id=head_id, version=version, batch_id=batch_id,
+                    branch_id=branch_id, values=p.values, deleted=False)
+
+
 def _apply(db: Session, ctx: AuthContext, entity: ManualEntity, batch_id: int, branch_id: int,
            planned: Sequence[_Planned]) -> None:
-    for p in planned:
-        if p.head is not None:
-            _insert_version(db, ctx, entity, head_id=p.head["entry_id"],
-                            version=p.head["version"] + 1, batch_id=batch_id,
-                            branch_id=branch_id, values=p.values, deleted=p.delete, prev=p.prev)
-            continue
-        key = business_key(entity, p.values)
-        head_id = db.execute(text(
-            "INSERT INTO core.manual_head (entity, branch_id, business_key) "
-            "VALUES (:e, :b, :k) ON CONFLICT (entity, business_key) DO NOTHING "
-            "RETURNING entry_id"), {"e": entity.id, "b": branch_id, "k": key}).scalar_one_or_none()
-        version = 1
-        if head_id is None:
-            old = db.execute(text(
-                "SELECT entry_id, version, approved_version, pending_batch_id "
-                "FROM core.manual_head WHERE entity = :e AND business_key = :k FOR UPDATE"),
-                {"e": entity.id, "k": key}).mappings().first()
-            if old is None:  # begona filial yozuvi (RLS) -- mavjudligi oshkor qilinmaydi
-                raise ConflictError("duplicate_record")
-            if old["approved_version"] is not None or old["pending_batch_id"] is not None:
-                raise ConflictError("duplicate_record", entry_id=old["entry_id"])
-            head_id, version = old["entry_id"], old["version"] + 1  # tashlab ketilgan bosh
-        if entity.kind == "dim":
-            code = (entity.code_fn(p.values) if entity.code_fn
-                    else f"{entity.code_prefix}-{head_id}")
-            try:
-                with db.begin_nested():
-                    db.execute(text("UPDATE core.manual_head SET code = :c WHERE entry_id = :e"),
-                               {"c": code, "e": head_id})
-            except IntegrityError as exc:
-                raise ConflictError("duplicate_record") from exc
-        _insert_version(db, ctx, entity, head_id=head_id, version=version, batch_id=batch_id,
-                        branch_id=branch_id, values=p.values, deleted=False)
+    """To'qnashuvlar (takroriy kalit) yig'iladi: qaysi qatorlar ekani aytiladi (review I6)."""
+    collisions: list[dict[str, Any]] = []
+    first: ConflictError | None = None
+    for idx, p in enumerate(planned, start=1):
+        try:
+            _apply_one(db, ctx, entity, batch_id, branch_id, p)
+        except ConflictError as exc:
+            if exc.code != "duplicate_record":
+                raise
+            first = first or exc
+            collisions.append({"row": idx, "field": dup_field(entity), "code": "duplicate_record"})
+    if first is not None:
+        raise ConflictError("duplicate_record", **{**first.params, "rows": collisions[:200]})
 
 
 # --- ommaviy servis ------------------------------------------------------------------------

@@ -90,6 +90,7 @@ class AuditAction(StrEnum):
     DATA_BATCH_REJECTED = "data.batch.rejected"
     DATA_BATCH_WITHDRAWN = "data.batch.withdrawn"
     DATA_IMPORTED = "data.imported"
+    DATA_IMPORT_REJECTED = "data.import.rejected"
     DATA_APPROVE_GRANTED = "security.data_approve_granted"
     PARTITIONS_DROPPED = "dwh.partitions.dropped"
     RESTORE_TEST_RECORDED = "ops.restore_test.recorded"

@@ -8,13 +8,18 @@ Worker 4 раза в день (`etl.banks_cron`, по умолчанию 09:30, 
 Каталог выписок подключён к worker **только на чтение**; удаляет обработанные файлы хост.
 
 ## Настройка
-1. Каталоги на хосте (владелец данных — uid 10001, пользователь SFTP банка пишет в inbox):
+1. Каталоги. По умолчанию `worker` использует именованные тома `bank_inbox` и `bank_archive`
+   (host-каталоги не нужны, сервис стартует и без них); содержимое лежит в
+   `docker volume inspect <проект>_bank_inbox` (`Mountpoint`). Если выписки кладёт SFTP-пользователь
+   банка в обычный каталог хоста, **сначала создайте каталоги** (иначе `worker` не запустится), затем
+   добавьте `-f deploy/compose.banks-bind.yml` и задайте в `prod.env` `UGK_BANK_INBOX`,
+   `UGK_BANK_ARCHIVE`:
    ```bash
    install -d -o sftp-banks -g 10001 -m 2750 /srv/ugekazna/banks/inbox/{sqb,nbu,asaka,ipoteka,xalq}
    install -d -o 10001 -g 10001 -m 0750 /srv/ugekazna/banks/archive
    ```
-   Пути задаются в `prod.env`: `UGK_BANK_INBOX`, `UGK_BANK_ARCHIVE`. Диск — под LUKS (в архиве
-   номера счетов).
+   Диск — под LUKS (в архиве номера счетов). Символические ссылки в inbox игнорируются
+   (ошибка `unsafe_file`), читаются только обычные файлы внутри каталога своего банка.
 2. Сопоставление счетов и филиалов — файл `accounts.csv` (UTF-8, `;`):
    ```
    account;bank_code;branch_code;currency;gl_account

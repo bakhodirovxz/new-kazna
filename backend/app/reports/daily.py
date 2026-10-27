@@ -1,8 +1,9 @@
 """Kundalik Telegram hisoboti (TZ 7 «Второй этап», TZ 8 «Телеграм-бот» — 08:30; S2 spec 9).
 
-Faqat agregatlar (pub view'lar) va KRITIK qoidalar SARLAVHALARI: qoida xabarlarida kontragent
-nomi bo'lishi mumkin — ular yuborilmaydi. Shaxsiy ma'lumot, hisob raqami, INN yo'q. Summalar
-млрд/трлн сум. Har yuborish auditga yoziladi (tashqi servisga ma'lumot uzatish).
+Faqat tashkilot jami agregatlari (pub view'lar) va qoidalar SONI (A-S2.R1): qoida
+xabarlarida kontragent nomi bo'lishi mumkin — ular yuborilmaydi. Shaxsiy ma'lumot, hisob
+raqami, INN yo'q. Summalar млрд/трлн сум. Har yuborish auditga yoziladi (tashqi servisga
+ma'lumot uzatish).
 """
 
 from __future__ import annotations
@@ -91,7 +92,7 @@ def build_summary(db: Session, *, today: date, now: datetime, base_url: str) -> 
     critical = [h for h in hits if h.level == "critical"]
     warning = len(hits) - len(critical)
     lines += ["", f"Требует внимания: критично {len(critical)}, внимание {warning}"]
-    lines += [f"• {h.title}" for h in critical]
+    # org_totals: faqat sonlar - qoida nomlari/xabarlari (filial, kontragent) yuborilmaydi.
     lines.append(f"Подробнее: {base_url.rstrip('/')}/#obzor/vnimanie")
     return Summary("\n".join(lines), len(critical), warning)
 
@@ -100,8 +101,8 @@ def send_daily_summary(*, client: Sender | None = None, now: datetime | None = N
                        loader: Callable[[], TelegramConfig | None] = telegram_config) -> int:
     """Konfiguratsiya (token + chat'lar) panelda — har chaqiruvda o'qiladi; sozlanmagan - 0."""
     cfg = loader()
-    if cfg is None:
-        log.info("telegram_summary_skipped", reason="not_configured")
+    if cfg is None or cfg.summary_scope != "org_totals":
+        log.info("telegram_summary_skipped", reason="not_configured_or_scope_off")
         return 0
     sender: Sender = client or make_client(cfg)
     moment = now or datetime.now(UTC)

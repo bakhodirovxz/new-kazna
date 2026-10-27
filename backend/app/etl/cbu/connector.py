@@ -28,6 +28,8 @@ log = get_logger("ugekazna.cbu")
 
 
 class CbuRatesConnector:
+    buffered = True  # runner HTTP davomida DB tranzaksiyasini ochmaydi (M9)
+
     def __init__(self, client: CbuClient, currencies: Sequence[str], *, days: int = 7,
                  date_from: date | None = None, date_to: date | None = None,
                  today: Callable[[], date] = today_tashkent,

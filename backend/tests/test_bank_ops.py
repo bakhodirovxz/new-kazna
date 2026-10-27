@@ -1,4 +1,5 @@
 import json
+import uuid
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -72,8 +73,8 @@ def test_make_connector_banks_and_directbank(tmp_path: Path, accounts_setting: N
 
 
 def test_bank_files_cli(capsys: pytest.CaptureFixture[str]) -> None:
-    DbFileLedger().mark(FileEntry("a" * 64, "sqb", "sqb/…0001_x.csv", 10, "unknown", "rejected",
-                                  None, 0, 1, None))
+    DbFileLedger().mark(FileEntry(uuid.uuid4().hex * 2, "sqb", "sqb/…0001_x.csv", 10, "unknown",
+                                  "rejected", None, 0, 1, None))
     assert cli.main(["bank-files", "--limit", "5"]) == 0
     assert "sqb/…0001_x.csv" in capsys.readouterr().out
 

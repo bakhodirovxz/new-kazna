@@ -59,9 +59,15 @@ def test_s2_settings_validation() -> None:
 
 
 def test_integration_fields_are_admin_integrations_guarded() -> None:
-    for key in ("cbu.enabled", "telegram.chat_ids"):
+    for key in ("cbu.enabled", "telegram.chat_ids", "telegram.summary_scope",
+                "telegram.forward_alerts", "banks.accounts", "banks.statement_branches"):
         d = sysconfig.REGISTRY[key]
-        assert d.category == "integrations" and d.guarded and d.step_up, key
+        assert d.guarded and d.step_up, key
+        assert d.category == ("banks" if key.startswith("banks.") else "integrations"), key
+    assert DEFAULT_SETTINGS["telegram.summary_scope"] == "off"  # A-S2.R1: sukut bo'yicha o'chiq
+    assert DEFAULT_SETTINGS["telegram.forward_alerts"] is False
+    with pytest.raises(ValueError):
+        validate_setting("telegram.summary_scope", "branches")
     assert set(integrations.INTEGRATIONS) >= {"telegram", "cbu"}
     _integ, sd = integrations.SECRETS["telegram.bot_token"]
     assert sd.validate(TOKEN) == TOKEN
@@ -84,3 +90,11 @@ def test_egress_proxy_problem() -> None:
 def test_new_notification_kind_and_audit_action() -> None:
     assert Notification("bank_rows_rejected", "s", "b").kind == "bank_rows_rejected"
     assert AuditAction.TELEGRAM_SUMMARY_SENT.value == "notify.telegram.summary"
+
+
+def test_external_base_urls_require_https() -> None:
+    base = get_settings()
+    for name in ("cbu_base_url", "telegram_api_base"):
+        bad = base.model_copy(update={name: "http://example.test"})
+        assert any(name in p for p in bad.problems())
+    assert not any("base_url" in p or "api_base" in p for p in base.problems())

@@ -11,6 +11,8 @@ from __future__ import annotations
 
 import hashlib
 import os
+import re
+import stat
 import time
 from collections.abc import Callable, Mapping, Sequence
 from datetime import UTC, datetime
@@ -37,7 +39,12 @@ from app.etl.types import (
 
 MAX_BYTES = 50 * 1024 * 1024
 MIN_AGE_SECONDS = 60.0
+_CONTROL = re.compile(r"[\x00-\x1f\x7f]")
 log = get_logger("ugekazna.banks")
+
+
+def _printable(name: str) -> str:
+    return _CONTROL.sub("?", name)
 
 
 class BankFileConnector:
@@ -78,16 +85,26 @@ class BankFileConnector:
         mapper = BankMapper(sink, AccountIndex(self.accounts, self.index_key), self.fx,
                             index_key=self.index_key)
         total = 0
-        for bank_code, path in self._candidates():
-            display = mask(f"{bank_code}/{path.name}")
-            size = path.stat().st_size
-            if size > self.max_bytes:
-                mapper.report(display, "too_large",
-                              f"файл больше {self.max_bytes // (1024 * 1024)} МБ — не обработан")
+        for bank_code, path, regular in self._candidates():
+            display = mask(f"{bank_code}/{_printable(path.name)}")
+            if not regular:
+                # Symlink / qurilma / katalog: hech qachon o'qilmaydi (S2-I2).
+                mapper.report(display, "unsafe_file", "не обычный файл (ссылка) — не обработан")
                 continue
-            data = path.read_bytes()
+            try:
+                data = self._read(path)
+            except OSError:
+                mapper.report(display, "unsafe_file", "файл недоступен или заменён ссылкой")
+                continue
             sha = hashlib.sha256(data).hexdigest()
             if self.ledger.done(sha):
+                continue
+            if len(data) > self.max_bytes:
+                # Hajmdan oshgan fayl jurnalga yoziladi (M6): har yugurishda takrorlanmaydi.
+                mapper.report(display, "too_large",
+                              f"файл больше {self.max_bytes // (1024 * 1024)} МБ — не обработан")
+                self.ledger.mark(FileEntry(sha, bank_code, display, len(data), "unknown",
+                                           "rejected", sink.load_id, 0, 1, None))
                 continue
             archived = self._archive(bank_code, sha, data)
             adapter = ADAPTERS[self.formats.get(bank_code, "canonical")]
@@ -108,20 +125,37 @@ class BankFileConnector:
         return ExtractStats(total, {})
 
     # ── Yordamchilar ────────────────────────────────────────────────
-    def _candidates(self) -> list[tuple[str, Path]]:
-        found: list[tuple[float, str, str, Path]] = []
+    def _read(self, path: Path) -> bytes:
+        """Ochilgan deskriptordan, ko'pi bilan max_bytes+1 bayt (stat/read TOCTOU yo'q);
+        oxirgi komponent symlink bo'lsa O_NOFOLLOW ochmaydi (S2-I2, M3)."""
+        flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0)
+        fd = os.open(path, flags)
+        try:
+            if not stat.S_ISREG(os.fstat(fd).st_mode):
+                raise OSError("not a regular file")
+            with os.fdopen(fd, "rb", closefd=False) as handle:
+                return handle.read(self.max_bytes + 1)
+        finally:
+            os.close(fd)
+
+    def _candidates(self) -> list[tuple[str, Path, bool]]:
+        found: list[tuple[float, str, str, Path, bool]] = []
+        inbox_real = os.path.realpath(self.inbox)
         for bank_code in sorted(BANKS):
             folder = self.inbox / bank_code
-            if not folder.is_dir():
+            # Bank katalogi symlink bo'lsa yoki inbox'dan tashqariga chiqsa - o'tkazib yuboriladi.
+            is_ok = folder.is_dir() and not folder.is_symlink()
+            if not is_ok or os.path.realpath(folder) != os.path.join(inbox_real, bank_code):
                 continue
             for path in folder.glob("*.csv"):
                 try:
-                    stat = path.stat()
+                    st = path.lstat()  # symlink'ni kuzatmaydi
                 except OSError:
                     continue
-                if path.is_file() and self.now() - stat.st_mtime >= self.min_age:
-                    found.append((stat.st_mtime, path.name, bank_code, path))
-        return [(bank, path) for _, _, bank, path in sorted(found)]
+                regular = stat.S_ISREG(st.st_mode)
+                if self.now() - st.st_mtime >= self.min_age:
+                    found.append((st.st_mtime, path.name, bank_code, path, regular))
+        return [(bank, path, regular) for _, _, bank, path, regular in sorted(found)]
 
     def _archive(self, bank_code: str, sha: str, data: bytes) -> str:
         folder = self.archive / bank_code / datetime.now(UTC).strftime("%Y-%m")

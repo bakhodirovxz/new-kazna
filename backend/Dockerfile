@@ -47,6 +47,9 @@ WORKDIR /app
 COPY app/ /app/app/
 COPY migrations/ /app/migrations/
 COPY alembic.ini pyproject.toml /app/
+# Bank ko'chirmalari kataloglari (S2): nom-li volume bo'sh holda shu egalikni oladi, shuning uchun
+# worker (uid 10001) arxivga yoza oladi va host kataloglarisiz ham ishga tushadi.
+RUN install -d -o 10001 -g 10001 -m 0750 /data/import/banks /data/archive/banks
 USER 10001:10001
 EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \

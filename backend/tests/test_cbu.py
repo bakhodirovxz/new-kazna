@@ -196,3 +196,27 @@ def test_cli_backfill_validates_range(capsys: pytest.CaptureFixture[str]) -> Non
     assert cli.main(["cbu-backfill", "--from", "2020-01-01", "--to", "2026-09-01"]) == 1
     assert cli.main(["cbu-backfill", "--from", "2026-09-01", "--to", "2026-09-02"]) == 2
     assert "800" in capsys.readouterr().out
+
+
+def test_no_etl_transaction_open_during_http(source: str) -> None:
+    """M9: ЦБ so'rovi paytida ugk_etl 'idle in transaction' holatida bo'lmasligi kerak."""
+    from app.core.db import get_engine
+
+    seen: list[int] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        with get_engine("migrator").connect() as conn:
+            seen.append(int(conn.execute(text(
+                "SELECT count(*) FROM pg_stat_activity WHERE usename = 'ugk_etl' "
+                "AND state LIKE 'idle in transaction%'")).scalar_one()))
+        body = json.dumps([{"Ccy": "XTB", "Rate": "250.50", "Nominal": "10",
+                            "Date": "24.09.2026"}])
+        return httpx.Response(200, content=body.encode())
+
+    connector = CbuRatesConnector(CbuClient(transport=httpx.MockTransport(handler)), ["XTB"],
+                                  days=1, today=lambda: date(2026, 9, 24), source=source)
+    assert connector.buffered is True
+    result = Runner(connector, mode=Mode.INCREMENTAL, today=TEST_AS_OF,
+                    sleep=lambda _: None).run()
+    assert result.status == "success", result
+    assert seen and set(seen) == {0}

@@ -64,7 +64,9 @@ _ALL: tuple[IntegrationDef, ...] = (
         secrets=(SecretDef("onec.username", "Пользователь 1С", max_length=128),
                  SecretDef("onec.password", "Пароль 1С"))),
     IntegrationDef(
-        "telegram", "Telegram-бот", fields=("telegram.chat_ids",), endpoint=(),
+        "telegram", "Telegram-бот", fields=("telegram.chat_ids", "telegram.summary_scope",
+                "telegram.forward_alerts"),
+        endpoint=(),
         secrets=(SecretDef("telegram.bot_token", "Токен бота",
                            pattern=TELEGRAM_TOKEN_RE.pattern),)),
     IntegrationDef("cbu", "ЦБ РУз: курсы валют", fields=("cbu.enabled",), endpoint=(),

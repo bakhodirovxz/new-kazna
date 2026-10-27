@@ -35,7 +35,7 @@ from __future__ import annotations
 import json
 import random
 import time
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 from typing import Any
@@ -62,7 +62,7 @@ from app.etl.merge import MergeStats, merge_dims, merge_facts
 from app.etl.notify import LogNotifier, Notification, Notifier
 from app.etl.quality import CheckResult, failed, run_checks
 from app.etl.retry import RETRY_DELAYS, call_with_retries
-from app.etl.staging import DbStagingSink, clear_load
+from app.etl.staging import BufferingSink, DbStagingSink, clear_load
 from app.etl.types import (
     ConnectorUnavailableError,
     ExtractStats,
@@ -98,14 +98,6 @@ class StepResult:
     detail: dict[str, Any] = field(default_factory=dict)
     value: Any = None
     ok: bool = True
-
-
-class _BufferSink:
-    def __init__(self) -> None:
-        self.rows: list[tuple[str, dict[str, Any]]] = []
-
-    def add(self, target: str, row: Mapping[str, Any]) -> None:
-        self.rows.append((target, dict(row)))
 
 
 class _StepDetailError(Exception):
@@ -344,15 +336,14 @@ class Runner:
                 raise ConnectorUnavailableError(health.detail or "источник недоступен")
             captured.append(self.connector.watermark())
             if getattr(self.connector, "buffered", False):
-                # M9: tashqi manbani kutish paytida DB tranzaksiyasi ochiq turmasin
-                # (idle_in_transaction timeout) — avval xotiraga, keyin qisqa tranzaksiyada.
-                buffer = _BufferSink()
+                # M9: tarmoqdan olish DB tranzaksiyasi tashqarisida (idle_in_transaction
+                # timeout); olingan qatorlar keyin qisqa tranzaksiyada staging'ga yoziladi.
+                buffer = BufferingSink()
                 stats = self.connector.extract(window, buffer)
                 with etl_transaction() as conn:
                     clear_load(conn, run_id)
                     sink = DbStagingSink(conn, run_id, self.connector.source)
-                    for target, row in buffer.rows:
-                        sink.add(target, row)
+                    buffer.replay(sink)
                     sink.close()
                 return stats
             with etl_transaction() as conn:

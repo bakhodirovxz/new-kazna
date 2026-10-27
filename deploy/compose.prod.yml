@@ -257,12 +257,10 @@ volumes:
   db_data: {}
   pg_run: {}
   etl_inbox: {}
-  bank_inbox:
-    driver: local
-    driver_opts: {type: none, o: bind, device: "${UGK_BANK_INBOX:-/srv/ugekazna/banks/inbox}"}
-  bank_archive:
-    driver: local
-    driver_opts: {type: none, o: bind, device: "${UGK_BANK_ARCHIVE:-/srv/ugekazna/banks/archive}"}
+  # Nom-li volume'lar: host kataloglari kerak emas, worker ularsiz ham ishga tushadi (I4).
+  # Host kataloglariga bog'lash (SFTP banki yozadigan inbox) - deploy/compose.banks-bind.yml.
+  bank_inbox: {}
+  bank_archive: {}
   # I2: nomli hajm — host katalogi talab qilinmaydi (worker har doim ishga tushadi). Host SFTP
   # uchun bind override: docs/integration/askue-connector.md.
   askue_inbox: {}

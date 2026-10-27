@@ -108,7 +108,7 @@ def test_notifier_sends_to_all_chats_and_survives_failure() -> None:
         chats.append(chat)
         return httpx.Response(400 if chat == 1 else 200, json={"ok": chat != 1})
 
-    notifier = TelegramNotifier(lambda: TelegramConfig(TOKEN, [1, 2]),
+    notifier = TelegramNotifier(lambda: TelegramConfig(TOKEN, [1, 2], True),
                                 lambda cfg: _client(handler))
     notifier.notify(Notification("etl_failed", "Загрузка «onec» завершилась ошибкой", "тело"))
     assert chats == [1, 2]
@@ -128,7 +128,7 @@ def test_config_comes_from_panel_secret_and_setting(setting: Callable[[str, obje
     with get_engine("app").begin() as conn:
         integrations.store_secret(conn, "telegram.bot_token", TOKEN, None)
     try:
-        assert telegram_config() == TelegramConfig(TOKEN, [-100500, 7])
+        assert telegram_config() == TelegramConfig(TOKEN, [-100500, 7], False, "off")
     finally:
         with get_engine("app").begin() as conn:
             integrations.clear_secret(conn, "telegram.bot_token")
@@ -158,3 +158,20 @@ def test_probe_codes() -> None:
         raise httpx.ConnectError("x", request=request)
 
     assert telegram_probe(lambda: cfg, factory(refuse)) == "connect_failed"
+
+
+def test_forward_alerts_is_opt_in_and_title_only() -> None:
+    sent: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        sent.append(json.loads(request.content)["text"])
+        return httpx.Response(200, json={"ok": True})
+
+    note = Notification("etl_failed", "Загрузка «banks» завершилась ошибкой",
+                        "Филиал ГЭС-1: 1 234 567 000 сум")
+    TelegramNotifier(lambda: TelegramConfig(TOKEN, [1], False), lambda cfg: _client(handler)
+                     ).notify(note)
+    assert sent == []  # sukut bo'yicha yuborilmaydi
+    TelegramNotifier(lambda: TelegramConfig(TOKEN, [1], True), lambda cfg: _client(handler)
+                     ).notify(note)
+    assert sent == ["UGEKAZNA: Загрузка «banks» завершилась ошибкой"]  # tafsilotsiz

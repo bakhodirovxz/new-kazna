@@ -157,6 +157,9 @@ class Settings(BaseSettings):
                 "smtp_password berilgan, lekin na starttls, na ssl yoqilgan "
                 "(parol ochiq matnda yuborilmaydi)"
             )
+        for name in ("cbu_base_url", "telegram_api_base"):  # token URL yo'lida - faqat TLS
+            if not getattr(self, name).startswith("https://"):
+                out.append(f"{name} https:// bilan boshlanishi kerak")
         if self.egress_proxy and not self.egress_proxy.startswith(("http://", "https://")):
             out.append("EGRESS_PROXY http:// yoki https:// bilan boshlanishi kerak")
         if self.ai_provider == "fake" and self.env == "prod":

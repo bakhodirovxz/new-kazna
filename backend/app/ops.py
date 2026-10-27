@@ -3,7 +3,8 @@
 `ops_check()` DB darajasidagi holatni faqat o'qiydi: audit default partitsiyasi, keyingi oy audit
 partitsiyasi, ma'lumot yangiligi, oylik tiklash testi, faol DEK yoshi, ilova va DB soatlari farqi
 (`core.audit_append` ±5 daqiqa oynasi va TOTP uchun NTP shart), WAL arxivatori (RPO), navbatda
-qotib qolgan ETL so'rovlari, ixtiyoriy — TLS sertifikat muddati.
+qotib qolgan ETL so'rovlari, prod'da qolgan `load_*` yuklama hisoblari, ixtiyoriy — TLS sertifikat
+muddati.
 Yagona yozuvchi — `record_restore_test`: `core.settings` dagi `last_restore_test` tizim yozuvi.
 Bu kalit `DEFAULT_SETTINGS` da yo'q — admin API uni ko'rsatmaydi va tahrirlay olmaydi (404).
 """
@@ -22,7 +23,9 @@ from cryptography import x509
 from sqlalchemy import text
 from sqlalchemy.engine import Connection
 
+from app.core.config import get_settings
 from app.core.db import get_engine
+from app.devtools import LOAD_PREFIX
 from app.dwh.freshness import freshness
 
 RESTORE_KEY = "last_restore_test"
@@ -222,9 +225,12 @@ def ops_check(
     tls_cert: Path | None = None,
     app_clock: Callable[[], datetime] = _utcnow,
     notes: list[str] | None = None,
+    env: str | None = None,
 ) -> list[Problem]:
-    """`notes` (ixtiyoriy) — muammo bo'lmagan ma'lumot qatorlari (masalan, `skipped` qoidalar)."""
+    """`notes` (ixtiyoriy) — muammo bo'lmagan ma'lumot qatorlari (masalan, `skipped` qoidalar).
+    `env` — standart `Settings.env` (test uchun almashtiriladi)."""
     now = now or _utcnow()
+    env = env or get_settings().env
     problems: list[Problem] = []
     with get_engine("app").connect() as conn:
         default_rows = int(conn.execute(text(
@@ -257,6 +263,18 @@ def ops_check(
                 f"(или в работе дольше {int(ETL_RUNNING_STUCK.total_seconds() // 3600)} ч): "
                 f"{stuck}"))
         problems.extend(check_restore(last_restore_test(conn), now))
+        if env == "prod":
+            # seed-load hisoblari: ochiq parol va TOTP siri (devtools) — prod'da bo'lmasligi shart.
+            load_users = int(conn.execute(
+                text("SELECT count(*) FROM core.users WHERE starts_with(username, :p)"),
+                {"p": LOAD_PREFIX},
+            ).scalar_one())
+            if load_users:
+                problems.append(Problem(
+                    "load_users_present", "critical",
+                    f"В БД {load_users} нагрузочных учётных записей {LOAD_PREFIX}* "
+                    "с известным паролем — удалите: python -m app.devtools seed-load --purge "
+                    "(только в dev/test) или вручную"))
         rows = conn.execute(text(
             "SELECT purpose, created_at FROM core.crypto_keys "
             "WHERE status = 'active' ORDER BY purpose"))

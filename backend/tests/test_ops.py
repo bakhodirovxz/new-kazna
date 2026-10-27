@@ -1,4 +1,6 @@
 import base64
+import contextlib
+import io
 import json
 import os
 from collections.abc import Callable, Iterator
@@ -14,7 +16,7 @@ from cryptography.x509.oid import NameOID
 from fastapi.testclient import TestClient
 from sqlalchemy import text
 
-from app import cli, ops
+from app import cli, devtools, ops
 from app.core import keystore
 from app.core.config import get_settings
 from app.core.db import get_engine
@@ -405,3 +407,17 @@ def test_cli_key_operations_are_audited(tmp_path: Path) -> None:
             "SELECT details FROM core.audit_log WHERE action = 'admin.key.rewrapped' "
             "AND result = 'ok' ORDER BY id DESC LIMIT 1")).scalar_one()
     assert details["fingerprint"] == cli._kek_id(new_kek)
+
+
+def test_ops_check_flags_load_users_only_in_prod() -> None:
+    """M4: seed-load hisoblari (ochiq parol/TOTP) prod'da — critical; dev/test'da odatiy."""
+    devtools.purge_load()  # boshqa testlar qoldirgan load_* hisoblari
+    with contextlib.redirect_stdout(io.StringIO()):
+        assert devtools.main(["seed-load", "--users", "2"]) == 0
+    try:
+        found = [p for p in ops.ops_check(env="prod") if p.code == "load_users_present"]
+        assert found and found[0].level == "critical" and " 2 " in found[0].message
+        assert "load_users_present" not in {p.code for p in ops.ops_check(env="test")}
+    finally:
+        devtools.purge_load()
+    assert "load_users_present" not in {p.code for p in ops.ops_check(env="prod")}

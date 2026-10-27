@@ -4,8 +4,10 @@ import json
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import text
 
 from app import devtools
+from app.core.db import get_engine
 from app.main import create_app
 
 
@@ -21,12 +23,49 @@ def _seed(users: int) -> list[dict[str, object]]:
     return json.loads(out.getvalue().strip().splitlines()[-1])
 
 
+def _load_user_count() -> int:
+    with get_engine("migrator").connect() as conn:
+        return int(conn.execute(
+            text("SELECT count(*) FROM core.users WHERE starts_with(username, 'load_')")
+        ).scalar_one())
+
+
+@pytest.mark.parametrize("env", ["prod", None])
+@pytest.mark.parametrize("extra", [[], ["--purge"]])
 def test_seed_load_refuses_outside_dev_and_test(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str],
+    env: str | None, extra: list[str],
 ) -> None:
-    monkeypatch.setenv("ENV", "prod")
-    assert devtools.main(["seed-load", "--users", "2"]) == 2
-    assert "Rad etildi" in capsys.readouterr().out
+    """ENV=prod yoki belgilanmagan: seed ham, purge ham DB'ga tegmaydi."""
+    devtools.purge_load()
+    _seed(1)
+    before = _load_user_count()
+    if env is None:
+        monkeypatch.delenv("ENV", raising=False)
+    else:
+        monkeypatch.setenv("ENV", env)
+    assert devtools.main(["seed-load", "--users", "2", *extra]) == 2
+    out = capsys.readouterr().out
+    assert "Rad etildi" in out and f"ENV={env or 'belgilanmagan'}" in out
+    assert _load_user_count() == before == 1
+
+
+def test_seed_load_purge_removes_users_sessions_and_positions() -> None:
+    data = _seed(3)
+    out = io.StringIO()
+    with contextlib.redirect_stdout(out):
+        assert devtools.main(["seed-load", "--purge"]) == 0
+    assert "O'chirildi: 3 ta" in out.getvalue()
+    assert _load_user_count() == 0
+    with get_engine("migrator").connect() as conn:
+        assert conn.execute(text(
+            "SELECT count(*) FROM core.positions WHERE starts_with(code, 'e2e_load_')"
+        )).scalar_one() == 0
+        assert conn.execute(text(
+            "SELECT count(*) FROM core.sessions s LEFT JOIN core.users u ON u.id = s.user_id "
+            "WHERE u.id IS NULL")).scalar_one() == 0
+    with TestClient(create_app(), base_url="https://testserver") as client:
+        assert client.get("/api/v1/auth/me", headers=_cookie(data[0])).status_code == 401
 
 
 def test_seed_load_sessions_work_and_respect_scope() -> None:

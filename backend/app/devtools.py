@@ -2,6 +2,7 @@
 
     python -m app.devtools seed-e2e
     python -m app.devtools seed-load --users 100
+    python -m app.devtools seed-load --purge
 
 `seed-e2e` Playwright E2E testlari uchun ma'lum parol va ma'lum TOTP sirli
 foydalanuvchilarni yaratadi yoki holatini qayta tiklaydi (idempotent). ENV dev/test
@@ -9,6 +10,9 @@ bo'lmasa hech narsa qilmaydi va 2 kodi bilan chiqadi — prod'da bu hisoblar pay
 
 `seed-load` yuklama testi (k6) uchun `load_NNN` foydalanuvchilarini yaratadi/tiklaydi va har biriga
 TAYYOR sessiya ochadi (login'siz); natija — stdout'dagi oxirgi qator, JSON ro'yxat.
+`seed-load --purge` ularni (sessiyalar, zaxira kodlar va filial lavozimlari bilan) o'chiradi —
+`ugk_migrator` ulanishi kerak (ugk_app'da core.users DELETE huquqi yo'q), masalan `migrate`
+konteynerida. Prod'da qolgan `load_*` hisoblarini `ops-check` (`load_users_present`) ko'rsatadi.
 """
 
 from __future__ import annotations
@@ -29,7 +33,7 @@ from app.auth.service import totp_aad
 from app.bootstrap import bootstrap_runtime
 from app.core import keystore
 from app.core.crypto import Purpose
-from app.core.db import new_session
+from app.core.db import get_engine, new_session
 
 ALLOWED_ENVS = frozenset({"dev", "test"})
 E2E_PASSWORD = "E2e-Sinov-Kalit-2026!"  # noqa: S105 -- faqat dev/test E2E qiymati
@@ -193,6 +197,22 @@ def seed_load(count: int) -> list[dict[str, object]]:
     return out
 
 
+def purge_load() -> int:
+    """`load_*` foydalanuvchilarini o'chiradi (sessiyalar, backup kodlar — CASCADE)."""
+    with get_engine("migrator").begin() as conn:
+        deleted = conn.execute(
+            delete(User).where(User.username.startswith(LOAD_PREFIX, autoescape=True))
+        ).rowcount
+        # _position_id: filial foydalanuvchilari uchun `e2e_<username>` lavozimi yaratilgan.
+        conn.execute(
+            delete(Position).where(
+                Position.code.startswith(f"e2e_{LOAD_PREFIX}", autoescape=True),
+                ~select(User.id).where(User.position_id == Position.id).exists(),
+            )
+        )
+    return int(deleted)
+
+
 def _load_count(value: str) -> int:
     count = int(value)
     if not 1 <= count <= LOAD_MAX_USERS:
@@ -208,6 +228,7 @@ def main(argv: list[str] | None = None) -> int:
         "seed-load", help="yuklama testi foydalanuvchilari va sessiyalari (faqat dev/test)"
     )
     load.add_argument("--users", type=_load_count, default=100)
+    load.add_argument("--purge", action="store_true", help="load_* foydalanuvchilarini o'chirish")
     args = parser.parse_args(argv)
     if args.command == "seed-load":
         # seed_e2e bilan bir xil: Settings standartiga emas, aniq berilgan ENV'ga tayanamiz.
@@ -216,6 +237,9 @@ def main(argv: list[str] | None = None) -> int:
             shown = env or "belgilanmagan"
             _out(f"Rad etildi: seed-load faqat aniq ENV=dev/test muhitida ishlaydi (ENV={shown})")
             return 2
+        if args.purge:
+            _out(f"O'chirildi: {purge_load()} ta {LOAD_PREFIX}* foydalanuvchi")
+            return 0
         sys.stdout.write(json.dumps(seed_load(args.users), ensure_ascii=False) + "\n")
         return 0
     return seed_e2e()

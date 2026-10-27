@@ -14,10 +14,10 @@
 | Шифрование полей (ПДн, реквизиты, секреты TOTP, IP/UA в аудите) | AES-256-GCM, nonce 96 бит (CSPRNG), тег 128 бит, AAD обязателен | `backend/app/core/crypto.py` |
 | Обёртывание ключей данных (DEK) ключом KEK | AES Key Wrap (RFC 3394), KEK 256 бит | `backend/app/core/crypto.py` |
 | Хранение паролей | Argon2id: память 64 МиБ, 3 итерации, параллелизм 4, соль 128 бит, хеш 256 бит (облегчённый профиль `fast_test` приложение принимает только при `ENV=test`) | `backend/app/auth/passwords.py`, `backend/app/core/config.py` |
-| Токен сессии | 256 бит CSPRNG (`secrets.token_urlsafe(32)`); в БД только HMAC-SHA256(pepper, «session»‖токен) | `backend/app/auth/sessions.py` |
-| Токен CSRF | base64url(HMAC-SHA256(pepper, «csrf»‖токен сессии)) — подписанный double-submit | `backend/app/auth/sessions.py` |
-| Токен challenge 2FA | в БД только HMAC-SHA256(pepper, «mfa»‖токен) | `backend/app/auth/service.py` |
-| Резервные коды 2FA | 10 кодов по 12 символов алфавита из 31 знака (~59 бит), в БД HMAC-SHA256(pepper, «backup»‖пользователь:код), одноразовые | `backend/app/auth/totp.py`, `backend/app/auth/service.py` |
+| Токен сессии | 256 бит CSPRNG (`secrets.token_urlsafe(32)`); в БД только HMAC-SHA256(pepper, `"session|"+токен`) | `backend/app/auth/sessions.py` |
+| Токен CSRF | base64url(HMAC-SHA256(pepper, `"csrf|"+токен сессии`)) — подписанный double-submit | `backend/app/auth/sessions.py` |
+| Токен challenge 2FA | в БД только HMAC-SHA256(pepper, `"mfa|"+токен`) | `backend/app/auth/service.py` |
+| Резервные коды 2FA | 10 кодов по 12 символов алфавита из 31 знака (~59 бит), в БД HMAC-SHA256(pepper, `"backup|"+id пользователя+":"+код`), одноразовые | `backend/app/auth/totp.py`, `backend/app/auth/service.py` |
 | Одноразовые пароли | TOTP RFC 6238: HMAC-SHA1, шаг 30 с, 6 цифр, окно ±1 шаг, секрет 160 бит | `backend/app/auth/totp.py` |
 | Blind index зашифрованных полей | HMAC-SHA256(ключ индекса, «метка»‖«\|»‖нормализованное значение) | `backend/app/core/crypto.py` |
 | Целостность журнала аудита | HMAC-SHA256(DEK `audit_chain` версии v, предыдущий хеш ‖ канонический JSON записи) | `backend/app/audit/service.py` |
@@ -91,7 +91,7 @@ AAD = три байта заголовка (формат + версия ключ
 (`dwh.dim_counterparty.inn_bidx`, `dwh.dim_bank.account_bidx`), где значение нормализуется: Unicode
 NFKC, приведение регистра (`casefold`), удаление пробельных символов. Шифртекст каждый раз
 отличается (случайный nonce), поэтому при загрузке данных изменение значения определяется именно
-по индексу. Поиск по индексу в этапе «Основа» не реализован — запланирован в следующих этапах.
+по индексу. Поиск по индексу на этапе «Основа» не реализован — запланирован в следующих этапах.
 Индекс раскрывает только равенство значений (остаточный риск R11 в
 [threat-model.md](threat-model.md)). Метки — константы кода без символа `|`, поэтому граница метки
 и значения однозначна.
@@ -103,7 +103,7 @@ NFKC, приведение регистра (`casefold`), удаление пр�
 
 - **Ротация** создаёт новую версию и перешифровывает зарегистрированные столбцы. Из интерфейса
   («Администрирование → Ключи шифрования → Ротировать») перешифровываются только столбцы схемы
-  `core` (роль `ugk_app`): у приложения нет доступа к `dwh.*`. Столбцы `dwh.dim_counterparty.inn_enc`
+  `core` (роль `ugk_app`): у приложения нет доступа к зашифрованным реквизитам `dwh`. Столбцы `dwh.dim_counterparty.inn_enc`
   и `dwh.dim_bank.account_enc` перешифровывает команда оператора `rotate-key` (роль `ugk_migrator`,
   отдельная транзакция). Записи аудита (`audit_meta`, `audit_chain`) не перешифровываются —
   журнал дополняется, а не переписывается; старые версии остаются в состоянии `decrypt_only`.

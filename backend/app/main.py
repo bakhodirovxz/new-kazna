@@ -30,6 +30,7 @@ from app.core.middleware import (
 )
 from app.health.router import router as health_router
 from app.meta.router import router as meta_router
+from app.sections.obzor import router as obzor_router
 
 API_PREFIX = "/api/v1"
 
@@ -66,6 +67,7 @@ def create_app() -> FastAPI:
     app.include_router(audit_router, prefix=API_PREFIX)
     app.include_router(keys_router, prefix=API_PREFIX)
     app.include_router(meta_router, prefix=API_PREFIX)
+    app.include_router(obzor_router, prefix=API_PREFIX)
     app.include_router(etl_router, prefix=API_PREFIX)
     app.include_router(config_router, prefix=API_PREFIX)
     _mount_openapi(app, protected=settings.env == "prod")

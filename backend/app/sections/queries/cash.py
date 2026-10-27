@@ -312,3 +312,19 @@ def detail(db: Session, sel: BranchSel, period: ReportPeriod) -> list[DetailRow]
         {**params, "months": list(period.months)}).all()
     return [DetailRow(int(r.branch_id), r.branch_name, r.direction, int(r.item_id), r.item_name,
                       r.activity, num(r.amount)) for r in rows]
+
+
+def item_months(db: Session, sel: BranchSel, months: list[int],
+                direction: str) -> dict[int, dict[int, float]]:
+    """Statya × oy summalari (Поступления/Расходование oylik grafiklari uchun)."""
+    col = _FLOW_COL[direction]
+    where, params = sel.total("a.branch_id")
+    out: dict[int, dict[int, float]] = {}
+    for r in db.execute(text(
+            f"SELECT a.item_id, a.month_id, sum(a.{col}) AS v FROM pub.agg_cash_month a "
+            "JOIN pub.items i ON i.item_id = a.item_id "
+            f"WHERE a.item_id <> 0 AND i.direction = :dir AND {where} AND a.month_id = ANY(:m) "
+            "GROUP BY a.item_id, a.month_id"),
+            {**params, "dir": direction, "m": months}).all():
+        out.setdefault(int(r.item_id), {})[int(r.month_id)] = num(r.v)
+    return out

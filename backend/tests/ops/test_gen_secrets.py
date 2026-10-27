@@ -9,7 +9,7 @@ from tests.ops.repo import load_script
 EXPECTED = {
     "master_kek", "blind_index_key", "session_pepper", "db_superuser_password",
     "db_migrator_password", "db_app_password", "db_etl_password", "redis_password",
-    "smtp_password", "pgbackrest_cipher_pass",
+    "smtp_password", "pgbackrest_cipher_pass", "onec_ca_bundle.pem",
 }
 
 

@@ -184,6 +184,12 @@ class Runner:
             try:
                 return self._run_locked()
             finally:
+                close = getattr(self.connector, "close", None)
+                if close is not None:  # masalan, 1C HTTP mijozi (ulanish oqib ketmasin)
+                    try:
+                        close()
+                    except Exception as exc:
+                        _log_failure("etl_connector_close_failed", exc)
                 # M4: unlock xatosi natijani (yoki chiquvchi istisnoni) niqoblamasligi kerak.
                 try:
                     lock.execute(text("SELECT pg_advisory_unlock(hashtext(:k))"), {"k": ETL_LOCK})

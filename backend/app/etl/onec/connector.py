@@ -81,6 +81,9 @@ class OneCConnector:
         self.now = now
         self._by_name = {_norm(o.org_name): o for o in self.orgs}
 
+    def close(self) -> None:
+        self.client.close()
+
     # ── Protokol ────────────────────────────────────────────────────
     def healthcheck(self) -> HealthResult:
         today = _ymd(today_tashkent())

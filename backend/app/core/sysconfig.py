@@ -42,6 +42,7 @@ from app.core.setting_types import (
     hr_orgs,
     method_norms,
     onec_orgs,
+    onec_url_host,
 )
 from app.dwh.dates import today_tashkent
 
@@ -273,9 +274,11 @@ _DEFS: tuple[SettingDef, ...] = (
     SettingDef("telegram.chat_ids", [], _CHAT_IDS, "list", title="Чаты Telegram", **_SMTP),
     bool_def("smtp.ssl", False, title="SSL/TLS (SMTPS)", env="smtp_ssl", **_SMTP),
     # 1C HTTP-servislari (integratsiya maydonlari; login/parol — core.integrations sirlari)
-    str_def("onec.base_url", "", r"^(https?://[A-Za-z0-9.-]+(:[0-9]{1,5})?(/[A-Za-z0-9._~/-]*)?)?$",
-            300, title="Адрес HTTP-сервиса 1С", **_SMTP),
-    int_def("onec.max_mb", 64, 1, 256, title="Максимальный размер ответа 1С", unit="МБ",
+    SettingDef("onec.base_url", "", TypeAdapter(Annotated[str, Field(
+        strict=True, max_length=300,
+        pattern=r"^(https?://[A-Za-z0-9.-]+(:[0-9]{1,5})?(/[A-Za-z0-9._~/-]*)?)?$"),
+        AfterValidator(onec_url_host)]), "str", title="Адрес HTTP-сервиса 1С", **_SMTP),
+    int_def("onec.max_mb", 64, 1, 128, title="Максимальный размер ответа 1С", unit="МБ",
             **_SMTP),
     # HR API (S4): manzil faqat https; login/parol — integrations sirlari
     str_def("hr.base_url", "", r"^(https://[A-Za-z0-9.-]+(:[0-9]{1,5})?(/[A-Za-z0-9._~/-]*)?)?$",

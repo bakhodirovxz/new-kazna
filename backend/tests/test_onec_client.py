@@ -8,7 +8,7 @@ import httpx
 import pytest
 from sqlalchemy import text
 
-from app.core import integrations
+from app.core import integrations, sysconfig
 from app.core.config import ConfigError, get_settings
 from app.core.db import get_engine
 from app.etl.onec.client import (
@@ -171,3 +171,44 @@ def test_http_rule_blocks_plain_http_unless_allowed(monkeypatch: pytest.MonkeyPa
                         lambda: get_settings().model_copy(update={"onec_allow_http": True}))
     with get_engine("app").connect() as conn:
         assert rule(conn) is None
+
+
+@pytest.mark.parametrize("url", [
+    "https://localhost/x", "https://127.0.0.1/x", "https://169.254.169.254/latest", "https://db/x",
+    "https://redis:6379", "https://api/x", "https://caddy/x", "https://worker/x",
+    "https://backup/x", "https://[::1]/x", "https://0.0.0.0/x"])
+def test_blocked_hosts_are_rejected(url: str) -> None:
+    with pytest.raises(ConfigError, match="taqiqlangan"):
+        OneCClient(_cfg(url))
+    with pytest.raises(ValueError):
+        sysconfig.REGISTRY["onec.base_url"].validate(url)
+
+
+@pytest.mark.parametrize("url", ["https://10.0.90.52/con2026/hs/aiassistant",
+                                 "https://192.168.1.5/x", "https://1c.uzgidro.local/x", ""])
+def test_internal_hosts_are_allowed(url: str) -> None:
+    assert sysconfig.REGISTRY["onec.base_url"].validate(url) == url
+
+
+def test_max_mb_is_capped_at_128() -> None:
+    assert sysconfig.REGISTRY["onec.max_mb"].validate(128) == 128
+    with pytest.raises(ValueError):
+        sysconfig.REGISTRY["onec.max_mb"].validate(129)
+
+
+def test_total_deadline_stops_slow_response() -> None:
+    cfg = _cfg()
+    client = OneCClient(cfg, deadline=-1.0, transport=httpx.MockTransport(
+        lambda r: httpx.Response(200, content=b'{"a": 1}')))
+    with pytest.raises(ConnectorUnavailableError, match="тайм-аут"):
+        client.post("/payments", {})
+
+
+def test_invalid_ca_is_a_distinct_error(tmp_path: Path) -> None:
+    from app.etl.onec.client import OneCCaError
+
+    bad = tmp_path / "bad.pem"
+    bad.write_text("-----BEGIN CERTIFICATE-----\nnope\n-----END CERTIFICATE-----\n",
+                   encoding="ascii")
+    with pytest.raises(OneCCaError):
+        OneCClient(OneCConfig(BASE, "u", "p", 1024, str(bad), False))

@@ -19,7 +19,7 @@ import { displaySetting, formatSetting, parseSetting } from './settingValue';
 import { FieldEditor, SourceBadge } from './SettingsList';
 import { useFocusFirstInvalid } from './useFocusFirstInvalid';
 
-const CODES = ['ok', 'auth_failed', 'tls_failed', 'timeout', 'connect_failed', 'protocol_error', 'http_error', 'format_error', 'not_configured', 'insecure_refused', 'not_supported', 'error'];
+const CODES = ['ok', 'auth_failed', 'tls_failed', 'timeout', 'connect_failed', 'protocol_error', 'http_error', 'format_error', 'not_configured', 'insecure_refused', 'ca_invalid', 'not_supported', 'error'];
 
 function checkText(check: IntegrationCheckOut): string {
   if (check.status === 'pending' || check.status === 'running') return t('integrations.checking');

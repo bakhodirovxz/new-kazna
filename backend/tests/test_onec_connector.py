@@ -11,7 +11,7 @@ from sqlalchemy import text
 
 from app import cli
 from app.core import integrations
-from app.core.config import ConfigError
+from app.core.config import ConfigError, get_settings
 from app.core.db import get_engine
 from app.dwh import builds
 from app.dwh.reference import current_setting
@@ -289,7 +289,7 @@ def test_check_cli_and_job_skip_when_not_configured(onec_panel: None,
     assert runs == before
 
 
-def test_probe_codes(onec_panel: None, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_probe_codes(onec_panel: None, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     from app.etl.onec import probe as probe_module
 
     assert PROBES["onec"]() == "not_configured"
@@ -316,3 +316,39 @@ def test_probe_codes(onec_panel: None, monkeypatch: pytest.MonkeyPatch) -> None:
     assert run(httpx.ReadTimeout("slow")) == "timeout"
     assert run(httpx.ConnectError("refused")) == "connect_failed"
     assert run(httpx.ConnectError("[SSL: CERTIFICATE_VERIFY_FAILED] s3cr3t")) == "tls_failed"
+    # M5: buzuq CA fayli va ochiq http — alohida kodlar
+    bad = tmp_path / "bad.pem"
+    bad.write_text("-----BEGIN CERTIFICATE-----\nnope\n-----END CERTIFICATE-----\n",
+                   encoding="ascii")
+    monkeypatch.setattr(get_settings(), "onec_ca_file", str(bad))
+    assert PROBES["onec"]() == "ca_invalid"
+
+
+def test_onec_check_prints_clean_error_on_401_and_closes_client(
+        onec_panel: None, monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str]) -> None:
+    from app.etl import connectors
+
+    _configure_panel()
+    put_setting("onec.orgs", [{"branch_code": "UGE-02", "org_uid": "uid-02",
+                               "org_name": "Чарвакская ГЭС"}])
+    real = connectors.OneCClient
+    made: list[OneCClient] = []
+
+    def factory(config: OneCConfig) -> OneCClient:
+        client = real(config, transport=httpx.MockTransport(lambda r: httpx.Response(401)))
+        made.append(client)
+        return client
+
+    monkeypatch.setattr(connectors, "OneCClient", factory)
+    assert cli.main(["onec-check"]) == 1
+    out = capsys.readouterr().out
+    assert "доступ запрещён" in out and "s3cr3t" not in out and "Traceback" not in out
+    assert made[0].http.is_closed
+
+
+def test_runner_closes_connector(onec_source: None) -> None:
+    client = OneCClient(CFG, transport=fake_1c())
+    Runner(OneCConnector(client, ORGS), mode=Mode.FULL, today=TEST_AS_OF,
+           sleep=lambda _: None).run()
+    assert client.http.is_closed

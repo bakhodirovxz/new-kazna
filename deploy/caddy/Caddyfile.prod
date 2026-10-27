@@ -11,6 +11,9 @@
 	https_port 8443
 	servers {
 		protocols h1 h2
+		# Oldida reverse proxy (masalan aaPanel Apache) bo'lsa — uning manzili (Docker gateway) prod.env da;
+		# standart 127.0.0.1/32 hech kimga ishonmaydi, X-Forwarded-For mijozdan olinmaydi.
+		trusted_proxies static {$UGK_TRUSTED_PROXIES:127.0.0.1/32}
 	}
 }
 

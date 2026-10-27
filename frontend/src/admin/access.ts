@@ -1,7 +1,7 @@
 import type { MessageKey } from '../i18n';
 import type { IconName } from '../ui/icons';
 
-export type AdminPageId = 'users' | 'roles' | 'alerts' | 'finmodel' | 'etl' | 'builds' | 'audit' | 'keys' | 'settings' | 'security' | 'integrations';
+export type AdminPageId = 'users' | 'roles' | 'alerts' | 'finmodel' | 'etl' | 'builds' | 'audit' | 'keys' | 'settings' | 'security' | 'integrations' | 'aijournal';
 
 export interface AdminPageDef {
   id: AdminPageId;
@@ -22,6 +22,7 @@ export const ADMIN_PAGES: readonly AdminPageDef[] = [
   { id: 'etl', perm: 'admin:etl', titleKey: 'admin.page.etl', icon: 'refresh' },
   { id: 'builds', perm: 'admin:etl', titleKey: 'admin.page.builds', icon: 'layers' },
   { id: 'audit', perm: 'audit:read', titleKey: 'admin.page.audit', icon: 'history' },
+  { id: 'aijournal', perm: 'audit:read', titleKey: 'admin.page.aijournal', icon: 'history' },
   { id: 'keys', perm: 'admin:keys', titleKey: 'admin.page.keys', icon: 'key' },
 ];
 

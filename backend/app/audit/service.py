@@ -87,6 +87,8 @@ class AuditAction(StrEnum):
     PARTITIONS_DROPPED = "dwh.partitions.dropped"
     RESTORE_TEST_RECORDED = "ops.restore_test.recorded"
     TELEGRAM_SUMMARY_SENT = "notify.telegram.summary"
+    AI_REQUEST = "ai.request"
+    AI_JOURNAL_PURGED = "ai.journal.purged"
     RLS_VIOLATION = "security.rls_violation_attempt"
     ACCESS_DENIED = "security.access_denied"
 

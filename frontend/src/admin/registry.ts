@@ -14,6 +14,7 @@ export const ADMIN_COMPONENTS: Partial<Record<AdminPageId, AdminPageComponent>> 
   etl: lazy(() => import('./EtlPage')),
   builds: lazy(() => import('./BuildsPage')),
   audit: lazy(() => import('./AuditPage')),
+  aijournal: lazy(() => import('./AiJournalPage')),
   keys: lazy(() => import('./KeysPage')),
   roles: lazy(() => import('./RolesPage')),
   alerts: lazy(() => import('./AlertRulesPage')),

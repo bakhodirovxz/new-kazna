@@ -1,0 +1,18 @@
+/* S5 «Экран» (prototip body.wall): menyu, filtrlar, chiplar va asboblar yashirin, shrift katta. */
+html.screen-mode { font-size: clamp(20px, 1.6vw, 30px); }
+html.screen-mode .side,
+html.screen-mode .filters,
+html.screen-mode .chips,
+html.screen-mode .tools,
+html.screen-mode .head__menu,
+html.screen-mode .skip { display: none !important; }
+html.screen-mode .layout { grid-template-columns: minmax(0, 1fr); }
+.wallbar { position: fixed; right: 1rem; bottom: 1rem; z-index: 40; display: flex; gap: 0.6rem; align-items: center; padding: 0.4rem 0.5rem 0.4rem 1rem; border: 1px solid var(--line); border-radius: 999px; background: var(--card); color: var(--ink); font-size: 0.9rem; }
+.wallbar__exit { min-height: 44px; padding: 0 1rem; border: 1px solid var(--line); border-radius: 999px; background: var(--soft); color: var(--brand); cursor: pointer; }
+.screen-ended { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; padding: 1rem; background: var(--bg); }
+.screen-ended__card { max-width: 34rem; padding: 2rem; border: 1px solid var(--line); border-radius: 1rem; background: var(--card); text-align: center; }
+@media (prefers-reduced-motion: no-preference) {
+  html.screen-motion main { animation: screen-in 0.4s ease-out; }
+}
+@keyframes screen-in { from { opacity: 0.2; } to { opacity: 1; } }
+@media print { .wallbar { display: none; } }

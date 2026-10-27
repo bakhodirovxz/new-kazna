@@ -12,6 +12,8 @@ export interface MockResponse {
   status?: number;
   body?: unknown;
   headers?: Record<string, string>;
+  /** JSON o'rniga xom tana (masalan, SSE oqimi). */
+  raw?: BodyInit;
 }
 
 export type MockHandler = MockResponse | ((req: MockRequest) => MockResponse | Promise<MockResponse>);
@@ -54,6 +56,9 @@ export function mockApi(routes: Record<string, MockHandler>) {
           : handler;
     const status = res.status ?? 200;
     const hasBody = res.body !== undefined && status !== 204;
+    if (res.raw !== undefined) {
+      return new Response(res.raw, { status, headers: { ...res.headers } });
+    }
     return new Response(hasBody ? JSON.stringify(res.body) : null, {
       status,
       headers: { ...(hasBody ? { 'Content-Type': 'application/json' } : {}), ...res.headers },

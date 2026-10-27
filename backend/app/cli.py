@@ -17,6 +17,7 @@ telegram-test  — Telegram sinov xabari (--summary — kundalik hisobotni hozir
 rollback-build — aktiv build'ni oldingisiga (yoki --build ID ga) qaytarish
 restore-test-record — tiklash testi natijasini yozish (scripts/restore_test.sh chaqiradi)
 restore-test-status — oxirgi tiklash testi: 0 — joyida, 1 — yo'q/xato/eskirgan
+ai-enable      — AI-анализni yoqish/o'chirish (on|off, --reason — infosec xati, audit uchun)
 ops-check      — ekspluatatsiya tekshiruvi: [--json] [--notify] [--tls-cert PATH] [--extra TEXT]
 hr-orgs        — HR tashkilotlari ↔ filiallar (JSON fayldan; faylsiz — ko'rsatish)
 hr-check       — HR API'ga ulanishni tekshirish (0 — OK, 1 — xato, 2 — konfiguratsiya)
@@ -63,6 +64,7 @@ from sqlalchemy import select, text
 from sqlalchemy.exc import IntegrityError
 
 from app import ops
+from app.ai.admin import ai_enable_command
 from app.audit.service import AuditAction, AuditEvent, record, verify_chain_snapshot
 from app.auth import passwords
 from app.auth.models import Position, User
@@ -136,6 +138,12 @@ def _backup_label(value: str) -> str:
         raise argparse.ArgumentTypeError(
             "--backup pgBackRest yorlig'i (yoki 'none') bo'lishi kerak")
     return value
+
+
+def _reason(value: str) -> str:
+    if len(value.strip()) < 5:
+        raise argparse.ArgumentTypeError("sabab kamida 5 belgi")
+    return value.strip()
 
 
 def _details(value: str) -> str:
@@ -498,6 +506,9 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--new-kek-file", type=Path, required=True)
     sub.add_parser("audit-verify")
     sub.add_parser("cleanup")
+    p = sub.add_parser("ai-enable")
+    p.add_argument("state", choices=["on", "off"])
+    p.add_argument("--reason", type=_reason, required=True)
     p = sub.add_parser("etl-run")
     p.add_argument("--source", required=True)
     p.add_argument("--mode", choices=["full", "incremental"], default="incremental")
@@ -546,6 +557,8 @@ def main(argv: list[str] | None = None) -> int:
         return _retire(args.grace_minutes)
     if args.command == "rewrap-keys":
         return _rewrap(args.new_kek_file)
+    if args.command == "ai-enable":
+        return ai_enable_command(args.state, args.reason)
     if args.command == "audit-verify":
         return _audit_verify()
     if args.command == "etl-run":

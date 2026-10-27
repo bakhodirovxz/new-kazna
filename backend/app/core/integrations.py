@@ -74,6 +74,10 @@ _ALL: tuple[IntegrationDef, ...] = (
         endpoint=("hr.base_url",),
         secrets=(SecretDef("hr.username", "Пользователь HR", max_length=128),
                  SecretDef("hr.password", "Пароль HR"))),
+    IntegrationDef(
+        "ai", "AI-анализ (провайдер)",
+        fields=("ai.model", "ai.effort", "ai.max_tokens", "ai.fallbacks"), endpoint=(),
+        secrets=(SecretDef("ai.api_key", "Ключ API", max_length=512),), check_in="api"),
 )
 INTEGRATIONS: dict[str, IntegrationDef] = {i.name: i for i in _ALL}
 SECRETS: dict[str, tuple[IntegrationDef, SecretDef]] = {

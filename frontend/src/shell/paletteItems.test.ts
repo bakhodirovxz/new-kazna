@@ -36,7 +36,7 @@ describe('buildPaletteItems', () => {
 
   it('shows only the audit page to internal control', () => {
     const items = buildPaletteItems({ ...base, menu: MENU_AUDITOR, permissions: ME_AUDITOR.permissions });
-    expect(items.filter((i) => i.kind === 'admin').map((i) => i.label)).toEqual(['Администрирование: Журнал аудита']);
+    expect(items.filter((i) => i.kind === 'admin').map((i) => i.label)).toEqual(['Администрирование: Журнал аудита', 'Администрирование: Журнал AI-анализа']);
   });
 });
 

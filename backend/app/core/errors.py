@@ -59,6 +59,10 @@ MESSAGES: dict[str, str] = {
     "invalid_secret": "Недопустимое значение учётных данных",
     "insecure_http": "Адрес 1С без HTTPS запрещён настройкой сервера",
     "insecure_smtp": "Пароль SMTP передаётся только по защищённому соединению (STARTTLS или SSL)",
+    "ai_disabled": "AI-анализ отключён",
+    "ai_limit": "Лимит запросов AI-анализа исчерпан",
+    "ai_question_sensitive": "Вопрос содержит реквизиты (ИНН, счёт, паспорт) — уберите их",
+    "ai_context_rejected": "Сводка для AI-анализа не прошла проверку на персональные данные",
     "internal_error": "Внутренняя ошибка сервера",
 }
 
@@ -122,6 +126,22 @@ class RateLimitedError(AppError):
 
     def __init__(self, retry_after: int) -> None:
         super().__init__(headers={"Retry-After": str(retry_after)}, retry_after=retry_after)
+
+
+class AiDisabledError(NotFoundError):
+    """S5: AI-анализ o'chiq (sozlama yoki kalit yo'q) — endpoint mavjud emasdek."""
+
+    code = "ai_disabled"
+
+
+class AiLimitError(RateLimitedError):
+    """S5: AI limitlari (20/soat foydalanuvchiga, 300/sutka tashkilotga)."""
+
+    code = "ai_limit"
+
+    def __init__(self, retry_after: int, scope: str) -> None:
+        AppError.__init__(self, headers={"Retry-After": str(retry_after)},
+                          retry_after=retry_after, scope=scope)
 
 
 class ServiceBusyError(AppError):

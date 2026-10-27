@@ -31,7 +31,7 @@ from tests.etl_helpers import (
 
 JOBS = {"etl_synthetic_full", "etl_onec_full", "etl_onec_incremental", "etl_requests", "partitions",
         "cleanup", "freshness", "heartbeat", "integration_checks", "schedules", "etl_banks",
-        "etl_cbu", "telegram_summary", "etl_hr"}
+        "etl_cbu", "telegram_summary", "etl_hr", "ai_journal"}
 
 
 @pytest.fixture

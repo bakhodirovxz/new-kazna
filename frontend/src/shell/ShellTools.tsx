@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { MeOut, MenuOut } from '../api/types';
+import { AiButton } from '../ai/AiButton';
 import { t } from '../i18n';
 import type { Route } from '../router/hash';
 import { navigate } from '../router/store';
+import { ScreenMode } from '../screen/ScreenMode';
 import { Icon } from '../ui/icons';
 import { useToast } from '../ui/Toast';
 import { CommandPalette } from './CommandPalette';
@@ -101,6 +103,7 @@ export function ShellTools({ me, menu, route }: ShellToolsProps) {
 
   return (
     <>
+      <AiButton menu={menu} route={route} />
       <button type="button" className="tool" title={t('tools.searchTitle')} aria-keyshortcuts="Control+K Meta+K" onClick={() => setPaletteOpen(true)}>
         <Icon name="search" />
         <span className="tool__label">{t('tools.search')}</span>
@@ -115,6 +118,7 @@ export function ShellTools({ me, menu, route }: ShellToolsProps) {
         <Icon name="print" />
         <span className="tool__label">{t('tools.print')}</span>
       </button>
+      <ScreenMode menu={menu} route={route} />
       <Freshness />
       <UserMenu me={me} />
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} me={me} menu={menu} route={route} />

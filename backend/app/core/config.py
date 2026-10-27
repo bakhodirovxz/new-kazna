@@ -95,6 +95,12 @@ class Settings(BaseSettings):
     onec_ca_file: str = "/run/secrets/onec_ca_bundle"
     onec_allow_http: bool = False
 
+
+    # S5: AI-анализ. Kalit/model/effort — integrations/sysconfig (panel); bu yerda faqat A sinfi.
+    ai_provider: Literal["anthropic", "openai_compatible", "fake"] = "anthropic"
+    ai_base_url: str = ""
+    ai_ca_file: str = "/run/secrets/ai_ca_bundle"
+
     @property
     def smtp_recipients(self) -> list[str]:
         raw = [a.strip() for a in self.smtp_to.split(",") if a.strip()]
@@ -152,6 +158,10 @@ class Settings(BaseSettings):
             )
         if self.egress_proxy and not self.egress_proxy.startswith(("http://", "https://")):
             out.append("EGRESS_PROXY http:// yoki https:// bilan boshlanishi kerak")
+        if self.ai_provider == "fake" and self.env == "prod":
+            out.append("AI_PROVIDER=fake faqat dev/test muhitida")
+        if self.ai_base_url and not self.ai_base_url.startswith("https://"):
+            out.append("AI_BASE_URL https:// bilan boshlanishi kerak")
         if self.env == "prod":
             if not self.base_url.startswith("https://"):
                 out.append("base_url https bo'lishi shart")

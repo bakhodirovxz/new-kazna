@@ -66,11 +66,9 @@ function IntegrationCard({ integration, onEdit }: { integration: IntegrationOut;
       title={integration.title}
       actions={
         <>
-          {integration.check_in === 'worker' ? (
-            <Button variant="secondary" loading={request.isPending} onClick={() => request.mutate(integration.name, { onSuccess: (c) => setCheckId(c.id) })}>
-              {t('integrations.check')}
-            </Button>
-          ) : null}
+          <Button variant="secondary" loading={request.isPending} onClick={() => request.mutate(integration.name, { onSuccess: (c) => setCheckId(c.id) })}>
+            {t('integrations.check')}
+          </Button>
           <Button onClick={onEdit}>{t('integrations.edit')}</Button>
         </>
       }

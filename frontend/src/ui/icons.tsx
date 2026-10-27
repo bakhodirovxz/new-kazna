@@ -237,6 +237,18 @@ const PATHS = {
       <path d="m3 13 9 5 9-5" />
     </>
   ),
+  spark: (
+    <>
+      <path d="M12 3l1.9 4.8L19 9.5l-4.4 2.4L13.4 17 12 12.9 10.6 17 9.4 11.9 5 9.5l5.1-1.7z" />
+      <path d="M18.5 16.5l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7z" />
+    </>
+  ),
+  monitor: (
+    <>
+      <rect x="2.5" y="4" width="19" height="13" rx="2" />
+      <path d="M8 21h8M12 17v4" />
+    </>
+  ),
 } satisfies Record<string, ReactElement>;
 
 export type IconName = keyof typeof PATHS;

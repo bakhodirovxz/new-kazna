@@ -648,6 +648,16 @@ export const ru = {
   'kazna.debt.until': 'до {date}',
   'kazna.debt.none': 'Договоров с такими условиями нет.',
   'kazna.debt.allContracts': 'Все договоры',
+  'kazna.debtBranch.title': 'Задолженность по филиалам',
+  'kazna.debtBranch.sub': 'Дебиторская и кредиторская на {date}. Нажмите на строку, чтобы выбрать филиал',
+  'kazna.debtBranch.overdue': 'Просрочено',
+  'kazna.funds.title': 'Целевое использование средств',
+  'kazna.funds.sub': 'Выделено и использовано за период, на {date}',
+  'kazna.funds.used': 'использовано {amount}',
+  'kazna.funds.allocated': 'выделено {amount}',
+  'kazna.funds.branches': 'Использование по филиалам',
+  'kazna.funds.branchesSub': 'Доля использованных целевых средств',
+  'kazna.funds.share': '{share} от выделенного',
 } as const satisfies Record<string, string>;
 
 export type RuKey = keyof typeof ru;

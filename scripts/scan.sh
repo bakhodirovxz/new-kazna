@@ -43,7 +43,8 @@ for name in ugekazna-backend ugekazna-web ugekazna-db ugekazna-redis; do
   docker save -o "build/images/$name.tar" "$name:$VERSION"
   echo "== trivy $name:$VERSION"
   if ! "${TRIVY[@]}" image --input "/build/images/$name.tar" --severity HIGH,CRITICAL \
-       --ignore-unfixed --exit-code 1 --ignorefile /src/.trivyignore --no-progress; then
+       --ignore-unfixed --exit-code 1 --ignorefile /src/.trivyignore \
+       --secret-config /src/trivy-secret.yaml --no-progress; then
     status=1
   fi
   "${TRIVY[@]}" image --input "/build/images/$name.tar" --format cyclonedx \

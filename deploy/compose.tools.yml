@@ -78,6 +78,7 @@ services:
     volumes:
       # Faqat kerakli fayllar (butun repo — deploy/secrets, .env — uchinchi tomon image'iga berilmaydi).
       - "../.trivyignore:/src/.trivyignore:ro"
+      - "./trivy-secret.yaml:/src/trivy-secret.yaml:ro"
       - "../frontend/package-lock.json:/src/frontend/package-lock.json:ro"
       - "../build:/build"
       - "../backend/certs:/certs:ro"

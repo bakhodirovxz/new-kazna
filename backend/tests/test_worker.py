@@ -28,9 +28,11 @@ from tests.etl_helpers import (
     open_run,
     purge_source,
 )
+from tests.helpers import put_setting
 
-JOBS = {"etl_synthetic_full", "etl_requests", "partitions", "cleanup", "freshness", "heartbeat",
-        "integration_checks", "schedules"}
+JOBS = {"etl_synthetic_full", "etl_askue", "askue_live", "etl_requests", "partitions",
+        "etl_onec_sklad_full", "etl_onec_sklad_incremental", "cleanup", "freshness",
+        "heartbeat", "integration_checks", "schedules"}
 
 
 @pytest.fixture
@@ -305,3 +307,10 @@ def test_partitions_audit_records_effective_retention() -> None:
             "SELECT details FROM core.audit_log WHERE action = 'dwh.partitions.dropped' "
             "ORDER BY id DESC LIMIT 1")).scalar_one()
     assert details["keep_years_effective"] == 5 and "keep_years_setting" in details
+
+
+def test_askue_job_is_scheduled_and_skips_when_not_configured(tmp_path: Path) -> None:
+    jobs = {j.id: j for j in worker.build_scheduler(get_settings(), RecordingNotifier()).get_jobs()}
+    assert jobs["etl_askue"].func is worker.run_askue_job
+    put_setting("askue.stations", [])
+    assert worker.run_askue_job(RecordingNotifier()) is None  # sozlanmagan — o'tkazib yuboradi

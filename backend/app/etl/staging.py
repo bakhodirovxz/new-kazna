@@ -86,6 +86,15 @@ class DbStagingSink:
         if len(self._buffer) >= self.batch_size:
             self.flush()
 
+    def error(self, *, target: str, code: str, message: str, src_id: str | None = None,
+              severity: str = "error") -> None:
+        """Manba xatosi (fayl/qator) — `core.etl_error`, step extract (load_id = run_id)."""
+        self.conn.execute(text(
+            "INSERT INTO core.etl_error (run_id, step, severity, target, src_id, code, message) "
+            "VALUES (:r, 'extract', :sev, :t, :s, :c, :m)"),
+            {"r": self.load_id, "sev": severity, "t": target[:64], "s": src_id and src_id[:128],
+             "c": code[:32], "m": message[:500]})
+
     def flush(self) -> None:
         if self._buffer:
             self.conn.execute(_INSERT, self._buffer)

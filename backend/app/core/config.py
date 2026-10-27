@@ -70,6 +70,9 @@ class Settings(BaseSettings):
 
     etl_statement_timeout_ms: int = 1_800_000
     etl_file_dir: str = "/data/inbox"
+    egress_proxy: str = ""  # tashqi HTTP(S) uchun ixtiyoriy proksi (4-reja egress); S2 ham qo'shadi
+    onec_ca_file: str = ""  # ichki CA (1C HTTPS); hisob ma'lumoti — panelda (integrations)
+    onec_allow_http: bool = False
     askue_inbox_dir: str = "/data/import/askue"  # S3: АСКУЭ kunlik eksporti (faqat o'qish)
     synthetic_seed: int = 916202617
 

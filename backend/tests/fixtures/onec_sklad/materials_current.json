@@ -1,0 +1,9 @@
+{
+  "success": true,
+  "data": [
+    {"accountCode": "1000", "accountName": "Материалы (итого)", "isTotal": true, "openingSum": 1500000000, "closingSum": 1700000000},
+    {"accountCode": 1010, "accountName": "Сырьё и материалы", "isTotal": false, "openingSum": 400000000, "closingSum": 450000000},
+    {"accountCode": "1050", "accountName": "Запасные части", "isTotal": false, "openingSum": 1100000000, "closingSum": 1250000000},
+    {"accountCode": "1060", "accountName": "Топливо", "isTotal": false, "openingSum": 0, "closingSum": 0}
+  ]
+}

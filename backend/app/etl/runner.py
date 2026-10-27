@@ -214,6 +214,12 @@ class Runner:
                 "AND watermark IS NOT NULL ORDER BY id DESC LIMIT 1"), {"s": source}).scalar()
             window = compute_window(self.mode, today=self.today, history_start=history_start,
                                     last_watermark=last, lookback_days=lookback)
+            # S3: manba o'z oynasini cheklashi mumkin (1C ombori — oxirgi N oy snapshot'lari).
+            # Almashtirish (replace) ham shu qisqa oyna ichida — undan eski qatorlar saqlanadi.
+            months_back = getattr(self.connector, "lookback_months", None)
+            if isinstance(months_back, int) and months_back > 0:
+                floor = add_months(month_start(self.today), -(months_back - 1))
+                window = Window(max(window.date_from, floor), window.date_to)
             run_id = int(conn.execute(text(
                 "INSERT INTO core.etl_run (source, mode, status, window_from, window_to, "
                 "triggered_by) VALUES (:s, :m, 'running', :f, :t, :u) RETURNING id"),

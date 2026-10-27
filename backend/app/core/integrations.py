@@ -124,6 +124,13 @@ def clear_secret(conn: Connection, name: str) -> bool:
                              "RETURNING name"), {"n": name}).first() is not None
 
 
+def configured(conn: Connection, name: str) -> bool:
+    """Manzil maydonlari to'ldirilgan va barcha sirlar mavjud (job «sozlanmagan» tekshiruvi)."""
+    integ = INTEGRATIONS[name]
+    return (all(sysconfig.current(conn, key) for key in integ.endpoint)
+            and all(secret(conn, s.name) for s in integ.secrets))
+
+
 def field_values(conn: Connection, name: str) -> dict[str, Any]:
     return {key: sysconfig.current(conn, key) for key in INTEGRATIONS[name].fields}
 

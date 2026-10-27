@@ -8,6 +8,9 @@ audit-verify   — audit zanjirini tekshirish (buzilgan bo'lsa chiqish kodi 2)
 cleanup        — eskirgan sessiya, 2FA challenge va staging qatorlarini o'chirish
 etl-run        — ETL yuklash: --source synthetic|file --mode full|incremental [--no-retry]
                [--allow-full-replace] (file + full uchun majburiy)
+askue-stations — АСКУЭ stansiyalari ↔ filiallar (JSON fayldan; faylsiz — ko'rsatish)
+askue-live-check — jonli quvvat manbasi javobi va stansiyalar moslashtirishi (yozuvsiz)
+onec-sklad-check — 1C ombor servisiga (hs/sklad) ulanishni tekshirish
 rollback-build — aktiv build'ni oldingisiga (yoki --build ID ga) qaytarish
 restore-test-record — tiklash testi natijasini yozish (scripts/restore_test.sh chaqiradi)
 restore-test-status — oxirgi tiklash testi: 0 — joyida, 1 — yo'q/xato/eskirgan
@@ -68,6 +71,8 @@ from app.core.db import get_engine, new_session
 from app.core.errors import ConflictError
 from app.core.reencrypt import reencrypt, retire_unused
 from app.dwh import builds
+from app.etl.askue.admin import askue_stations_command
+from app.etl.askue.live import askue_live_check_command
 from app.etl.connectors import make_connector
 from app.etl.db import etl_transaction
 from app.etl.errors import FILE_FULL_REFUSED, EtlBusyError, safe_error
@@ -372,6 +377,17 @@ def _ops_check(as_json: bool, notify: bool, tls_cert: Path | None, extra: list[s
     return 1 if problems else 0
 
 
+def _onec_sklad_check() -> int:
+    try:
+        connector = make_connector("onec_sklad")
+    except ConfigError as exc:
+        _out(f"Konfiguratsiya xatosi: {exc}")
+        return 2
+    health = connector.healthcheck()
+    _out(f"1C (sklad): {'OK' if health.ok else 'XATO'} — {health.detail}")
+    return 0 if health.ok else 1
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m app.cli")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -391,6 +407,10 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--mode", choices=["full", "incremental"], default="incremental")
     p.add_argument("--no-retry", action="store_true")
     p.add_argument("--allow-full-replace", action="store_true")
+    sub.add_parser("askue-live-check")
+    sub.add_parser("onec-sklad-check")
+    p = sub.add_parser("askue-stations")
+    p.add_argument("--file", type=Path, default=None)
     p = sub.add_parser("rollback-build")
     p.add_argument("--build", type=int, default=None)
     p = sub.add_parser("restore-test-record")
@@ -423,6 +443,12 @@ def main(argv: list[str] | None = None) -> int:
         return _audit_verify()
     if args.command == "etl-run":
         return _etl_run(args.source, args.mode, args.no_retry, args.allow_full_replace)
+    if args.command == "onec-sklad-check":
+        return _onec_sklad_check()
+    if args.command == "askue-live-check":
+        return askue_live_check_command(get_settings(), _out)
+    if args.command == "askue-stations":
+        return askue_stations_command(args.file, _out)
     if args.command == "rollback-build":
         return _rollback(args.build)
     if args.command == "restore-test-record":

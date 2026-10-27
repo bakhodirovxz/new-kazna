@@ -81,6 +81,11 @@ class Settings(BaseSettings):
     smtp_starttls: bool = True
     smtp_ssl: bool = False
 
+    # 1C: login/parol/manzil/limit — panelda (core.integrations, shifrlangan). Bu yerda faqat
+    # serverga xos (A sinfi) qiymatlar: CA fayli va ochiq HTTP'ga vaqtincha ruxsat.
+    onec_ca_file: str = "/run/secrets/onec_ca_bundle"
+    onec_allow_http: bool = False
+
     @property
     def smtp_recipients(self) -> list[str]:
         raw = [a.strip() for a in self.smtp_to.split(",") if a.strip()]

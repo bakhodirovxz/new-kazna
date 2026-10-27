@@ -528,6 +528,8 @@ export const ru = {
   'integrations.code.timeout': 'Сервер не ответил вовремя',
   'integrations.code.connect_failed': 'Не удалось подключиться к серверу',
   'integrations.code.protocol_error': 'Ошибка протокола',
+  'integrations.code.http_error': 'Сервер ответил ошибкой (HTTP)',
+  'integrations.code.format_error': 'Ответ сервера не в ожидаемом формате',
   'integrations.code.not_configured': 'Интеграция не настроена',
   'integrations.code.insecure_refused': 'Пароль не передаётся без шифрования',
   'integrations.code.not_supported': 'Проверка не поддерживается',

@@ -8,6 +8,8 @@ audit-verify   — audit zanjirini tekshirish (buzilgan bo'lsa chiqish kodi 2)
 cleanup        — eskirgan sessiya, 2FA challenge va staging qatorlarini o'chirish
 etl-run        — ETL yuklash: --source synthetic|file --mode full|incremental [--no-retry]
                [--allow-full-replace] (file + full uchun majburiy)
+onec-orgs      — 1C tashkilotlari ↔ filiallar moslashtirishi (JSON fayldan; faylsiz — ko'rsatish)
+onec-check     — 1C ulanishini tekshirish (0 — OK, 1 — ulanish yo'q, 2 — konfiguratsiya)
 rollback-build — aktiv build'ni oldingisiga (yoki --build ID ga) qaytarish
 restore-test-record — tiklash testi natijasini yozish (scripts/restore_test.sh chaqiradi)
 restore-test-status — oxirgi tiklash testi: 0 — joyida, 1 — yo'q/xato/eskirgan
@@ -68,6 +70,7 @@ from app.core.db import get_engine, new_session
 from app.core.errors import ConflictError
 from app.core.reencrypt import reencrypt, retire_unused
 from app.dwh import builds
+from app.dwh.reference import current_setting, validate_setting
 from app.etl.connectors import make_connector
 from app.etl.db import etl_transaction
 from app.etl.errors import FILE_FULL_REFUSED, EtlBusyError, safe_error
@@ -314,6 +317,50 @@ def _etl_run(source: str, mode: str, no_retry: bool, allow_full_replace: bool = 
     return 0 if result.status == "success" else 1
 
 
+def _onec_orgs(file: Path | None) -> int:
+    """1C tashkilot ↔ filial moslashtirishi (onec.orgs): yangi versiya + audit."""
+    if file is None:
+        with get_engine("app").connect() as conn:
+            _out(json.dumps(current_setting(conn, "onec.orgs"), ensure_ascii=False, indent=2))
+        return 0
+    try:
+        value = validate_setting("onec.orgs", json.loads(file.read_text(encoding="utf-8")))
+    except (OSError, ValueError) as exc:
+        _out(f"Xato: {type(exc).__name__}")  # fayl mazmuni/qiymat xabarga chiqmaydi
+        return 1
+    with etl_transaction() as conn:
+        known = set(conn.execute(text("SELECT code FROM dwh.dim_branch")).scalars())
+    missing = sorted({org["branch_code"] for org in value} - known)
+    if missing:
+        _out(f"Xato: noma'lum filial kodlari: {', '.join(missing)}")
+        return 1
+    with get_engine("app").begin() as conn:
+        version = int(conn.execute(text(
+            "SELECT coalesce(max(version), 0) FROM core.settings WHERE key = 'onec.orgs'"
+        )).scalar_one()) + 1
+        conn.execute(text("UPDATE core.settings SET is_current = false "
+                          "WHERE key = 'onec.orgs' AND is_current"))
+        conn.execute(text("INSERT INTO core.settings (key, version, value) "
+                          "VALUES ('onec.orgs', :v, CAST(:val AS jsonb))"),
+                     {"v": version, "val": json.dumps(value, ensure_ascii=False)})
+    record(AuditEvent(action=AuditAction.SETTING_UPDATED, user_id=None, object_type="setting",
+                      object_id="onec.orgs",
+                      details={"via": "cli", "version": version, "orgs": len(value)}))
+    _out(f"onec.orgs: versiya {version}, {len(value)} ta tashkilot")
+    return 0
+
+
+def _onec_check() -> int:
+    try:
+        connector = make_connector("onec")
+    except ConfigError as exc:
+        _out(f"Konfiguratsiya xatosi: {exc}")
+        return 2
+    health = connector.healthcheck()
+    _out(f"1C: {'OK' if health.ok else 'XATO'} — {health.detail}")
+    return 0 if health.ok else 1
+
+
 def _rollback(build_id: int | None) -> int:
     try:
         with etl_transaction() as conn:
@@ -391,6 +438,9 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--mode", choices=["full", "incremental"], default="incremental")
     p.add_argument("--no-retry", action="store_true")
     p.add_argument("--allow-full-replace", action="store_true")
+    p = sub.add_parser("onec-orgs")
+    p.add_argument("--file", type=Path, default=None)
+    sub.add_parser("onec-check")
     p = sub.add_parser("rollback-build")
     p.add_argument("--build", type=int, default=None)
     p = sub.add_parser("restore-test-record")
@@ -423,6 +473,10 @@ def main(argv: list[str] | None = None) -> int:
         return _audit_verify()
     if args.command == "etl-run":
         return _etl_run(args.source, args.mode, args.no_retry, args.allow_full_replace)
+    if args.command == "onec-orgs":
+        return _onec_orgs(args.file)
+    if args.command == "onec-check":
+        return _onec_check()
     if args.command == "rollback-build":
         return _rollback(args.build)
     if args.command == "restore-test-record":

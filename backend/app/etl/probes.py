@@ -12,9 +12,10 @@ from sqlalchemy import text
 from app.core.db import get_engine
 from app.core.logging import get_logger
 from app.etl.notify import smtp_probe
+from app.etl.onec.probe import onec_probe
 
 log = get_logger("ugekazna.probes")
-PROBES: dict[str, Callable[[], str]] = {"smtp": smtp_probe}
+PROBES: dict[str, Callable[[], str]] = {"smtp": smtp_probe, "onec": onec_probe}
 _BATCH = 5
 
 

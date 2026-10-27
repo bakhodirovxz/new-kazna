@@ -35,6 +35,8 @@ secrets:
   pgbackrest_cipher_pass: {file: "${UGK_SECRETS_DIR:-./secrets}/pgbackrest_cipher_pass"}
   tls_cert: {file: "${UGK_SECRETS_DIR:-./secrets}/tls_cert.pem"}
   tls_key: {file: "${UGK_SECRETS_DIR:-./secrets}/tls_key.pem"}
+  # 1C login/paroli bu yerda YO'Q: «Администрирование → Интеграции» (shifrlangan, audit). Faqat CA.
+  onec_ca_bundle: {file: "${UGK_SECRETS_DIR:-./secrets}/onec_ca_bundle.pem"}
 
 configs:
   caddyfile: {file: ./caddy/Caddyfile.prod}
@@ -154,9 +156,10 @@ services:
       SMTP_USER: ${SMTP_USER:-}
       SMTP_STARTTLS: ${SMTP_STARTTLS:-true}
       SMTP_SSL: ${SMTP_SSL:-false}
+      ONEC_ALLOW_HTTP: ${ONEC_ALLOW_HTTP:-false}
     # tls_cert — faqat ochiq sertifikat (ops-check --tls-cert muddatni tekshiradi), kalit berilmaydi.
     secrets: [db_app_password, db_etl_password, redis_password, master_kek, blind_index_key,
-              session_pepper, smtp_password, tls_cert]
+              session_pepper, smtp_password, tls_cert, onec_ca_bundle]
     volumes:
       - etl_inbox:/data/inbox:ro
     tmpfs: ["/tmp:uid=10001,gid=10001,mode=0700"]

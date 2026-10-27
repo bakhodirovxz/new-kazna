@@ -215,6 +215,11 @@ _DEFS: tuple[SettingDef, ...] = (
             env="smtp_user", **_SMTP),
     bool_def("smtp.starttls", True, title="STARTTLS", env="smtp_starttls", **_SMTP),
     bool_def("smtp.ssl", False, title="SSL/TLS (SMTPS)", env="smtp_ssl", **_SMTP),
+    # 1C HTTP-servislari (integratsiya maydonlari; login/parol — core.integrations sirlari)
+    str_def("onec.base_url", "", r"^(https?://[A-Za-z0-9.-]+(:[0-9]{1,5})?(/[A-Za-z0-9._~/-]*)?)?$",
+            300, title="Адрес HTTP-сервиса 1С", **_SMTP),
+    int_def("onec.max_mb", 64, 1, 256, title="Максимальный размер ответа 1С", unit="МБ",
+            **_SMTP),
 )
 REGISTRY: dict[str, SettingDef] = {d.key: d for d in _DEFS}
 

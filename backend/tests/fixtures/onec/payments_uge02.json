@@ -1,0 +1,6 @@
+﻿{"payments": [
+  {"number": "000101", "date": "2026-08-05", "sum": 125000000, "contractor_name": "ООО «Гидромонтаж»", "contract_number": "12/2026", "expense_type_name": "Материал харажатлар (тоза)"},
+  {"number": "000102", "date": "2026-08-06T00:00:00", "sum": "2500000.50", "contractor_name": "=cmd|' /C calc'!A0", "contract_number": null, "expense_type_name": "Коммунал хизматлар"},
+  {"number": "000103", "date": "2026-08-07", "sum": 0, "contractor_name": "X", "contract_number": "1", "expense_type_name": "Материал харажатлар (тоза)"},
+  {"number": "000104", "date": "2026-08-08", "sum": -100000, "contractor_name": "X", "contract_number": "1", "expense_type_name": "Материал харажатлар (тоза)", "operation_type": "Оплата по договору"}
+]}

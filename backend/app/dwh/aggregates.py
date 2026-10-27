@@ -194,4 +194,8 @@ CASH_MONTH = register(Aggregate("agg_cash_month", (_CASH_ITEMS, _CASH_TOTALS, _C
 PAYMENTS_MONTH = register(Aggregate("agg_payments_month", (_PAYMENTS,)))
 
 # S1 agregatlari (spec 5): shu modul yuklanganda ro'yxatga qo'shiladi (register allaqachon tayyor).
-from app.dwh import production_aggregates, treasury_aggregates  # noqa: E402, F401
+from app.dwh import (  # noqa: E402, F401
+    production_aggregates,
+    stock_aggregates,
+    treasury_aggregates,
+)

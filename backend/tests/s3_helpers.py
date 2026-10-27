@@ -71,3 +71,69 @@ def production_scenario(source: str, *, publish: bool = False) -> ProdScenario:
             {"a": f"T-{tag}", "b": f"T-{tag}H"}).all())
     return ProdScenario(source, tag, int(ids[f"T-{tag}"]), f"T-{tag}", int(ids[f"T-{tag}H"]),
                         run_id, build_id)
+
+
+@dataclass(frozen=True, slots=True)
+class StockScenario:
+    source: str
+    tag: str
+    branch_id: int
+    branch_code: str
+    run_id: int
+    build_id: int
+    noms: dict[str, int]  # "N1" → nom_id
+
+
+def stock_rows(tag: str) -> dict[str, list[dict[str, Any]]]:
+    branch = branch_row(tag)
+    code = branch["code"]
+
+    def nom(key: str, name: str, category: str, unit: str) -> dict[str, Any]:
+        return {"code": f"{key}-{tag}", "name": name, "category": category, "unit": unit,
+                "enbt_code": None}
+
+    def snap(src_id: str, day: int, key: str, wh: str, qty: float, value: float,
+             min_qty: float | None, last: int | None) -> dict[str, Any]:
+        return {"doc_type": "stock_snapshot", "src_id": src_id, "date_id": day,
+                "branch_code": code, "nom_code": f"{key}-{tag}", "warehouse": wh, "qty": qty,
+                "value": value, "min_qty": min_qty, "last_move_date_id": last}
+
+    def move(src_id: str, day: int, key: str, direction: str, value: float) -> dict[str, Any]:
+        return {"doc_type": "stock_move", "src_id": src_id, "date_id": day, "branch_code": code,
+                "nom_code": f"{key}-{tag}", "direction": direction, "qty": 1, "value": value}
+
+    return {
+        "dim_branch": [branch],
+        "dim_nomenclature": [nom("N1", "Подшипник тестовый", "Запасные части", "шт"),
+                             nom("N2", "Масло тестовое", "Масла и ГСМ", "л"),
+                             nom("N3", "Задвижка тестовая", "Запасные части", "шт")],
+        "fact_stock": [
+            snap("a1", 20260815, "N1", "Склад А", 20, 80, 10, 20260810),
+            snap("a2", 20260831, "N1", "Склад А", 4, 40, 10, 20260820),
+            snap("a3", 20260831, "N2", "Склад А", 500, 20, 100, 20260110),
+            snap("a4", 20260831, "N3", "Склад Б", 2, 60, None, 20250601),
+            snap("b1", 20260924, "N1", "Склад А", 12, 48, 10, 20260915),
+            snap("b2", 20260924, "N2", "Склад А", 480, 19.2, 100, 20260110),
+            snap("b3", 20260924, "N3", "Склад Б", 2, 60, None, None),
+        ],
+        "fact_stock_move": [
+            move("m1", 20260805, "N1", "in", 100), move("m2", 20260820, "N1", "out", 140),
+            move("m3", 20260912, "N1", "in", 16), move("m4", 20260915, "N1", "out", 8),
+            move("m5", 20260910, "N2", "out", 0.8),
+        ],
+    }
+
+
+def stock_scenario(source: str, *, publish: bool = False) -> StockScenario:
+    tag = new_tag()
+    run_id = open_run(source)
+    stage(run_id, source, stock_rows(tag))
+    merge_all(run_id, source)
+    build_id = rebuild(run_id, publish=publish)
+    with etl_transaction() as conn:
+        branch_id = int(conn.execute(text("SELECT branch_id FROM dwh.dim_branch WHERE code = :c"),
+                                     {"c": f"T-{tag}"}).scalar_one())
+        noms = {str(code).split("-")[0]: int(nom_id) for code, nom_id in conn.execute(text(
+            "SELECT code, nom_id FROM dwh.dim_nomenclature WHERE code LIKE :p"),
+            {"p": f"N_-{tag}"}).all()}
+    return StockScenario(source, tag, branch_id, f"T-{tag}", run_id, build_id, noms)

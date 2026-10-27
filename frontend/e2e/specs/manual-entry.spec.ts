@@ -123,16 +123,22 @@ test('kirituvchi hisob va qoldiq kiritadi, tasdiqlovchi tasdiqlaydi, nashr qilin
   expect(denied.status()).toBe(403);
 
   // 5. Tasdiqlovchi qoldiqni tasdiqlaydi va nashr holatini kutadi
-  await goto(checker, 'vvod/inbox');
+  // Tasdiqlovchi hali oldingi paket sahifasida: ro'yxatga qaytamiz; yangi paket ro'yxatga fon so'rovi
+  // (60 s interval) bilan keladi.
+  await checker.getByRole('button', { name: 'К списку' }).click();
+  await expect(checker.getByRole('button', { name: /^Пакет №\d+$/ }).first()).toBeVisible({ timeout: 90_000 });
   await openFirstBatchOf(checker, /^Пакет №\d+$/);
   await checker.getByRole('button', { name: 'Утвердить' }).click();
   await expect(checker.getByText('Утверждено').first()).toBeVisible();
   await expect(checker.getByText(/Опубликовано \(сборка №\d+\)/)).toBeVisible({ timeout: 150_000 });
 
   // 6. Reyestr va "История изменений"
+  // Reyestr keshi (5 daqiqa) boshqa kontekstdagi tasdiqni ko'rmaydi: sahifani qayta yuklaymiz
+  // (sessiya cookie'si saqlanadi).
+  await page.reload();
   await goto(page, 'vvod/kazna-balance');
   await expect(page.getByRole('table', { name: 'Остатки на счетах' })).toContainText('1500,00');
-  await page.getByRole('button', { name: 'История изменений' }).first().click();
+  await page.getByRole('row').filter({ hasNotText: 'На согласовании' }).getByRole('button', { name: 'История изменений' }).first().click();
   await expect(page.getByRole('dialog', { name: 'История изменений' })).toContainText('Утверждено');
   await page.keyboard.press('Escape');
 

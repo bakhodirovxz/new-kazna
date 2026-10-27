@@ -17,7 +17,7 @@ async function login(page: Page, username: string, hash: string): Promise<void> 
   await page.waitForTimeout(30_000 - (Date.now() % 30_000) + 500);
   await page.goto(`/${hash}`);
   await signIn(page, username);
-  await expect(page).toHaveURL(new RegExp(`${hash.replace(/[/?]/g, '\$&')}$`));
+  await expect(page).toHaveURL(new RegExp(`${hash.replace(/[/?]/g, '\$&')}(\\?br=\\d+)?$`));
 }
 
 /** goto sahifani qayta yuklaydi (sessiya → login); SPA ichida location.hash orqali o'tamiz. */

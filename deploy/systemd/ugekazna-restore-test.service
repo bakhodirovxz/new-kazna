@@ -3,6 +3,7 @@ Description=UGEKAZNA oylik tiklash testi (zaxiradan vaqtinchalik klasterga)
 Documentation=file:/opt/ugekazna/current/docs/ops/backup-restore.md
 After=docker.service
 Requires=docker.service
+OnFailure=ugekazna-alert@%n.service
 
 [Service]
 Type=oneshot
@@ -11,3 +12,11 @@ Environment=UGK_LOG_DIR=/var/log/ugekazna
 ExecStart=/opt/ugekazna/current/scripts/restore_test.sh
 SyslogIdentifier=ugekazna-restore-test
 TimeoutStartSec=3h
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectHome=yes
+ProtectSystem=full
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes

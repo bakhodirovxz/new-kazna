@@ -42,17 +42,22 @@ finish() {
   if [ "$UGK_RESTORE_KEEP" != 1 ]; then
     "${RESTORE[@]}" down -v --remove-orphans >/dev/null 2>&1 || true
   fi
+  # CLI faqat pgBackRest yorlig'i yoki `none` qabul qiladi — boshqa qiymat yozuvni yo'qotmasin.
+  [[ $BACKUP_LABEL =~ ^[0-9]{8}-[0-9]{6}F(_[0-9]{8}-[0-9]{6}[DI])?$ ]] || BACKUP_LABEL=none
   echo "== natija: $RESULT, ${duration} s, zaxira: $BACKUP_LABEL (kod $code)"
-  "${PROD[@]}" run --rm -T --no-deps migrate python -m app.cli restore-test-record \
-      --result "$RESULT" --duration-seconds "$duration" --backup "$BACKUP_LABEL" --details "$DETAILS" \
-    || echo "OGOHLANTIRISH: natijani prod bazaga yozib bo'lmadi" >&2
+  if ! "${PROD[@]}" run --rm -T --no-deps migrate python -m app.cli restore-test-record \
+      --result "$RESULT" --duration-seconds "$duration" --backup "$BACKUP_LABEL" --details "$DETAILS"; then
+    echo "XATO: natijani prod bazaga yozib bo'lmadi" >&2
+    [ "$code" -ne 0 ] || code=1
+  fi
   exit "$code"
 }
 trap finish EXIT
 fail() { DETAILS="$2"; echo "XATO: $2" >&2; exit "$1"; }
 
 echo "== 1/6 oxirgi zaxira"
-BACKUP_LABEL="$("${PROD[@]}" exec -T backup ugk-backup latest | tr -d '\r')" || fail 1 "ugk-backup latest xatosi"
+BACKUP_LABEL="$("${PROD[@]}" exec -T backup ugk-backup latest | tr -d '\r')" \
+  || { BACKUP_LABEL=none; fail 1 "ugk-backup latest xatosi"; }
 if [ -z "$BACKUP_LABEL" ]; then
   BACKUP_LABEL=none
   fail 3 "repo'da zaxira yo'q"
@@ -61,15 +66,19 @@ echo "zaxira: $BACKUP_LABEL"
 
 echo "== 2/6 tiklash: WAL oxirigacha, arxivlash o'chiq, repo faqat o'qish"
 "${RESTORE[@]}" down -v --remove-orphans >/dev/null 2>&1 || true
-"${RESTORE[@]}" run --rm -T restore-db ugk-restore || fail 1 "pgbackrest restore xatosi"
+"${RESTORE[@]}" run --rm -T restore-db ugk-restore "--set=$BACKUP_LABEL" || fail 1 "pgbackrest restore xatosi"
 
 echo "== 3/6 PostgreSQL: WAL replay va promote"
-"${RESTORE[@]}" up -d restore-db
+"${RESTORE[@]}" up -d restore-db || fail 1 "restore-db ishga tushmadi"
 promoted=no
 for _ in $(seq 1 720); do
   if [ "$(psql_restore 'SELECT pg_is_in_recovery()' 2>/dev/null || true)" = f ]; then
     promoted=yes
     break
+  fi
+  if [ "$("${RESTORE[@]}" ps -a --format '{{.State}}' restore-db | tr -d '\r')" = exited ]; then
+    "${RESTORE[@]}" logs --tail=40 restore-db || true
+    fail 1 "restore-db tiklash paytida to'xtadi"
   fi
   sleep 10
 done
@@ -92,7 +101,8 @@ COUNTS="$(psql_restore "SELECT 'core.users=' || count(*) FROM core.users
   UNION ALL SELECT 'core.audit_log=' || count(*) FROM core.audit_log
   UNION ALL SELECT 'core.etl_run=' || count(*) FROM core.etl_run
   UNION ALL SELECT 'dwh.fact_cashflow=' || count(*) FROM dwh.fact_cashflow
-  UNION ALL SELECT 'mart.agg_cash_month=' || count(*) FROM mart.agg_cash_month")"
+  UNION ALL SELECT 'mart.agg_cash_month=' || count(*) FROM mart.agg_cash_month")" \
+  || fail 1 "qatorlar sonini o'qib bo'lmadi"
 echo "$COUNTS"
 DETAILS="$(printf '%s' "$COUNTS" | tr '\n' ';')"
 USERS="$(printf '%s\n' "$COUNTS" | sed -n 's/^core\.users=//p')"

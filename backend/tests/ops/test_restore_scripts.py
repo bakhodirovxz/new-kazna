@@ -45,3 +45,36 @@ def test_timers_schedule() -> None:
     assert "OnCalendar=*:0/15" in monitor
     assert "OnCalendar=Sat *-*-01..07 21:00:00 Asia/Tashkent" in restore
     assert "Persistent=true" in monitor and "Persistent=true" in restore
+
+
+def test_restore_script_always_records_valid_label() -> None:
+    script = repo_path("scripts/restore_test.sh").read_text(encoding="utf-8")
+    assert "BACKUP_LABEL=none" in script and "[[ $BACKUP_LABEL =~" in script
+    assert '"--set=$BACKUP_LABEL"' in script  # yozilgan yorliq == tiklangan zaxira
+    assert "code=1" in script  # yozuv yozilmasa, chiqish kodi 0 bo'lmaydi
+
+
+def test_services_have_timeout_hardening_and_alert() -> None:
+    services = sorted(repo_path("deploy/systemd").glob("*.service"))
+    assert len(services) == 3
+    for unit in services:
+        text = unit.read_text(encoding="utf-8")
+        assert re.search(r"^TimeoutStartSec=", text, re.M), unit.name
+        for key in ("NoNewPrivileges=yes", "PrivateTmp=yes", "ProtectHome=yes",
+                    "ProtectSystem=full"):
+            assert key in text, (unit.name, key)
+    for name in ("monitor", "restore-test"):
+        text = repo_path(f"deploy/systemd/ugekazna-{name}.service").read_text(encoding="utf-8")
+        assert "OnFailure=ugekazna-alert@%n.service" in text
+        for key in ("ProtectKernelTunables=yes", "ProtectKernelModules=yes",
+                    "RestrictSUIDSGID=yes", "LockPersonality=yes"):
+            assert key in text, (name, key)
+    alert = repo_path("deploy/systemd/ugekazna-alert@.service").read_text(encoding="utf-8")
+    assert "logger" in alert and "user.crit" in alert and "%i" in alert
+    monitor = repo_path("deploy/systemd/ugekazna-monitor.service").read_text(encoding="utf-8")
+    assert "TimeoutStartSec=10min" in monitor
+
+
+def test_monitor_logs_critical_when_mail_path_down() -> None:
+    text = repo_path("scripts/ops/monitor.sh").read_text(encoding="utf-8")
+    assert "user.crit" in text and 'state="ps xatosi"' in text

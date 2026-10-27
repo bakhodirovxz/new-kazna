@@ -18,7 +18,8 @@ SERVICES=(db redis api worker caddy backup)
 
 extra=()
 for svc in "${SERVICES[@]}"; do
-  state="$("${P[@]}" ps --format '{{.State}} {{.Health}}' "$svc" 2>/dev/null | tr -d '\r' | sed -n 1p)"
+  state="$("${P[@]}" ps --format '{{.State}} {{.Health}}' "$svc" 2>/dev/null | tr -d '\r' | sed -n 1p)" \
+    || state="ps xatosi"
   case "$state" in
     "running healthy"|"running starting") ;;
     *) extra+=(--extra "$svc: ${state:-не запущен}") ;;
@@ -32,6 +33,7 @@ if "${P[@]}" ps --format '{{.State}}' worker 2>/dev/null | grep running >/dev/nu
   fi
   exit 1
 fi
-logger -t ugekazna-monitor -p user.err "worker ishlamayapti: ${extra[*]}" 2>/dev/null || true
-echo "worker ishlamayapti — ops-check bajarilmadi: ${extra[*]}" >&2
+# Pochta yo'li (worker) ishlamaydi: syslog'ga CRIT — prod'da SIEM'ga yo'naltirilishi shart.
+logger -t ugekazna-monitor -p user.crit "worker ishlamayapti, pochta yuborilmadi: ${extra[*]:-}" 2>/dev/null || true
+echo "worker ishlamayapti — ops-check bajarilmadi: ${extra[*]:-}" >&2
 exit 1

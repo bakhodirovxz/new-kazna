@@ -12,6 +12,8 @@ set -euo pipefail
 export MSYS_NO_PATHCONV=1
 ROOT="$(cd "$(dirname "$0")/.." && (pwd -W 2>/dev/null || pwd))"
 cd "$ROOT"
+# Shell muhiti --env-file'dan ustun: prod host'dagi UGK_*/SMTP_* sinov stack'iga (prod sirlari, prod repo) o'tmasin.
+for v in $(compgen -v UGK_) $(compgen -v SMTP_); do unset "$v"; done
 VERSION=selftest
 PROJECT=ugekazna-selftest
 WORK="$ROOT/build/selftest"
@@ -19,13 +21,27 @@ VOLUME=ugekazna_selftest_repo
 export UGK_PROJECT="$PROJECT" UGK_ENV_FILES="$WORK/selftest.env" UGK_LOG_DIR="$WORK/logs"
 P=(docker compose -p "$PROJECT" -f deploy/compose.prod.yml --env-file "$WORK/selftest.env")
 R=(docker compose -p "$PROJECT-restore" -f deploy/compose.restore.yml --env-file "$WORK/selftest.env")
-CURL=(curl -s --ssl-no-revoke --cacert "$WORK/secrets/tls_cert.pem" --resolve ugk.selftest:18443:127.0.0.1)
-# Windows curl (Schannel) TLS yopilishida non-zero qaytarishi mumkin (close_notify yo'q): kod -w dan olinadi.
+CURL=(curl -s --cacert "$WORK/secrets/tls_cert.pem" --resolve ugk.selftest:18443:127.0.0.1)
+IS_WIN=no
+case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*) IS_WIN=yes; CURL+=(--ssl-no-revoke) ;; esac
+# Windows (Schannel) curl HTTP javobidan keyin non-zero qaytarishi mumkin (sababi tasdiqlanmagan taxmin:
+# TLS close_notify yo'q). Faqat Windows'da HTTP kodi mos kelsa kechiriladi; Linux'da fail-closed.
+http_code() {
+  local out rc=0
+  out="$("${CURL[@]}" -o /dev/null -w '%{http_code}' "$@")" || rc=$?
+  if [ "$rc" -ne 0 ]; then
+    echo "curl chiqish kodi $rc (http $out)" >&2
+    [ "$IS_WIN" = yes ] || out="curl-xato-$rc"
+  fi
+  printf '%s' "$out"
+}
 
 cleanup() {
   "${R[@]}" down -v --remove-orphans >/dev/null 2>&1 || true
   "${P[@]}" down -v --remove-orphans >/dev/null 2>&1 || true
   docker volume rm "$VOLUME" >/dev/null 2>&1 || true
+  # Faqat aynan shu sinov papkasi (sinov sirlari 0444 qoladi — qoldirmaymiz).
+  if [ -n "$WORK" ] && [ "$WORK" = "$ROOT/build/selftest" ]; then rm -rf "$WORK"; fi
 }
 step() { printf '\n######## %s\n' "$*"; }
 die() { echo "SELFTEST XATO: $*" >&2; exit 1; }
@@ -79,6 +95,12 @@ SMTP_USER=
 EOF
 docker volume create "$VOLUME" >/dev/null
 
+# Izolyatsiya: sirlar $WORK ichida, repo hajmi sinov hajmi (prod sirlari/repo'ga tegmaydi).
+CONFIG="$("${P[@]}" config | tr -d '\r')"
+printf '%s\n' "$CONFIG" | grep -q "build.selftest.secrets" || die "sirlar papkasi $WORK/secrets emas"
+printf '%s\n' "$CONFIG" | grep -q "name: $VOLUME\$" || die "repo hajmi $VOLUME emas"
+! printf '%s\n' "$CONFIG" | grep -q "deploy.secrets" || die "prod sirlari ulangan"
+
 step "1. prod stack (read_only, cap_drop, non-root, ci profili)"
 "${P[@]}" up -d
 for svc in db redis api worker caddy; do wait_healthy "$svc" 300; done
@@ -103,11 +125,10 @@ TOKEN="$("${P[@]}" run --rm -T --no-deps -e ENV=test migrate python -m app.devto
   | tr -d '\r' | tail -n 1 | sed -n 's/.*"token": *"\([^"]*\)".*/\1/p')"
 [ -n "$TOKEN" ] || die "seed-load sessiya tokenini bermadi"
 for i in 1 2; do
-  http="$("${CURL[@]}" -o /dev/null -w '%{http_code}' -H "Cookie: __Host-ugk_session=$TOKEN" \
-    https://ugk.selftest:18443/api/v1/meta/branches || true)"
+  http="$(http_code -H "Cookie: __Host-ugk_session=$TOKEN" https://ugk.selftest:18443/api/v1/meta/branches)"
   [ "$http" = 200 ] || die "/meta/branches ($i-chaqiruv) → $http"
 done
-[ "$("${CURL[@]}" -o /dev/null -w '%{http_code}' https://ugk.selftest:18443/api/v1/healthz || true)" = 404 ] \
+[ "$(http_code https://ugk.selftest:18443/api/v1/healthz)" = 404 ] \
   || die "healthz tashqaridan ochiq"
 [ "$(curl -s -o /dev/null -w '%{http_code}' --resolve ugk.selftest:18080:127.0.0.1 http://ugk.selftest:18080/)" = 308 ] \
   || die "HTTP → HTTPS yo'naltirish yo'q"

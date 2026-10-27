@@ -1,0 +1,12 @@
+[Unit]
+Description=UGEKAZNA ogohlantirish: %i muvaffaqiyatsiz tugadi
+
+[Service]
+Type=oneshot
+# Pochta yo'li ishlamasa ham syslog'ga CRIT yoziladi (prod'da SIEM'ga yo'naltirilishi shart).
+ExecStart=/usr/bin/logger -t ugekazna-alert -p user.crit "systemd unit %i muvaffaqiyatsiz tugadi"
+TimeoutStartSec=30
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectHome=yes
+ProtectSystem=full

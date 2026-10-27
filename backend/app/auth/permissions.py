@@ -47,6 +47,8 @@ class Perm(StrEnum):
     ADMIN_SETTINGS = "admin:settings"
     ADMIN_ETL = "admin:etl"
     ADMIN_KEYS = "admin:keys"
+    ADMIN_SECURITY = "admin:security"
+    ADMIN_INTEGRATIONS = "admin:integrations"
     AUDIT_READ = "audit:read"
 
 
@@ -58,6 +60,8 @@ _PERM_TITLES: dict[Perm, str] = {
     Perm.ADMIN_SETTINGS: "Администрирование: настройки и пороги",
     Perm.ADMIN_ETL: "Администрирование: загрузки данных",
     Perm.ADMIN_KEYS: "Администрирование: ключи шифрования",
+    Perm.ADMIN_SECURITY: "Администрирование: политика безопасности",
+    Perm.ADMIN_INTEGRATIONS: "Администрирование: интеграции и учётные данные",
     Perm.AUDIT_READ: "Просмотр журнала аудита",
 }
 

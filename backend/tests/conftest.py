@@ -11,14 +11,14 @@ from sqlalchemy.engine import Connection
 from sqlalchemy.orm import Session
 
 from app.bootstrap import bootstrap_runtime
-from app.core import keystore
+from app.core import keystore, sysconfig
 from app.core.config import get_settings
 from app.core.db import get_engine, new_session
 from app.dwh import builds
 from app.dwh.aggregates import BuildParams, build_all
 from app.etl.db import etl_transaction
 from app.etl.runner import RunResult
-from tests.helpers import SeedUser, create_user
+from tests.helpers import SeedUser, clear_setting, create_user, put_setting
 
 
 def _reset_dwh(conn: Connection) -> None:
@@ -167,3 +167,24 @@ def published_synthetic(synthetic_run: RunResult) -> Iterator[int]:
                 builds.rollback(conn, previous)
         except ConflictError:
             pass  # oldingi build prune qilingan — qayta aktivlash mumkin emas
+
+
+@pytest.fixture(autouse=True)
+def _fresh_sysconfig() -> Iterator[None]:
+    sysconfig.invalidate()
+    yield
+    sysconfig.invalidate()
+
+
+@pytest.fixture
+def setting() -> Iterator[Callable[[str, object], None]]:
+    """Panel qiymatini yozadi; test oxirida tegilgan kalitlar standartga qaytariladi."""
+    touched: list[str] = []
+
+    def put(key: str, value: object) -> None:
+        touched.append(key)
+        put_setting(key, value)
+
+    yield put
+    for key in dict.fromkeys(touched):
+        clear_setting(key)

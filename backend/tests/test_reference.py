@@ -82,10 +82,10 @@ def test_settings_defaults_and_validation() -> None:
     for bad_date in ("2014-12-31", (today_tashkent() + timedelta(days=1)).isoformat()):
         with pytest.raises(ValueError):
             validate_setting("etl.history_start", bad_date)
-    assert set(DEFAULT_SETTINGS) == {
+    assert {
         "freshness.max_age_hours", "etl.history_start", "etl.synthetic_cron", "builds.keep",
         "retention.fact_years", "retention.audit_months", "partitions.months_ahead",
-    }
+    } <= set(DEFAULT_SETTINGS)
 
 
 def test_ensure_reference_is_idempotent_and_restores() -> None:

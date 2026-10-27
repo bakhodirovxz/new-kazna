@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState, type FormEvent } from 'react';
 import { isApiError } from '../api/client';
 import type { IntegrationCheckOut, IntegrationOut, SecretStatusOut, SettingOut } from '../api/types';
+import { EnrollLink } from '../auth/EnrollLink';
 import { t, type MessageKey } from '../i18n';
 import { formatDateTime } from '../i18n/format';
 import { Badge } from '../ui/Badge';
@@ -159,7 +160,7 @@ function IntegrationDialog({ integration, onClose }: { integration: IntegrationO
       }
     >
       <form id={formId} ref={formRef} className="form-grid" noValidate onSubmit={submit} autoComplete="off">
-        <div className="span-2" ref={bannerRef} tabIndex={-1}><FormError error={bannerShown ? update.error : null} /></div>
+        <div className="span-2" ref={bannerRef} tabIndex={-1}><FormError error={bannerShown ? update.error : null} />{bannerShown && isApiError(update.error, 403, 'step_up_unavailable') ? <EnrollLink /> : null}</div>
         {integration.fields.map((f) => (
           <div key={f.key} className="span-2">
             <FieldEditor setting={f} value={values[f.key] ?? ''} onChange={(v) => setValues((prev) => ({ ...prev, [f.key]: v }))} error={errors[f.key]} />

@@ -122,6 +122,14 @@ def _clear_rate_limits() -> None:
 
 
 @pytest.fixture
+def mfa_required() -> Iterator[None]:
+    """`security.mfa_required=true` — majburiy ulash rejimi (standart: o'chiq)."""
+    put_setting("security.mfa_required", True)
+    yield
+    clear_setting("security.mfa_required")
+
+
+@pytest.fixture
 def make_user() -> Callable[..., SeedUser]:
     return create_user
 

@@ -1,16 +1,19 @@
+import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useDocumentTitle } from '../app/useDocumentTitle';
 import { t } from '../i18n';
 import { navigate } from '../router/store';
 import { Button } from '../ui/Button';
 import { PasswordInput, TextInput } from '../ui/Field';
-import { useLogin } from './api';
+import { meKey, useLogin } from './api';
 import { AuthAlert, AuthLayout } from './AuthLayout';
 import { useAuthFlow } from './AuthFlow';
+import { destinationAfterSignIn } from './destination';
 import { authErrorText } from './errors';
 
 export function LoginPage({ next }: { next: string | null }) {
   const login = useLogin();
+  const client = useQueryClient();
   const flow = useAuthFlow();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -38,8 +41,16 @@ export function LoginPage({ next }: { next: string | null }) {
       {
         onSuccess: (result) => {
           login.reset(); // parol/token kuzatuvchida qolmasin
-          flow.begin({ mfaToken: result.mfa_token, step: result.next, username: name, returnTo: next });
           setPassword('');
+          if (result.next === 'done' && result.user) {
+            // 2FA majburiy emas va ulanmagan: sessiya allaqachon ochiq (cookie), 2FA bosqichi yo'q.
+            client.clear(); // oldingi foydalanuvchi keshi yangisiga o'tmasin
+            client.setQueryData(meKey, result.user);
+            navigate(destinationAfterSignIn(result.user, next), { replace: true });
+            return;
+          }
+          if (!result.mfa_token || result.next === 'done') return;
+          flow.begin({ mfaToken: result.mfa_token, step: result.next, username: name, returnTo: next });
           navigate({ kind: result.next === 'mfa_enroll' ? 'mfaEnroll' : 'mfa' });
         },
         onError: (err) => {

@@ -25,7 +25,7 @@ userns-remap) и организационные процедуры в репоз
 | 1.2.1 | Отдельные низкопривилегированные учётные записи компонентов | Выполнено | UID 10001 (api, worker, migrate, caddy), 70 (db, backup), 999 (redis); `cap_drop: ALL`; userns-remap — требование к хосту ([../ops/host-hardening.md](../ops/host-hardening.md)) | `test_every_service_is_hardened` |
 | 1.2.2 | Аутентификация между компонентами с минимальными правами | Выполнено | Роли СУБД `ugk_app`, `ugk_etl`, `ugk_migrator` (SCRAM-SHA-256), пароль и ACL Redis | `test_pg_hba_only_scram_and_reject`, `test_app_role_cannot_create_tables` |
 | 1.2.3 | Единый проверенный механизм аутентификации | Выполнено | `backend/app/auth/service.py`: пароль (Argon2id) + TOTP | `test_full_login_sets_hardened_cookies` |
-| 1.2.4 | Все пути аутентификации одинаковой стойкости | Выполнено | Единственный путь: пароль → второй фактор (TOTP или одноразовый резервный код); API-ключей нет | `test_totp_code_cannot_be_replayed`, `test_enroll_flow_and_backup_codes` |
+| 1.2.4 | Все пути аутентификации одинаковой стойкости | Отклонение | 2FA необязательна по решению заказчика (27.10.2026); включается настройкой `security.mfa_required`: без TOTP вход возможен по одному паролю (риск R18); с TOTP второй фактор не обходится; API-ключей нет | `test_totp_user_always_verifies`, `test_no_totp_login_creates_session_and_offers` |
 | 1.4.1 | Контроль доступа в доверенной точке | Выполнено | Только сервер (зависимости FastAPI, RLS СУБД); фронтенд лишь скрывает элементы | `test_admin_and_audit_routes_require_matching_permission` |
 | 1.4.4 | Единый механизм контроля доступа | Выполнено | `require_perm`, `AuthContext.assert_branch`, RLS | `test_permission_required` |
 | 1.4.5 | Контроль доступа по функциям и атрибутам | Выполнено | Разрешения-функции (`backend/app/auth/permissions.py`), область данных по филиалам | `test_branch_user_gets_own_branches` |
@@ -74,7 +74,7 @@ userns-remap) и организационные процедуры в репоз
 | 2.2.2 | SMS и e-mail только как вторичные факторы | Н/П | Аутентификаторы SMS и e-mail не используются | — |
 | 2.2.3 | Уведомления об изменении аутентификаторов | Частично | Все изменения фиксируются в журнале аудита; адреса e-mail пользователей не хранятся, уведомления не отправляются | `test_reset_password_and_2fa` |
 | 2.3.1 | Начальные пароли случайны и не становятся постоянными | Частично | Временный пароль из CSPRNG, смена обязательна при первом входе; срок действия временного пароля не ограничен | `test_temporary_passwords_satisfy_policy`, `test_create_user_and_first_login_requires_enroll` |
-| 2.3.2 | Поддержка устройств FIDO/U2F | Отклонение (обосновано) | Для всех ролей обязательна TOTP-2FA; FIDO2 — возможное развитие | — |
+| 2.3.2 | Поддержка устройств FIDO/U2F | Отклонение (обосновано) | Поддерживается TOTP-2FA (необязательная, см. 1.2.4); FIDO2 — возможное развитие | — |
 | 2.3.3 | Уведомления о продлении срочных аутентификаторов | Частично | По истечении 90 дней пароль требуется сменить при входе; заблаговременных уведомлений нет | `test_expired_password_counts_as_must_change` |
 | 2.4.1 | Пароли хранятся стойкой однонаправленной функцией | Выполнено | Argon2id: 64 МиБ, 3 итерации, параллелизм 4 | `test_standard_params_match_spec` |
 | 2.4.2 | Соль не менее 32 бит, уникальная | Выполнено | Соль 128 бит на каждый хеш (argon2-cffi) | `test_hash_and_verify` |
@@ -144,7 +144,7 @@ userns-remap) и организационные процедуры в репоз
 | 4.1.5 | Безопасный отказ | Выполнено | Запрет по умолчанию; без контекста RLS — 0 строк; неактивная должность — пустая область | `test_rls_scopes`, `test_inactive_position_has_no_scope` |
 | 4.2.1 | Защита от IDOR | Выполнено | RLS на двух уровнях; чужие сеансы недоступны | `test_cannot_revoke_foreign_session`, `test_pub_views_and_mart_rls_direct_sql`, `frontend/e2e/specs/branch-scope.spec.ts` |
 | 4.2.2 | Защита от CSRF | Выполнено | Подписанный double-submit для всех методов, кроме GET, HEAD, OPTIONS | `test_csrf_required_for_unsafe_methods`, `test_csrf_unrelated_matching_pair_is_403` |
-| 4.3.1 | MFA для административных интерфейсов | Выполнено | 2FA обязательна для всех ролей | `test_create_user_and_first_login_requires_enroll` |
+| 4.3.1 | MFA для административных интерфейсов | Отклонение | 2FA необязательна по решению заказчика (27.10.2026); включается настройкой `security.mfa_required`; при включённой настройке обязательна для всех ролей. Изменение настроек безопасности и интеграций в любом случае требует TOTP (`step_up_unavailable` без него), но вход администратора без TOTP возможен по паролю (риск R18) | `test_create_user_and_first_login_requires_enroll`, `test_step_up_unavailable_without_totp` |
 | 4.3.2 | Нет листинга каталогов и служебных файлов | Выполнено | Caddy отдаёт только сборку (`/srv`) без листинга; пути с сегментом, начинающимся с точки, и пути с расширением, которых нет в сборке, — 404, прочие неизвестные пути → `index.html` (маршрутизация SPA) | `deploy/tests/probe_caddy.py` |
 | 4.3.3 | Разделение обязанностей для ценных операций | Частично | Отдельные разрешения `admin:keys`, `admin:security`, `admin:integrations`, `audit:read`; служба внутреннего контроля независима; смена KEK и уничтожение ключей — только оператор ОС (роль `ugk_migrator`) | `test_non_admin_cannot_rotate`, `test_settings_admin_cannot_change_security_key` |
 
@@ -267,7 +267,7 @@ userns-remap) и организационные процедуры в репоз
 
 | ID | Требование | Статус | Реализация / обоснование | Проверка |
 |---|---|---|---|---|
-| 11.1.1 | Шаги процесса выполняются по порядку | Выполнено | Вход → 2FA → смена пароля; сервер не допускает пропуск шагов | `test_must_change_password_blocks_other_routes` |
+| 11.1.1 | Шаги процесса выполняются по порядку | Выполнено | Вход → 2FA (если подключена или обязательна) → смена пароля; сервер не допускает пропуск шагов | `test_must_change_password_blocks_other_routes` |
 | 11.1.2 | Реалистичное время шагов | Выполнено | Challenge 2FA действует 5 минут, 5 попыток | `test_challenge_dies_after_five_wrong_codes` |
 | 11.1.3 | Лимиты действий на пользователя | Частично | 300 запросов в минуту на пользователя; при недоступности Redis лимиты временно отключаются (`backend/app/core/ratelimit.py`), блокировка входа хранится в СУБД и от Redis не зависит | `test_identities_are_independent_and_reset_works` |
 | 11.1.4 | Защита от автоматизированной массовой выгрузки | Частично | Лимиты, страница ≤ 500, выгрузка журнала ≤ 50 000 строк; лимиты запросов зависят от Redis (см. 11.1.3) | `test_limit_exceeded_raises_with_retry_after` |

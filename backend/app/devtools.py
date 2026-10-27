@@ -55,6 +55,8 @@ E2E_USERS: tuple[E2eUser, ...] = (
     E2eUser("e2e_admin_1024", "Тестов Планшетный", "admin", totp=True, must_change=False),
     E2eUser("e2e_admin_1440", "Тестов Настольный", "admin", totp=True, must_change=False),
     E2eUser("e2e_new", "Новиков Сотрудник", "spec_kazna", totp=False, must_change=True),
+    # 2FA majburiy emas: TOTP'siz, parol vaqtinchalik emas — "Позже" oqimi uchun
+    E2eUser("e2e_skip", "Пропускин Сотрудник", "spec_kazna", totp=False, must_change=False),
     E2eUser(
         "e2e_branch",
         "Филиалов Экономист",

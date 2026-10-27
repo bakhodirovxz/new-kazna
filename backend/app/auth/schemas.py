@@ -7,9 +7,11 @@ from datetime import datetime
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
+from sqlalchemy.orm import Session
 
 from app.auth import passwords
 from app.auth.context import AuthContext
+from app.auth.mfa_offer import mfa_offer_pending
 
 
 class _In(BaseModel):
@@ -19,11 +21,6 @@ class _In(BaseModel):
 class LoginIn(_In):
     username: str = Field(min_length=1, max_length=64)
     password: str = Field(min_length=1, max_length=256)
-
-
-class LoginOut(BaseModel):
-    next: Literal["mfa_verify", "mfa_enroll"]
-    mfa_token: str
 
 
 class MfaTokenIn(_In):
@@ -49,6 +46,21 @@ class MeOut(BaseModel):
     branch_ids: list[int] | None
     must_change_password: bool
     password_min_length: int
+    mfa_enabled: bool
+    mfa_offer: bool  # taklif kerak: ulanmagan, rad etilmagan, majburiy emas
+
+
+class LoginOut(BaseModel):
+    """`done` — sessiya yaratildi (cookie o'rnatildi), `user` to'ldirilgan, `mfa_token` yo'q.
+    `mfa_verify`/`mfa_enroll` — sessiya yo'q, `mfa_token` bor."""
+
+    next: Literal["mfa_verify", "mfa_enroll", "done"]
+    mfa_token: str | None = None
+    user: MeOut | None = None
+
+
+class MfaTokenOut(BaseModel):
+    mfa_token: str
 
 
 class EnrollConfirmOut(BaseModel):
@@ -70,7 +82,7 @@ class SessionOut(BaseModel):
     current: bool
 
 
-def me_out(ctx: AuthContext) -> MeOut:
+def me_out(ctx: AuthContext, db: Session) -> MeOut:
     return MeOut(
         id=ctx.user_id,
         username=ctx.username,
@@ -80,4 +92,6 @@ def me_out(ctx: AuthContext) -> MeOut:
         branch_ids=None if ctx.branch_ids is None else sorted(ctx.branch_ids),
         must_change_password=ctx.must_change_password,
         password_min_length=passwords.min_length(),
+        mfa_enabled=ctx.mfa_enabled,
+        mfa_offer=mfa_offer_pending(db, ctx.user_id, ctx.mfa_enabled),
     )

@@ -76,6 +76,22 @@ describe('SettingsList', () => {
     expect(server.calls.find((c) => c.method === 'PUT')?.body).toEqual({ value: 20, expected_version: 2, reason: 'Письмо ИБ №7', otp: '123456' });
   });
 
+  it('explains a missing 2FA and links to enrollment (step_up_unavailable)', async () => {
+    mockApi({
+      'GET /admin/settings': json([IDLE]),
+      'GET /admin/settings/security.session_idle_minutes/history': json([]),
+      'PUT /admin/settings/security.session_idle_minutes': apiError(403, 'step_up_unavailable', 'Для изменения этих настроек подключите двухфакторную аутентификацию'),
+    });
+    const { user } = renderWithProviders(<SettingsList perm="admin:security" />);
+    await user.click(await screen.findByText('Завершение сеанса при бездействии'));
+    const dialog = screen.getByRole('dialog', { name: 'Настройка: Завершение сеанса при бездействии' });
+    await user.type(within(dialog).getByLabelText('Причина изменения'), 'Письмо ИБ №7');
+    await user.type(within(dialog).getByLabelText('Код из приложения'), '123456');
+    await user.click(within(dialog).getByRole('button', { name: 'Сохранить' }));
+    expect(await within(dialog).findByText('Для изменения этих настроек подключите двухфакторную аутентификацию')).toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: 'Подключить 2FA' })).toBeInTheDocument();
+  });
+
   it('refreshes the dialog version after a 409 so a retry can succeed (M5)', async () => {
     let listCalls = 0;
     const server = mockApi({

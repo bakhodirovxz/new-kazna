@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react';
 import { allowedAdminPages } from '../admin/access';
 import type { MeOut } from '../api/types';
-import { useLogout } from '../auth/api';
+import { useLogout, useStartEnrollment } from '../auth/api';
 import { t } from '../i18n';
 import { navigate } from '../router/store';
 import { Icon, type IconName } from '../ui/icons';
@@ -29,10 +29,12 @@ export function UserMenu({ me }: { me: MeOut }) {
   const menuRef = useRef<HTMLDivElement>(null);
   const menuId = useId();
   const logout = useLogout();
+  const enroll = useStartEnrollment();
   const admin = allowedAdminPages(me.permissions);
 
   const actions: MenuAction[] = [
     { id: 'sessions', label: t('user.sessions'), icon: 'history', run: () => navigate({ kind: 'sessions' }) },
+    ...(me.mfa_enabled ? [] : [{ id: 'mfa', label: t('user.mfa'), icon: 'shield' as const, run: () => enroll.start() }]),
     { id: 'password', label: t('user.password'), icon: 'key', run: () => navigate({ kind: 'password' }) },
     ...(admin[0] ? [{ id: 'admin', label: t('user.admin'), icon: 'shield' as const, run: () => navigate({ kind: 'admin', page: admin[0]?.id ?? null }) }] : []),
     { id: 'logout', label: t('user.logout'), icon: 'logout', run: () => logout.mutate() },

@@ -1,6 +1,7 @@
 import { useId, useState, type FormEvent } from 'react';
 import { isApiError } from '../api/client';
 import type { SettingOut, SettingVersionOut } from '../api/types';
+import { EnrollLink } from '../auth/EnrollLink';
 import { t, type MessageKey } from '../i18n';
 import { formatDateTime } from '../i18n/format';
 import { Badge } from '../ui/Badge';
@@ -177,6 +178,7 @@ function SettingDialog({ setting, onClose }: { setting: SettingOut; onClose(): v
     >
       <form id={formId} ref={formRef} className="form-grid" noValidate onSubmit={submit}>
         <div className="span-2"><FormError error={update.error && !inline ? update.error : null} /></div>
+        {isApiError(update.error, 403, 'step_up_unavailable') ? <div className="span-2"><EnrollLink /></div> : null}
         <div className="span-2">
           <FieldEditor setting={{ ...setting, title: t('settings.value') }} value={raw} onChange={setRaw} error={errors.value} />
           <p className="field__hint">{setting.apply === 'next_run' ? t('settings.applyNextRun') : t('settings.applyLive')}</p>

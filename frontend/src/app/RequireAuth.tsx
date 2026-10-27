@@ -5,6 +5,7 @@ import type { MeOut, MenuOut } from '../api/types';
 import { AdminScreen } from '../admin/AdminScreen';
 import { useAuthFlow } from '../auth/AuthFlow';
 import { useMe } from '../auth/api';
+import { MfaOfferScreen } from '../auth/MfaOfferScreen';
 import { SessionsScreen } from '../auth/SessionsScreen';
 import { PasswordChangePage } from '../auth/PasswordChangePage';
 import { useMenu } from '../meta/api';
@@ -45,6 +46,7 @@ export function RequireAuth({ route }: { route: Route }) {
     return unauthenticated ? <ShellSkeleton /> : <FullPageError error={me.error} onRetry={() => void me.refetch()} />;
   }
   if (route.kind === 'password') return <PasswordChangePage me={me.data} />;
+  if (me.data.mfa_offer && !mustChange) return <MfaOfferScreen />;
   if (mustChange || menu.isPending) return <ShellSkeleton />;
   if (menu.isError) return <FullPageError error={menu.error} onRetry={() => void menu.refetch()} />;
   return <Screen me={me.data} menu={menu.data} route={route} />;

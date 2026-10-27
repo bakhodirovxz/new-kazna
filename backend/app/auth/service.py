@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 from app.audit.service import AuditAction, log_event
 from app.auth import passwords, sessions, totp
 from app.auth.context import AuthContext
+from app.auth.mfa_offer import mfa_offer_pending
 from app.auth.models import BackupCode, MfaChallenge, PasswordHistory, User, UserSession
 from app.auth.schemas import SessionOut
 from app.core import keystore, ratelimit, sysconfig
@@ -30,8 +31,12 @@ _USERNAME_HINT_RE = re.compile(r"^[a-z0-9._-]{2}$")
 
 @dataclass(frozen=True, slots=True)
 class LoginResult:
-    next: Literal["mfa_verify", "mfa_enroll"]
-    mfa_token: str = field(repr=False)
+    """`done` — 2FA kerak emas (majburiy emas va ulanmagan): sessiya shu yerda yaratilgan."""
+
+    next: Literal["mfa_verify", "mfa_enroll", "done"]
+    mfa_token: str | None = field(default=None, repr=False)
+    session: sessions.NewSession | None = field(default=None, repr=False)
+    user: User | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -113,7 +118,24 @@ def login(
     user.locked_until = None
     if passwords.needs_rehash(user.password_hash):
         user.password_hash = passwords.hash_password(password)
+    if not user.totp_enabled and not sysconfig.value("security.mfa_required"):
+        # Buyurtmachi qarori 27.10.2026: 2FA majburiy emas. Parol tekshirilgan (yuqorida),
+        # TOTP'si yo'q — sessiya shu yerda; majburiy parol almashtirish `build_context`da qoladi.
+        user.failed_logins = 0
+        user.last_login_at = now
+        new = sessions.create(db, user.id, meta.ip, meta.ua, now)
+        log_event(meta, AuditAction.PASSWORD_OK, user_id=user.id)
+        log_event(meta, AuditAction.LOGIN_OK, user_id=user.id, details={"method": "password"})
+        return LoginResult(next="done", session=new, user=user)
     kind: Literal["verify", "enroll"] = "verify" if user.totp_enabled else "enroll"
+    token = _open_challenge(db, user, kind, now)
+    log_event(meta, AuditAction.PASSWORD_OK, user_id=user.id)
+    return LoginResult(next="mfa_verify" if kind == "verify" else "mfa_enroll", mfa_token=token)
+
+
+def _open_challenge(
+    db: Session, user: User, kind: Literal["verify", "enroll"], now: datetime
+) -> str:
     token = secrets.token_urlsafe(32)
     # I3: yangi challenge ochilganda foydalanuvchining boshqa ochiq challenge'lari
     # o'chiriladi (bir vaqtda faqat bitta challenge tirik bo'lsin). Kutilayotgan enroll
@@ -133,8 +155,24 @@ def login(
         )
     )
     db.flush()
-    log_event(meta, AuditAction.PASSWORD_OK, user_id=user.id)
-    return LoginResult(next="mfa_verify" if kind == "verify" else "mfa_enroll", mfa_token=token)
+    return token
+
+
+def enroll_begin(db: Session, ctx: AuthContext, meta: ClientMeta, now: datetime) -> str:
+    """Kirgan foydalanuvchi 2FA'ni keyinroq ulaydi: enroll challenge ochadi, keyin mavjud
+    `enroll/start` + `enroll/confirm` ishlaydi."""
+    ratelimit.check("mfa_ip", meta.ip or "unknown", ratelimit.mfa_per_ip())
+    user = db.get(User, ctx.user_id, with_for_update=True, populate_existing=True)
+    if user is None or not user.is_active:
+        raise AuthError("session_expired")
+    if user.totp_enabled:
+        raise ConflictError("mfa_already_enabled")
+    return _open_challenge(db, user, "enroll", now)
+
+
+def dismiss_mfa_offer(db: Session, ctx: AuthContext, meta: ClientMeta) -> None:
+    if mfa_offer_pending(db, ctx.user_id, ctx.mfa_enabled):
+        log_event(meta, AuditAction.MFA_OFFER_DISMISSED, user_id=ctx.user_id)
 
 
 def _load_challenge(

@@ -166,6 +166,10 @@ _DEFS: tuple[SettingDef, ...] = (
             unit="симв.", **_SEC),
     int_def("security.password_history", 5, 5, 24,
             title="Запрет повторного использования паролей", unit="посл.", **_SEC),
+    # Buyurtmachi qarori 27.10.2026: 2FA majburiy emas. Bool uchun "pol" yo'q: yoqish ham,
+    # o'chirish ham panel orqali (sabab + TOTP). Yoqilgan qiymat KEYINGI kirishda kuchga kiradi.
+    bool_def("security.mfa_required", False, title="Обязательная двухфакторная аутентификация",
+             **_SEC),
     int_def("ratelimit.login_per_min", 10, 3, 10, title="Попыток входа с одного IP в минуту",
             **_SEC),
     int_def("ratelimit.mfa_per_min", 20, 5, 20, title="Проверок кода 2FA с одного IP в минуту",

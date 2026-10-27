@@ -72,6 +72,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/2fa/enroll/begin": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Enroll Begin */
+        post: operations["enroll_begin_api_v1_auth_2fa_enroll_begin_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/2fa/offer/dismiss": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Dismiss Offer */
+        post: operations["dismiss_offer_api_v1_auth_2fa_offer_dismiss_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/2fa/enroll/start": {
         parameters: {
             query?: never;
@@ -1178,15 +1212,20 @@ export interface components {
             /** Password */
             password: string;
         };
-        /** LoginOut */
+        /**
+         * LoginOut
+         * @description `done` — sessiya yaratildi (cookie o'rnatildi), `user` to'ldirilgan, `mfa_token` yo'q.
+         *     `mfa_verify`/`mfa_enroll` — sessiya yo'q, `mfa_token` bor.
+         */
         LoginOut: {
             /**
              * Next
              * @enum {string}
              */
-            next: "mfa_verify" | "mfa_enroll";
+            next: "mfa_verify" | "mfa_enroll" | "done";
             /** Mfa Token */
-            mfa_token: string;
+            mfa_token?: string | null;
+            user?: components["schemas"]["MeOut"] | null;
         };
         /** MeOut */
         MeOut: {
@@ -1206,6 +1245,10 @@ export interface components {
             must_change_password: boolean;
             /** Password Min Length */
             password_min_length: number;
+            /** Mfa Enabled */
+            mfa_enabled: boolean;
+            /** Mfa Offer */
+            mfa_offer: boolean;
         };
         /** MenuGroupOut */
         MenuGroupOut: {
@@ -1244,6 +1287,11 @@ export interface components {
         };
         /** MfaTokenIn */
         MfaTokenIn: {
+            /** Mfa Token */
+            mfa_token: string;
+        };
+        /** MfaTokenOut */
+        MfaTokenOut: {
             /** Mfa Token */
             mfa_token: string;
         };
@@ -1716,6 +1764,74 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["MeOut"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    enroll_begin_api_v1_auth_2fa_enroll_begin_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                "__Host-ugk_session"?: string | null;
+                "__Host-ugk_csrf"?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MfaTokenOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    dismiss_offer_api_v1_auth_2fa_offer_dismiss_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                "__Host-ugk_session"?: string | null;
+                "__Host-ugk_csrf"?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

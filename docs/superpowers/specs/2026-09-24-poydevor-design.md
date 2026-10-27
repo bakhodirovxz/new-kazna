@@ -99,6 +99,7 @@ orqali orqaga qaytish.
 - Parol siyosati: ≥12 belgi; top-100k buzilgan parollar ro'yxati (bundle ichida, offline) bo'yicha rad;
   oxirgi 5 parolni qayta ishlatish taqiqlangan; 90 kunlik muddat; birinchi kirishda majburiy almashtirish.
 - 2FA: TOTP (RFC 6238, SHA-1, 30 s, 6 raqam, ±1 oyna), **hamma rol uchun majburiy**, birinchi kirishda ulanadi.
+  > **O'zgartirildi 2026-10-27 (buyurtmachi qarori: «2FA hech qachon majburiy bo'lmasin, lekin taklif qilsin 1-kirishda»):** 2FA endi majburiy EMAS — 1-kirishda taklif qilinadi, o'tkazib yuborish mumkin; `security.mfa_required` sozlamasi (standart: o'chiq) uni qayta majburiy qiladi. TOTP ulangan foydalanuvchi har kirishda kodni tasdiqlaydi; xavfsizlik/integratsiya sozlamalarini o'zgartirish (step-up) TOTP'siz mumkin emas. Qarang: docs/security/access-control.md, threat-model.md R18.
   TOTP siri AES-256-GCM bilan shifrlangan. Bitta kodni qayta ishlatish taqiqlangan (oxirgi ishlatilgan
   qadam saqlanadi). 10 ta zaxira kod — HMAC-SHA256(session_pepper), bir martalik.
 - Brute-force: login bo'yicha 5 xato → 15 daqiqa blok; IP bo'yicha rate limit (10/daq); bir xil javob

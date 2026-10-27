@@ -93,7 +93,7 @@ def test_non_admin_forbidden(client: TestClient, make_user: Callable[..., SeedUs
     assert client.get("/api/v1/admin/users").status_code == 403
 
 
-@pytest.mark.usefixtures("admin")
+@pytest.mark.usefixtures("admin", "mfa_required")
 def test_create_user_and_first_login_requires_enroll(client: TestClient) -> None:
     username = _new_username()
     r = client.post("/api/v1/admin/users", json={
@@ -249,6 +249,7 @@ def test_last_admin_via_position_deactivation(
     assert exc.value.code == "last_admin"
 
 
+@pytest.mark.usefixtures("mfa_required")
 def test_reset_password_and_2fa(
     client: TestClient, admin: SeedUser, make_user: Callable[..., SeedUser]
 ) -> None:

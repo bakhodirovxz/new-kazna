@@ -179,6 +179,7 @@ def test_totp_code_cannot_be_replayed(
     assert r.json()["error"]["code"] == "invalid_mfa_code"
 
 
+@pytest.mark.usefixtures("mfa_required")
 def test_enroll_flow_and_backup_codes(
     client: TestClient, make_user: Callable[..., SeedUser]
 ) -> None:
@@ -335,6 +336,7 @@ def test_login_rate_limited_after_threshold(client: TestClient) -> None:
     assert r.status_code == 429
 
 
+@pytest.mark.usefixtures("mfa_required")
 def test_enroll_start_conflict_when_already_enabled(
     client: TestClient, make_user: Callable[..., SeedUser]
 ) -> None:

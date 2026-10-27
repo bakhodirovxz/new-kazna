@@ -100,6 +100,7 @@ def policy_problems(
 
 
 def generate_temporary_password(length: int = 16) -> str:
+    length = max(length, min_length())  # panel siyosati > 16 bo'lsa cheksiz sikl bo'lmasin
     while True:
         candidate = "".join(secrets.choice(_TEMP_ALPHABET) for _ in range(length))
         if not policy_problems(candidate, username=""):

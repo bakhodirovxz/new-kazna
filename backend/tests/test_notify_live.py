@@ -7,6 +7,7 @@ from typing import Any, ClassVar
 
 import pytest
 from sqlalchemy import text
+from sqlalchemy.exc import OperationalError
 
 from app.core import integrations
 from app.core.db import get_engine
@@ -142,3 +143,39 @@ def test_probe_exception_text_is_not_stored(monkeypatch: pytest.MonkeyPatch) -> 
     row_id = _enqueue()
     assert probes.process_integration_checks() == 1
     assert tuple(_check(row_id))[:2] == ("failed", "error")
+
+
+def test_smtp_config_falls_back_to_env_when_db_is_down(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A04b.R2: DB ishlamasa ham (ops-check "DB unreachable", ETL xatosi) xat env orqali ketadi."""
+    from pydantic import SecretStr
+
+    from app.core.config import Settings
+    from app.etl import notify
+
+    class _Down:
+        def connect(self) -> Any:
+            raise OperationalError("SELECT 1", {}, Exception("db down"))
+
+    monkeypatch.setattr(notify, "get_engine", lambda role="app": _Down())
+    monkeypatch.setattr(notify, "get_settings", lambda: Settings(
+        smtp_host="relay.uge.uz", smtp_to="ops@uge.uz", smtp_password=SecretStr("env-pw")))
+    cfg = smtp_config()
+    assert cfg is not None
+    assert (cfg.host, cfg.recipients, cfg.password) == ("relay.uge.uz", ["ops@uge.uz"], "env-pw")
+    assert "env-pw" not in repr(cfg)
+    monkeypatch.setattr(notify, "get_settings", lambda: Settings())
+    assert smtp_config() is None
+
+
+def test_probe_has_an_overall_deadline(monkeypatch: pytest.MonkeyPatch) -> None:
+    import time
+
+    from app.etl import notify
+
+    class Slow(FakeSMTP):
+        def noop(self) -> tuple[int, bytes]:
+            time.sleep(2)
+            return 250, b"ok"
+
+    monkeypatch.setattr(notify, "SMTP_DEADLINE", 0.2)
+    assert smtp_probe(loader=lambda: CFG, smtp_factory=Slow) == "timeout"

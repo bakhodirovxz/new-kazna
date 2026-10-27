@@ -87,25 +87,30 @@ def test_secret_is_encrypted_and_never_returned_or_audited(actor: AuthContext) -
 
 
 @pytest.mark.usefixtures("no_step_up")
-def test_endpoint_change_clears_panel_secret(actor: AuthContext) -> None:
-    _update(actor, values={"smtp.host": "relay.uge.uz"}, secrets={"smtp.password": PLAIN})
-    out = _update(actor, values={"smtp.host": "mail.evil.example"})
+@pytest.mark.parametrize(("key", "other"), [("smtp.host", "mail.evil.example"),
+                                            ("smtp.port", 2525)])
+def test_endpoint_change_clears_panel_secret(actor: AuthContext, key: str, other: Any) -> None:
+    _update(actor, values={"smtp.host": "relay.uge.uz", "smtp.port": 587},
+            secrets={"smtp.password": PLAIN})
+    out = _update(actor, values={key: other})
     assert _state(out) == "none"
     assert _audit()["secrets"] == [{"name": "smtp.password", "action": "cleared_endpoint_changed"}]
-    kept = _update(actor, values={"smtp.host": "relay.uge.uz"}, secrets={"smtp.password": PLAIN})
+    kept = _update(actor, values={"smtp.host": "relay.uge.uz", "smtp.port": 587},
+                   secrets={"smtp.password": PLAIN})
     assert _state(_update(actor, values={"smtp.user": "ugk"})) == _state(kept) == "panel"
 
 
 @pytest.mark.usefixtures("no_step_up")
+@pytest.mark.parametrize(("key", "value"), [("smtp.host", "relay.uge.uz"), ("smtp.port", 2525)])
 def test_env_secret_not_used_once_endpoint_is_set_in_panel(
-    actor: AuthContext, monkeypatch: pytest.MonkeyPatch
+    actor: AuthContext, monkeypatch: pytest.MonkeyPatch, key: str, value: Any
 ) -> None:
     monkeypatch.setattr(integrations, "get_settings",
                         lambda: Settings(smtp_password=SecretStr("env-secret")))
     with get_engine("app").connect() as conn:
         assert integrations.secret(conn, "smtp.password") == "env-secret"
         assert integrations.secret_state(conn, "smtp.password")[0] == "env"
-    _update(actor, values={"smtp.host": "relay.uge.uz"})
+    _update(actor, values={key: value})
     with get_engine("app").connect() as conn:
         assert integrations.secret(conn, "smtp.password") == ""
         assert integrations.secret_state(conn, "smtp.password")[0] == "none"

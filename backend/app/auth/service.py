@@ -6,7 +6,7 @@ import re
 import secrets
 import unicodedata
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Any, Literal, NoReturn
 
@@ -31,14 +31,14 @@ _USERNAME_HINT_RE = re.compile(r"^[a-z0-9._-]{2}$")
 @dataclass(frozen=True, slots=True)
 class LoginResult:
     next: Literal["mfa_verify", "mfa_enroll"]
-    mfa_token: str
+    mfa_token: str = field(repr=False)
 
 
 @dataclass(frozen=True, slots=True)
 class EnrollStart:
-    otpauth_uri: str
+    otpauth_uri: str = field(repr=False)
     qr_svg_data_uri: str
-    secret: str
+    secret: str = field(repr=False)
 
 
 def normalize_username(raw: str) -> str:

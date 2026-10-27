@@ -182,7 +182,8 @@ def test_step_up_sees_step_committed_after_user_was_loaded(
     user = make_user("admin")
     code = user.next_code()
     with new_session() as s:
-        s.get(User, user.id)  # identity map'da eskirgan nusxa
+        held = s.get(User, user.id)  # ushlab turiladi: aks holda GC identity map'ni tozalaydi
+        assert held is not None
         with get_engine("app").begin() as conn:
             conn.execute(text("UPDATE core.users SET totp_last_step = :s WHERE id = :i"),
                          {"s": user._step, "i": user.id})

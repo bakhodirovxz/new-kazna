@@ -5,13 +5,17 @@ from __future__ import annotations
 import re
 import smtplib
 import ssl
+import threading
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from email.message import EmailMessage
 from email.utils import formataddr
 from typing import Any, Literal, Protocol
 
+from sqlalchemy.exc import SQLAlchemyError
+
 from app.core import integrations, sysconfig
+from app.core.config import get_settings
 from app.core.db import get_engine
 from app.core.logging import get_logger
 
@@ -61,6 +65,31 @@ def _one_line(value: str) -> str:
     return " ".join(value.split())[:200]
 
 
+SMTP_DEADLINE = 30.0  # s: butun SMTP seansi (socket timeout'i har amalga alohida — M7)
+
+
+def _within_deadline(fn: Callable[[], Any]) -> Any:
+    """`fn` ni SMTP_DEADLINE ichida bajaradi, aks holda TimeoutError. Ip daemon: tugamasa ham
+    jarayonni ushlab turmaydi (shortcut: ip o'zi to'xtamaydi — socket timeout'i tugatadi)."""
+    out: list[Any] = []
+    err: list[BaseException] = []
+
+    def run() -> None:
+        try:
+            out.append(fn())
+        except BaseException as exc:
+            err.append(exc)
+
+    thread = threading.Thread(target=run, daemon=True)
+    thread.start()
+    thread.join(SMTP_DEADLINE)
+    if thread.is_alive():
+        raise TimeoutError("smtp deadline")
+    if err:
+        raise err[0]
+    return out[0] if out else None
+
+
 class EmailNotifier:
     def __init__(
         self,
@@ -101,7 +130,8 @@ class EmailNotifier:
         message["From"] = self.sender
         message["To"] = ", ".join(formataddr(("", r)) for r in self.recipients)
         message.set_content(notification.body)
-        try:
+
+        def send() -> None:
             if self.ssl:
                 context = ssl.create_default_context()
                 with self._ssl_factory(
@@ -117,6 +147,8 @@ class EmailNotifier:
                     if self.password:
                         smtp.login(self.username or self.sender, self.password)
                     smtp.send_message(message)
+        try:
+            _within_deadline(send)
         except (OSError, smtplib.SMTPException) as exc:
             # Xabarnoma xatosi ETL'ni yiqitmasligi kerak.
             log.error("notify_email_failed", kind=notification.kind, error=type(exc).__name__)
@@ -142,13 +174,34 @@ class SmtpConfig:
     sender: str
     recipients: list[str]
     username: str
-    password: str
+    password: str = field(repr=False)
     starttls: bool
     ssl: bool
 
 
+def _env_smtp_config() -> SmtpConfig | None:
+    """DB ishlamaganda: faqat server konfiguratsiyasi (env host + env sir — izchil juftlik)."""
+    cfg = get_settings()
+    if not cfg.smtp_host or not cfg.smtp_recipients:
+        return None
+    return SmtpConfig(
+        host=cfg.smtp_host, port=cfg.smtp_port, sender=cfg.smtp_from,
+        recipients=cfg.smtp_recipients, username=cfg.smtp_user,
+        password=cfg.smtp_password.get_secret_value(), starttls=cfg.smtp_starttls,
+        ssl=cfg.smtp_ssl)
+
+
 def smtp_config() -> SmtpConfig | None:
-    """Joriy SMTP sozlamasi (panel > env > standart); host yoki qabul qiluvchi yo'q — None."""
+    """Joriy SMTP sozlamasi (panel > env > standart); host yoki qabul qiluvchi yo'q — None.
+    DB ishlamasa — env'dan (A04b.R2): "DB unreachable" va ETL xatosi xabarlari yo'qolmasin."""
+    try:
+        return _db_smtp_config()
+    except SQLAlchemyError as exc:
+        log.warning("smtp_config_db_unavailable", error=type(exc).__name__)
+        return _env_smtp_config()
+
+
+def _db_smtp_config() -> SmtpConfig | None:
     with get_engine("app").connect() as conn:
         host = str(sysconfig.current(conn, "smtp.host"))
         recipients = list(sysconfig.current(conn, "notify.email_to"))
@@ -193,7 +246,8 @@ def smtp_probe(loader: Callable[[], SmtpConfig | None] = smtp_config,
     if cfg.password and not (cfg.starttls or cfg.ssl):
         return "insecure_refused"
     context = ssl.create_default_context()
-    try:
+
+    def run() -> None:
         if cfg.ssl:
             client = smtp_ssl_factory(cfg.host, cfg.port, context=context, timeout=10.0)
         else:
@@ -204,6 +258,9 @@ def smtp_probe(loader: Callable[[], SmtpConfig | None] = smtp_config,
             if cfg.password:
                 smtp.login(cfg.username or cfg.sender, cfg.password)
             smtp.noop()
+
+    try:
+        _within_deadline(run)
     except smtplib.SMTPAuthenticationError:
         return "auth_failed"
     except ssl.SSLError:

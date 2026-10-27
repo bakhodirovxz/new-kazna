@@ -93,3 +93,8 @@ def test_removed_env_fields_are_ignored() -> None:
     settings = Settings(session_idle_minutes=120, login_max_failures=99)  # type: ignore[call-arg]
     assert not hasattr(settings, "session_idle_minutes")
     assert not hasattr(settings, "login_max_failures")
+
+
+def test_temporary_password_meets_a_tightened_min_length(setting: Put) -> None:
+    setting("security.password_min_length", 64)
+    assert len(passwords.generate_temporary_password()) >= 64

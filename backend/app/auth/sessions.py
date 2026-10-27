@@ -5,7 +5,7 @@ from __future__ import annotations
 import base64
 import secrets
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Any, cast
 
@@ -30,8 +30,8 @@ _OSES = (
 @dataclass(frozen=True, slots=True)
 class NewSession:
     id: uuid.UUID
-    token: str
-    csrf: str
+    token: str = field(repr=False)
+    csrf: str = field(repr=False)
     absolute_expires_at: datetime
 
 

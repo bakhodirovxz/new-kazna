@@ -119,7 +119,10 @@ class FileConnector:
             counts[name] = 0
             for line, raw in self._rows(path):
                 row = self._convert(target, raw, f"{path.name}:{line}")
-                if target.kind == "fact" and row.get("date_id") is not None \
+                # forward maqsad (reja, kredit grafigi) kelajak qatorlarini ham beradi:
+                # oynadan keyingisini kesish ularni yo'qotadi (S2 spec 3.1).
+                if target.kind == "fact" and not target.forward \
+                        and row.get("date_id") is not None \
                         and not window.contains_id(int(row["date_id"])):
                     continue
                 sink.add(name, row)

@@ -6,8 +6,14 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import text
 
-from app.auth.models import Role, RolePermission
+from app.auth.context import AuthContext
+from app.auth.models import Role, RolePermission, User
+from app.auth.permissions import PERMISSIONS
+from app.auth.stepup import require_step_up
+from app.core import ratelimit
 from app.core.db import get_engine, new_session
+from app.core.errors import RateLimitedError, ValidationFailed
+from app.core.request_meta import ClientMeta
 from app.main import create_app
 from tests.helpers import SeedUser, clear_setting, create_user, login
 
@@ -154,3 +160,56 @@ def test_history_lists_versions_newest_first(
     login(client, make_user("admin"))
     rows = client.get(f"{URL}/builds.keep/history").json()
     assert [r["value"] for r in rows[:2]] == [5, 4]
+
+
+# --- step-up: replay/rate-limit/backup-code (review r1: I1, M2, M3) ---
+
+
+def _actor(user: SeedUser) -> AuthContext:
+    return AuthContext(user_id=user.id, username=user.username, full_name="A",
+                       role_code="admin", permissions=frozenset(PERMISSIONS), branch_ids=None,
+                       session_id=uuid.uuid4())
+
+
+_META = ClientMeta(ip=None, ua=None, request_id=None)
+
+
+def test_step_up_sees_step_committed_after_user_was_loaded(
+    make_user: Callable[..., SeedUser]
+) -> None:
+    """I1: get_ctx user'ni qulfsiz yuklaydi; parallel so'rov step'ni commit qilgach FOR UPDATE
+    eskirgan obyektni emas, DB qiymatini ko'rishi kerak."""
+    user = make_user("admin")
+    code = user.next_code()
+    with new_session() as s:
+        s.get(User, user.id)  # identity map'da eskirgan nusxa
+        with get_engine("app").begin() as conn:
+            conn.execute(text("UPDATE core.users SET totp_last_step = :s WHERE id = :i"),
+                         {"s": user._step, "i": user.id})
+        with pytest.raises(ValidationFailed) as exc:
+            require_step_up(s, _actor(user), code, _META)
+    assert exc.value.code == "step_up_failed"
+
+
+def test_step_up_rejects_backup_code(make_user: Callable[..., SeedUser]) -> None:
+    user = make_user("admin")
+    with new_session() as s, pytest.raises(ValidationFailed) as exc:
+        require_step_up(s, _actor(user), "ABCD-EFGH-JKLM", _META)
+    assert exc.value.code == "step_up_failed"
+
+
+def test_step_up_rate_limit_counts_only_failures(
+    make_user: Callable[..., SeedUser], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """M3 (A04b.R1): muvaffaqiyatlilar byudjetni yemaydi; limitdan ko'p xato → 429."""
+    monkeypatch.setattr(ratelimit, "STEP_UP_PER_USER", ratelimit.Limit(events=2, window=900))
+    user = make_user("admin")
+    for _ in range(2):  # 2 ta muvaffaqiyat (limit 2) — 429 yo'q va hisob oshmaydi
+        with new_session() as s:
+            require_step_up(s, _actor(user), user.next_code(), _META)
+            s.commit()
+    for _ in range(2):
+        with new_session() as s, pytest.raises(ValidationFailed):
+            require_step_up(s, _actor(user), "000000", _META)
+    with new_session() as s, pytest.raises(RateLimitedError):  # kod tekshirilmasdan rad etiladi
+        require_step_up(s, _actor(user), "000000", _META)

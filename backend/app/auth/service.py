@@ -159,7 +159,7 @@ def _load_challenge(
     # I2: foydalanuvchi qatori qulflanadi — parallel `verify`/`enroll` urinishlari
     # (masalan, bir xil TOTP kodi bilan) `totp_last_step`/`failed_logins` ustida
     # ketma-ketlashadi, aks holda ikkalasi ham "muvaffaqiyatli" bo'lib qolishi mumkin edi.
-    user = db.get(User, owner_id, with_for_update=True)
+    user = db.get(User, owner_id, with_for_update=True, populate_existing=True)
     if user is None or not user.is_active:
         raise AuthError("mfa_expired")
     # I3: bloklangan foydalanuvchining ochiq challenge'i ham, hatto to'g'ri kod bilan ham

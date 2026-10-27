@@ -98,6 +98,19 @@ def check(scope: str, identity: str, limit: Limit) -> int:
     return limit.events - int(count)
 
 
+def peek(scope: str, identity: str, limit: Limit) -> None:
+    """Hisoblagichni OSHIRMAYDI; limitga yetgan bo'lsa RateLimitedError (xatolarni sanash uchun)."""
+    key = f"rl:{scope}:{identity}"
+    try:
+        client = _get_client()
+        raw, ttl = client.get(key), client.ttl(key)
+    except redis.RedisError as exc:
+        log.warning("ratelimit_unavailable", error=type(exc).__name__)
+        return
+    if raw is not None and int(raw) >= limit.events:
+        raise RateLimitedError(retry_after=max(1, int(ttl)))
+
+
 def reset(scope: str, identity: str) -> None:
     try:
         _get_client().delete(f"rl:{scope}:{identity}")

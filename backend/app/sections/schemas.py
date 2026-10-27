@@ -194,3 +194,131 @@ def branch_cash_out(r: BranchCash) -> BranchCashOut:
 def items_out(rows: list[ItemAmount]) -> list[ItemAmountOut]:
     return [ItemAmountOut(item_id=i.item_id, code=i.code, name=i.name, activity=i.activity,
                           amount=i.amount) for i in rows]
+
+
+class KaznaKpisOut(_Out):
+    balance: float | None
+    balance_date: date
+    banks: int
+    plan: float
+    fact: float
+    execution: float | None
+    orders_count: int
+    orders_amount: float
+    requests_count: int
+    requests_amount: float
+    receivable: float | None
+    payable: float | None
+    overdue_payable: float | None
+
+
+class PlanFactRowOut(_Out):
+    item_id: int
+    name: str
+    activity: str
+    plan: float
+    fact: float
+    execution: float | None
+    deviation: float
+
+
+class OrderStatusOut(_Out):
+    status: str
+    count: int
+    amount: float
+
+
+class CalendarDayOut(_Out):
+    date: date
+    taxes: float
+    salary: float
+    loans: float
+    contracts: float
+    total: float
+
+
+class CalendarOut(_Out):
+    as_of: date | None
+    start: date | None
+    days: list[CalendarDayOut]
+    total: float
+    balance: float | None
+    coverage: float | None
+
+
+class BankBalanceOut(_Out):
+    bank_name: str
+    balance: float
+
+
+class ContractRowOut(_Out):
+    contract_id: int
+    number: str
+    cp_name: str
+    branch_id: int
+    branch_name: str
+    kind: str
+    amount: float
+    overdue: float
+    overdue_days: int
+    end_date: date | None
+
+
+class DebtBranchRowOut(_Out):
+    branch_id: int
+    name: str
+    receivable: float
+    payable: float
+    overdue_payable: float
+
+
+class FundRowOut(_Out):
+    key: int
+    name: str
+    allocated: float
+    used: float
+    share: float | None
+
+
+class RequestsRowOut(_Out):
+    branch_id: int
+    name: str
+    count: int
+    amount: float
+
+
+class KaznaSvodOut(_Out):
+    period: ReportPeriodOut
+    kpis: KaznaKpisOut
+    plan_fact: list[PlanFactRowOut]
+    orders: list[OrderStatusOut]
+    calendar: CalendarOut
+    banks: list[BankBalanceOut]
+    contracts: list[ContractRowOut]
+
+
+class KaznaPlatezhiOut(_Out):
+    period: ReportPeriodOut
+    kpis: KaznaKpisOut
+    plan_fact: list[PlanFactRowOut]
+    orders: list[OrderStatusOut]
+
+
+class KaznaCalendarOut(_Out):
+    period: ReportPeriodOut
+    calendar: CalendarOut
+    banks: list[BankBalanceOut]
+    requests: list[RequestsRowOut]
+
+
+class KaznaDogovoryOut(_Out):
+    period: ReportPeriodOut
+    kpis: KaznaKpisOut
+    contracts: list[ContractRowOut]
+    by_branch: list[DebtBranchRowOut]
+
+
+class KaznaCelevyeOut(_Out):
+    period: ReportPeriodOut
+    sources: list[FundRowOut]
+    branches: list[FundRowOut]

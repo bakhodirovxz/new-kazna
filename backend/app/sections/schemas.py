@@ -84,6 +84,16 @@ class BankAmountOut(_Out):
     closing: float | None
 
 
+class StationProductionOut(_Out):
+    """Xarita va stansiya paneli uchun ishlab chiqarish (S3): mln kVt·soat, ulushlar 0..1."""
+
+    generation: float
+    plan: float
+    execution: float | None
+    kium: float | None
+    payment_level: float | None
+
+
 class StationOut(_Out):
     branch_id: int
     code: str
@@ -99,8 +109,8 @@ class StationOut(_Out):
     receivable: float | None
     payable: float | None
     overdue_payable: float | None
-    # Ishlab chiqarish ko'rsatkichlari (выработка, план, КИУМ) — 3-bosqich rejasi to'ldiradi.
-    production: dict[str, float] | None = None
+    # Ishlab chiqarish (S3): stansiyada davr uchun ma'lumot bo'lmasa (yoki HQ) — None.
+    production: StationProductionOut | None = None
 
 
 class SeriesOut(_Out):

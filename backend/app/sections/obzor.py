@@ -18,7 +18,8 @@ from app.core.cache import Cache
 from app.core.db import DB
 from app.sections.deps import SQ, SectionQuery
 from app.sections.period import ReportPeriod
-from app.sections.queries import cash, debt
+from app.sections.production_schemas import production_out
+from app.sections.queries import cash, debt, production
 from app.sections.queries.cash import ACTIVITIES
 from app.sections.schemas import (
     ActivityAmountOut,
@@ -60,6 +61,7 @@ def stations(db: Session, q: SectionQuery, period: ReportPeriod) -> list[Station
     every = BranchSel(None, q.branch_ids is None)
     money = {r.branch_id: r for r in cash.by_branch(db, every, period)}
     debts = {r.branch_id: r for r in debt.debt_by_branch(db, every, period.last_month)}
+    prod = production.station_map(db, every, period)
     out: list[StationOut] = []
     for b in db.execute(text(
             "SELECT branch_id, code, name, short_name, kind, capacity_mw, lat, lon "
@@ -72,7 +74,8 @@ def stations(db: Session, q: SectionQuery, period: ReportPeriod) -> list[Station
             inflow=m.inflow if m else None, outflow=m.outflow if m else None,
             closing=m.closing if m else None,
             receivable=d.receivable if d else None, payable=d.payable if d else None,
-            overdue_payable=d.overdue_payable if d else None))
+            overdue_payable=d.overdue_payable if d else None,
+            production=production_out(prod.get(b.branch_id))))
     return out
 
 

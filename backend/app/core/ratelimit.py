@@ -10,6 +10,7 @@ from __future__ import annotations
 import threading
 import time
 from dataclasses import dataclass
+from typing import Any
 
 import redis
 
@@ -103,7 +104,8 @@ def peek(scope: str, identity: str, limit: Limit) -> None:
     key = f"rl:{scope}:{identity}"
     try:
         client = _get_client()
-        raw, ttl = client.get(key), client.ttl(key)
+        raw: Any = client.get(key)
+        ttl: Any = client.ttl(key)
     except redis.RedisError as exc:
         log.warning("ratelimit_unavailable", error=type(exc).__name__)
         return

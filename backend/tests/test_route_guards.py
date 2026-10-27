@@ -85,6 +85,10 @@ EXPECTED_ROUTES = frozenset({
     ("GET", "/api/v1/admin/settings"),
     ("PUT", "/api/v1/admin/settings/{key}"),
     ("GET", "/api/v1/admin/settings/{key}/history"),
+    ("GET", "/api/v1/admin/integrations"),
+    ("PUT", "/api/v1/admin/integrations/{name}"),
+    ("POST", "/api/v1/admin/integrations/{name}/check"),
+    ("GET", "/api/v1/admin/integrations/checks/{check_id}"),
     ("PATCH", "/api/v1/admin/positions/{position_id}"),
     ("PATCH", "/api/v1/admin/roles/{role_id}"),
     ("PATCH", "/api/v1/admin/users/{user_id}"),
@@ -243,6 +247,7 @@ def test_all_protected_routes_return_401_without_session() -> None:
                 .replace("{session_id}", "00000000-0000-0000-0000-000000000000")
                 .replace("{purpose}", "mfa").replace("{run_id}", "1")
                 .replace("{code}", "turnover").replace("{key}", "builds.keep")
+                .replace("{name}", "smtp").replace("{check_id}", "1")
             )
             response = client.request(method, req_path, json={})
             assert response.status_code == 401, f"{method} {req_path}: {response.status_code}"

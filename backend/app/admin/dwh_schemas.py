@@ -166,3 +166,38 @@ class SettingVersionOut(BaseModel):
     updated_by: int | None
     updated_at: datetime
 
+
+class SecretStatusOut(BaseModel):
+    name: str
+    title: str
+    state: Literal["panel", "env", "none"]
+    updated_at: datetime | None
+    updated_by: int | None
+
+
+class IntegrationCheckOut(BaseModel):
+    id: int
+    name: str
+    status: Literal["pending", "running", "ok", "failed"]
+    code: str | None
+    requested_at: datetime
+    finished_at: datetime | None
+
+
+class IntegrationOut(BaseModel):
+    name: str
+    title: str
+    check_in: Literal["worker", "api"]
+    endpoint: list[str]
+    fields: list[SettingOut]
+    secrets: list[SecretStatusOut]
+    last_check: IntegrationCheckOut | None
+
+
+class IntegrationUpdate(BaseModel):
+    # _In emas: str_strip_whitespace sir qiymatini jimgina o'zgartirib yuborardi.
+    model_config = ConfigDict(extra="forbid")
+    values: dict[str, Any] = Field(default_factory=dict, max_length=20)
+    secrets: dict[str, str | None] = Field(default_factory=dict, max_length=10)  # None — o'chirish
+    reason: str | None = Field(default=None, max_length=500)
+    otp: str | None = Field(default=None, max_length=8)

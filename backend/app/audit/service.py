@@ -80,6 +80,8 @@ class AuditAction(StrEnum):
     ALERT_RULE_UPDATED = "admin.alert_rule.updated"
     FIN_ASSUMPTIONS_UPDATED = "admin.fin_assumptions.updated"
     SETTING_UPDATED = "admin.setting.updated"
+    INTEGRATION_UPDATED = "admin.integration.updated"
+    INTEGRATION_CHECK_REQUESTED = "admin.integration.check_requested"
     PARTITIONS_DROPPED = "dwh.partitions.dropped"
     RESTORE_TEST_RECORDED = "ops.restore_test.recorded"
     RLS_VIOLATION = "security.rls_violation_attempt"

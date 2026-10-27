@@ -186,3 +186,6 @@ GROUP BY GROUPING SETS ((j.branch_id, j.month_id, j.item_id), (j.month_id, j.ite
 
 CASH_MONTH = register(Aggregate("agg_cash_month", (_CASH_ITEMS, _CASH_TOTALS, _CASH_ALL)))
 PAYMENTS_MONTH = register(Aggregate("agg_payments_month", (_PAYMENTS,)))
+
+# S1 agregatlari (spec 5): shu modul yuklanganda ro'yxatga qo'shiladi (register allaqachon tayyor).
+from app.dwh import treasury_aggregates  # noqa: E402, F401

@@ -31,7 +31,7 @@ def _reset_engines() -> None:
         core_db.get_engine(role).dispose()
     core_db.get_engine.cache_clear()
     core_db._session_factory.cache_clear()
-    core_db._slots.clear()
+    core_db.reset_db_slots()
 
 
 @pytest.fixture
@@ -111,3 +111,49 @@ def test_request_holds_at_most_one_connection(make_user: Callable[..., SeedUser]
         event.remove(engine.pool, "checkin", checkin)
     assert statuses == [200] * 12
     assert peak and max(peak.values()) == 1, peak
+
+
+async def _take_slot() -> None:
+    await core_db.db_slots().acquire()
+
+
+def _free_slot() -> None:
+    core_db.db_slots().release()
+
+
+class _Recorder:
+    def __init__(self) -> None:
+        self.events: list[tuple[str, dict[str, Any]]] = []
+
+    def warning(self, event: str, **fields: Any) -> None:
+        self.events.append((event, fields))
+
+
+@pytest.mark.usefixtures("tiny_pool")
+def test_slot_wait_is_bounded_and_returns_503(
+    make_user: Callable[..., SeedUser], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """M1: slot DB_SLOT_TIMEOUT_SECONDS ichida bo'shamasa — 503 service_busy + Retry-After va
+    `db_slot_timeout` log hodisasi; slot bo'shagach so'rovlar yana o'tadi."""
+    monkeypatch.setenv("DB_SLOT_TIMEOUT_SECONDS", "0.3")
+    get_settings.cache_clear()
+    recorder = _Recorder()
+    # structlog logger'lari birinchi ishlatilganda keshlanadi — capture_logs suite'da ko'rmaydi.
+    monkeypatch.setattr(core_db, "log", recorder)
+    with TestClient(create_app(), base_url="https://testserver") as client:
+        login(client, make_user("rukovodstvo"))
+        portal = client.portal
+        assert portal is not None
+        portal.call(_take_slot)  # yagona slotni band qilamiz (DB_POOL_SIZE=1)
+        try:
+            busy = client.get("/api/v1/auth/me")
+        finally:
+            portal.call(_free_slot)
+        again = client.get("/api/v1/auth/me")
+    assert busy.status_code == 503
+    assert busy.headers["Retry-After"] == "1"
+    assert busy.json()["error"]["code"] == "service_busy"
+    assert [e for e, _ in recorder.events] == ["db_slot_timeout"]
+    fields = recorder.events[0][1]
+    assert fields["total"] >= 1 and fields["timeout_s"] == 0.3
+    assert again.status_code == 200

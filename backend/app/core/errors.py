@@ -45,6 +45,7 @@ MESSAGES: dict[str, str] = {
     "password_policy": "Пароль не соответствует политике",
     "unknown_permission": "Неизвестное право доступа",
     "rate_limited": "Слишком много запросов, повторите позже",
+    "service_busy": "Сервер перегружен, повторите попытку позже",
     "payload_too_large": "Слишком большой запрос",
     "method_not_allowed": "Метод не поддерживается",
     "build_not_available": "Сборка недоступна",
@@ -114,6 +115,16 @@ class RateLimitedError(AppError):
 
     def __init__(self, retry_after: int) -> None:
         super().__init__(headers={"Retry-After": str(retry_after)}, retry_after=retry_after)
+
+
+class ServiceBusyError(AppError):
+    """Jarayon DB slot navbati DB_SLOT_TIMEOUT_SECONDS ichida bo'shamadi (core/db.py)."""
+
+    status_code = 503
+    code = "service_busy"
+
+    def __init__(self, retry_after: int) -> None:
+        super().__init__(headers={"Retry-After": str(retry_after)})
 
 
 def _payload(request: Request, code: str, params: dict[str, Any] | None = None) -> dict[str, Any]:

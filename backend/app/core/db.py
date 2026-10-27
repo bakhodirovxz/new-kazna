@@ -18,6 +18,10 @@ from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.config import DbRole, get_settings
+from app.core.errors import ServiceBusyError
+from app.core.logging import get_logger
+
+log = get_logger("ugekazna.db")
 
 
 @lru_cache(maxsize=3)
@@ -59,10 +63,11 @@ def new_session() -> Session:
 
 
 _slots: WeakKeyDictionary[asyncio.AbstractEventLoop, anyio.Semaphore] = WeakKeyDictionary()
+_slot_timeouts = 0  # jarayon bo'yicha hisoblagich: `db_slot_timeout` log hodisasida chiqadi
 
 
-def _db_slots() -> anyio.Semaphore:
-    # Event loop bo'yicha: TestClient (context'siz) har so'rovga yangi loop ochadi.
+def db_slots() -> anyio.Semaphore:
+    """Joriy event loop'ning so'rov slotlari (TestClient context'siz har so'rovga yangi loop)."""
     loop = asyncio.get_running_loop()
     slots = _slots.get(loop)
     if slots is None:
@@ -70,16 +75,37 @@ def _db_slots() -> anyio.Semaphore:
     return slots
 
 
+def reset_db_slots() -> None:
+    """Slotlarni unutadi — DB_POOL_SIZE o'zgargach (testlar) keyingi so'rov yangisini oladi."""
+    _slots.clear()
+
+
 async def _db_slot() -> AsyncIterator[None]:
     """Sessiyali so'rovlarni DB_POOL_SIZE bilan cheklaydi (Task 9 perf, pool/threadpool deadlock).
 
     Sessiya ulanishni `get_ctx`da oladi va keyingi threadpool sakrashlarini (endpoint, teardown)
     kutganda ham ushlab turadi. Cheklovsiz: thread'lar pool'da ulanish kutadi, ulanish egalari
-    thread kutadi — `pool_timeout`gacha qotadi. Bu yerda navbat async: thread ham, ulanish ham
-    band qilinmaydi, qo'yilgan so'rovga esa pool'da doim joy bor.
+    thread kutadi — `pool_timeout`gacha qotadi. Endi sakrashlar orasida "to'xtab turgan"
+    so'rovlar ko'pi bilan DB_POOL_SIZE ta ulanishni ushlaydi (2x pool'dan), qolganini ishlayotgan
+    thread'lar qaytaradi — pool kutuvchisi doim navbat oladi. Slot navbati async (thread ham,
+    ulanish ham band emas) va DB_SLOT_TIMEOUT_SECONDS bilan cheklangan: oshsa 503 + Retry-After.
     """
-    async with _db_slots():
+    global _slot_timeouts
+    slots = db_slots()
+    settings = get_settings()
+    try:
+        with anyio.fail_after(settings.db_slot_timeout_seconds):
+            await slots.acquire()
+    except TimeoutError:
+        _slot_timeouts += 1
+        log.warning("db_slot_timeout", total=_slot_timeouts,
+                    waiting=slots.statistics().tasks_waiting,
+                    timeout_s=settings.db_slot_timeout_seconds)
+        raise ServiceBusyError(retry_after=1) from None
+    try:
         yield
+    finally:
+        slots.release()
 
 
 def get_db(_slot: Annotated[None, Depends(_db_slot, scope="function")]) -> Iterator[Session]:

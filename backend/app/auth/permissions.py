@@ -6,6 +6,7 @@ yaratilganda seed qilinadi, keyin ularni administrator boshqaradi.
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import Literal
@@ -82,6 +83,12 @@ def data_perm(section: Section, action: DataAction) -> str:
 ALL_DATA_PERMS: tuple[str, ...] = tuple(
     data_perm(s, a) for s in DATA_SECTIONS for a in ("write", "approve")
 )
+
+def sod_conflict(perms: Iterable[str]) -> bool:
+    """Vazifalar ajratilishi: bitta rolda `admin:*` va `data:*` birga bo'lmaydi."""
+    held = set(perms)
+    return any(p.startswith("admin:") for p in held) and bool(held & set(ALL_DATA_PERMS))
+
 
 PERMISSIONS: dict[str, str] = {
     **{section_perm(s): f"Раздел «{t}»: просмотр" for s, t in SECTION_TITLES.items()},

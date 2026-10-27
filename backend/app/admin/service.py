@@ -35,7 +35,13 @@ from app.auth.models import (
     RolePermission,
     User,
 )
-from app.auth.permissions import ADMIN_GUARANTEED, ADMIN_ROLE, ALL_DATA_PERMS
+from app.auth.permissions import (
+    ADMIN_GUARANTEED,
+    ADMIN_ROLE,
+    ALL_DATA_PERMS,
+    sod_conflict,
+)
+from app.auth.stepup import require_step_up
 from app.core.errors import ConflictError, ForbiddenError, NotFoundError, ValidationFailed
 from app.core.request_meta import ClientMeta
 
@@ -106,6 +112,48 @@ def _assert_no_escalation(actor: AuthContext, granted: Iterable[str]) -> None:
     # o'zgartirish taqiqi bilan yopiladi (spec 4.1, risk 7).
     if not set(granted) - set(ALL_DATA_PERMS) <= actor.permissions:
         raise ForbiddenError("privilege_escalation")
+
+
+def _data_of(perms: Iterable[str]) -> frozenset[str]:
+    return frozenset(perms) & frozenset(ALL_DATA_PERMS)
+
+
+def _assert_no_sod_mix(perms: Iterable[str]) -> None:
+    """admin:* va data:* bitta rolda bo'lmaydi (spec 4.1; review I2)."""
+    if sod_conflict(perms):
+        raise ValidationFailed("role_sod_conflict", fields=["permissions"])
+
+
+def _data_delta(
+    db: Session, old_role: int | None, new_role: int | None
+) -> tuple[frozenset[str], frozenset[str]]:
+    old = _data_of(_role_permission_codes(db, old_role)) if old_role else frozenset()
+    new = _data_of(_role_permission_codes(db, new_role)) if new_role else frozenset()
+    return new - old, old - new
+
+
+def _grant_audit(
+    db: Session, actor: AuthContext, meta: ClientMeta, otp: str | None,
+    added: frozenset[str], removed: frozenset[str], details: dict[str, object],
+) -> frozenset[str]:
+    """Samarali data:* o'zgarishi auditga; data:*:approve qo'shilsa -- 2FA bor admin uchun step-up.
+    Qaytaradi: yangi tasdiqlash huquqlari (ish tugagach xavfsizlik hodisasi yoziladi)."""
+    approve = frozenset(p for p in added if p.endswith(":approve"))
+    if approve and actor.mfa_enabled:
+        require_step_up(db, actor, otp, meta)
+    if added or removed:
+        details["data_perms"] = {"added": sorted(added), "removed": sorted(removed)}
+    return approve
+
+
+def _emit_approve_grant(
+    meta: ClientMeta, actor: AuthContext, object_type: str, object_id: object,
+    approve: frozenset[str],
+) -> None:
+    if approve:
+        log_event(meta, AuditAction.DATA_APPROVE_GRANTED, user_id=actor.user_id,
+                  object_type=object_type, object_id=object_id,
+                  details={"perms": sorted(approve)})
 
 
 def _assert_target_not_out_of_reach(db: Session, actor: AuthContext, target: User) -> None:
@@ -233,6 +281,9 @@ def create_user(
     # R2-3(c): filial doirasi bilan cheklangan actor scope_all yoki o'z doirasidan tashqi
     # lavozimga foydalanuvchi joylashtira olmaydi.
     _assert_no_scope_escalation(db, actor, position)
+    added, removed = _data_delta(db, None, position.role_id)
+    user_details: dict[str, object] = {"username": data.username, "position_id": position.id}
+    approve = _grant_audit(db, actor, meta, data.otp, added, removed, user_details)
     if db.execute(select(User.id).where(User.username == data.username)).first() is not None:
         raise ConflictError("username_taken")
     temporary = passwords.generate_temporary_password()
@@ -257,8 +308,9 @@ def create_user(
         user_id=actor.user_id,
         object_type="user",
         object_id=user.id,
-        details={"username": user.username, "position_id": user.position_id},
+        details=user_details,
     )
+    _emit_approve_grant(meta, actor, "user", user.id, approve)
     return get_user_out(db, user.id), temporary
 
 
@@ -270,6 +322,7 @@ def update_user(
     # bo'yicha ham o'zgartira olmaydi.
     _assert_target_not_out_of_reach(db, actor, user)
     changes: dict[str, object] = {}
+    approve: frozenset[str] = frozenset()
     if data.full_name is not None and data.full_name != user.full_name:
         user.full_name = data.full_name
         changes["full_name"] = True
@@ -280,6 +333,10 @@ def update_user(
         _assert_no_escalation(actor, _role_permission_codes(db, position.role_id))
         # R2-3(c): yangi lavozim ham scope_all yoki actor doirasidan tashqi bo'lmasin.
         _assert_no_scope_escalation(db, actor, position)
+        old_role = db.execute(
+            select(Position.role_id).where(Position.id == user.position_id)).scalar_one()
+        added, removed = _data_delta(db, old_role, position.role_id)
+        approve = _grant_audit(db, actor, meta, data.otp, added, removed, changes)
         changes["position_id"] = [user.position_id, data.position_id]
         user.position_id = data.position_id
         now = _now()
@@ -289,6 +346,7 @@ def update_user(
     if changes:
         log_event(meta, AuditAction.USER_UPDATED, user_id=actor.user_id, object_type="user",
                   object_id=user.id, details=changes)
+        _emit_approve_grant(meta, actor, "user", user.id, approve)
     return get_user_out(db, user.id)
 
 
@@ -382,6 +440,9 @@ def create_role(db: Session, actor: AuthContext, data: RoleIn, meta: ClientMeta)
     perms = _validate_permissions(db, data.permissions)
     # I3: actor faqat o'zida bor ruxsatlarni yangi rolga bera oladi.
     _assert_no_escalation(actor, perms)
+    _assert_no_sod_mix(perms)
+    role_details: dict[str, object] = {"permissions": perms}
+    approve = _grant_audit(db, actor, meta, data.otp, _data_of(perms), frozenset(), role_details)
     if db.execute(select(Role.id).where(Role.code == data.code)).first() is not None:
         raise ConflictError("code_taken")
     role = Role(code=data.code, name=data.name, scope_all=data.scope_all, is_system=False)
@@ -395,7 +456,8 @@ def create_role(db: Session, actor: AuthContext, data: RoleIn, meta: ClientMeta)
     # F1: `code` kaliti logging.mask'da "sezgir" deb topilib "***"ga aylantiriladi — audit
     # qatorida rol kodini o'qish uchun `role_code` ishlatiladi.
     log_event(meta, AuditAction.ROLE_CREATED, user_id=actor.user_id, object_type="role",
-              object_id=role.id, details={"role_code": role.code, "permissions": perms})
+              object_id=role.id, details={"role_code": role.code, **role_details})
+    _emit_approve_grant(meta, actor, "role", role.id, approve)
     return _role_out(db, role)
 
 
@@ -423,6 +485,7 @@ def update_role(
     effective_scope_all = data.scope_all if data.scope_all is not None else role.scope_all
     _assert_no_scope_all_escalation(actor, effective_scope_all)
     details: dict[str, object] = {}
+    approve: frozenset[str] = frozenset()
     if data.name is not None:
         role.name = data.name
         details["name"] = data.name
@@ -434,12 +497,17 @@ def update_role(
         _assert_no_escalation(actor, perms)
         if role.code == ADMIN_ROLE and not set(perms) >= ADMIN_GUARANTEED:
             raise ConflictError("admin_role_protected")
+        _assert_no_sod_mix(perms)
+        before = _data_of(_role_permission_codes(db, role.id))
+        after = _data_of(perms)
+        approve = _grant_audit(db, actor, meta, data.otp, after - before, before - after, details)
         _set_permissions(db, role.id, perms)
         details["permissions"] = perms
         assert_admin_remains(db)
     db.flush()
     log_event(meta, AuditAction.ROLE_UPDATED, user_id=actor.user_id, object_type="role",
               object_id=role.id, details=details)
+    _emit_approve_grant(meta, actor, "role", role.id, approve)
     return _role_out(db, role)
 
 
@@ -503,6 +571,9 @@ def create_position(
     # lavozimga biriktira olmaydi.
     _assert_no_branch_escalation(actor, data.branch_ids)
     _require_role(db, data.role_id)
+    pos_details: dict[str, object] = {}
+    added, removed = _data_delta(db, None, data.role_id)
+    approve = _grant_audit(db, actor, meta, data.otp, added, removed, pos_details)
     if db.execute(select(Position.id).where(Position.code == data.code)).first() is not None:
         raise ConflictError("code_taken")
     position = Position(code=data.code, name=data.name, role_id=data.role_id)
@@ -517,7 +588,8 @@ def create_position(
     log_event(meta, AuditAction.POSITION_CREATED, user_id=actor.user_id, object_type="position",
               object_id=position.id,
               details={"position_code": position.code, "role_id": position.role_id,
-                       "branch_ids": sorted(set(data.branch_ids))})
+                       "branch_ids": sorted(set(data.branch_ids)), **pos_details})
+    _emit_approve_grant(meta, actor, "position", position.id, approve)
     return _position_out(db, position)
 
 
@@ -542,6 +614,7 @@ def update_position(
     _assert_no_escalation(actor, _role_permission_codes(db, position.role_id))
     _assert_no_scope_escalation(db, actor, position)
     details: dict[str, object] = {}
+    approve: frozenset[str] = frozenset()
     scope_changed = False
     if data.name is not None:
         position.name = data.name
@@ -554,6 +627,8 @@ def update_position(
         # (R2-3(a) mirror): filial doirasi bilan cheklangan actor lavozimni scope_all rolga
         # ko'chira olmaydi.
         _assert_no_scope_all_escalation(actor, new_role.scope_all)
+        added, removed = _data_delta(db, position.role_id, data.role_id)
+        approve = _grant_audit(db, actor, meta, data.otp, added, removed, details)
         details["role_id"] = [position.role_id, data.role_id]
         position.role_id = data.role_id
         scope_changed = True
@@ -590,4 +665,5 @@ def update_position(
     db.flush()
     log_event(meta, AuditAction.POSITION_UPDATED, user_id=actor.user_id, object_type="position",
               object_id=position.id, details=details)
+    _emit_approve_grant(meta, actor, "position", position.id, approve)
     return _position_out(db, position)

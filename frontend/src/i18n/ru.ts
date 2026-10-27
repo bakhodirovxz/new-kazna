@@ -682,6 +682,14 @@ export const ru = {
   'obzor.excel.nothing': 'Ничего не найдено. Измените условия поиска.',
   'obzor.excel.dirInOne': 'Поступление',
   'obzor.excel.dirOutOne': 'Расходование',
+  'obzor.kpi.noPeriod': 'за период нет движения средств',
+  'obzor.kpi.noBalances': 'остатки по выпискам не загружены',
+  'obzor.compare.noPrev': 'Данные за {year} год недоступны: сравнивать не с чем.',
+  'obzor.excel.noDetail': 'Нет данных по статьям за выбранный период.',
+  'kazna.kpi.noPlan': 'план платежей на период не внесён',
+  'kazna.kpi.noDebt': 'задолженность по договорам не загружена',
+  'kazna.kpi.noBalance': 'остатки по выпискам не загружены',
+  'kazna.orders.none': 'Платёжных поручений за период нет.',
 } as const satisfies Record<string, string>;
 
 export type RuKey = keyof typeof ru;

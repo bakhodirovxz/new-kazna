@@ -15,7 +15,7 @@
 .card h2 { margin: 0; font-size: 1.2rem; font-weight: 600; }
 .card__sub { margin: 0.2rem 0 0; font-size: 0.92rem; color: var(--muted); }
 .card__actions { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
-.card__exp { position: absolute; top: 0.85rem; right: 0.9rem; z-index: 2; opacity: 0; transition: opacity 0.15s; }
+.card__exp { opacity: 0; transition: opacity 0.15s; } /* в потоке шапки: не перекрывает элементы карточки */
 .card:hover .card__exp, .card:focus-within .card__exp { opacity: 1; }
 @media (hover: none) { .card__exp { opacity: 1; } }
 

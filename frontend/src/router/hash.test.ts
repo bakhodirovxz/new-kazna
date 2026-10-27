@@ -109,3 +109,7 @@ it('marks only sign-in routes as public', () => {
   expect(isPublicRoute({ kind: 'password' })).toBe(false);
   expect(isPublicRoute({ kind: 'home' })).toBe(false);
 });
+
+it('accepts the TZ alias per=05 as m05', () => {
+  expect(parseHash('#kazna/svod?per=05')).toMatchObject({ per: 'm05' });
+});

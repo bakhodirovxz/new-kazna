@@ -1,3 +1,5 @@
+/* Явные роли: в карточном режиме (display:block) Safari/VoiceOver теряют семантику таблицы. */
+/* eslint-disable jsx-a11y/no-redundant-roles, jsx-a11y/no-interactive-element-to-noninteractive-role */
 import { useMemo, useState, type KeyboardEvent, type MouseEvent, type ReactNode } from 'react';
 import { t } from '../i18n';
 import { cx } from './cx';
@@ -33,6 +35,8 @@ export interface TableProps<T> {
   free?: boolean;
   footer?: ReactNode;
   className?: string;
+  /** Таблица внутри карточки: без собственной рамки. */
+  bare?: boolean;
 }
 
 const collator = new Intl.Collator('ru', { numeric: true });
@@ -65,6 +69,7 @@ export function Table<T>({
   free = false,
   footer,
   className,
+  bare = false,
 }: TableProps<T>) {
   const [sort, setSort] = useState<SortState | null>(initialSort ?? null);
 
@@ -117,7 +122,7 @@ export function Table<T>({
   };
 
   return (
-    <div className={cx('tw', mobile === 'cards' && 'tw--cards', free && 'tw--free', className)}>
+    <div className={cx('tw', mobile === 'cards' && 'tw--cards', free && 'tw--free', bare && 'tw--bare', className)}>
       {mobile === 'cards' && sortable.length > 0 ? (
         <Select
           className="tw__sort"
@@ -127,16 +132,17 @@ export function Table<T>({
           onChange={onSortSelect}
         />
       ) : null}
-      <table className="table">
+      <table className="table" role="table">
         <caption className={captionHidden ? 'visually-hidden' : undefined}>{caption}</caption>
-        <thead>
-          <tr>
+        <thead role="rowgroup">
+          <tr role="row">
             {columns.map((column) => {
               const dir = sort !== null && sort.key === column.key ? sort.dir : null;
               return (
                 <th
                   key={column.key}
                   scope="col"
+                  role="columnheader"
                   className={cx(column.align === 'left' && 'l')}
                   aria-sort={dir ? (dir === 'asc' ? 'ascending' : 'descending') : undefined}
                 >
@@ -157,10 +163,10 @@ export function Table<T>({
             })}
           </tr>
         </thead>
-        <tbody>
+        <tbody role="rowgroup">
           {sorted.length === 0 ? (
-            <tr>
-              <td colSpan={columns.length} className="empty">
+            <tr role="row">
+              <td role="cell" colSpan={columns.length} className="empty">
                 {empty ?? t('table.empty')}
               </td>
             </tr>
@@ -170,6 +176,7 @@ export function Table<T>({
               const clickable = Boolean(onRowClick);
               return (
                 <tr
+                  role="row"
                   key={key}
                   className={cx(clickable && 'click', activeKey === key && 'active')}
                   tabIndex={clickable ? 0 : undefined}
@@ -178,6 +185,7 @@ export function Table<T>({
                 >
                   {columns.map((column) => (
                     <td
+                      role="cell"
                       key={column.key}
                       data-label={column.header}
                       className={cx(column.align === 'left' && 'l', column.wrap && 'w')}
@@ -190,7 +198,7 @@ export function Table<T>({
             })
           )}
         </tbody>
-        {footer ? <tfoot>{footer}</tfoot> : null}
+        {footer ? <tfoot role="rowgroup">{footer}</tfoot> : null}
       </table>
       <span className="visually-hidden" role="status">
         {sort && sortColumn?.sortValue

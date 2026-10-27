@@ -27,12 +27,12 @@ export function DebtCard({ contracts, limit, hasData, ctx, className }: { contra
     .filter((c) => filter === 'all' || (filter === 'overdue' ? c.overdue_days > 0 : c.kind === filter))
     .slice(0, limit ?? contracts.length);
   const columns: Column<ContractRowOut>[] = [
-    { key: 'cp', header: t('kazna.debt.cp'), cell: (c) => c.cp_name, wrap: true },
-    { key: 'number', header: t('kazna.debt.contract'), cell: (c) => c.number },
-    { key: 'branch', header: t('dash.branch'), cell: (c) => c.branch_name, wrap: true },
-    { key: 'kind', header: t('kazna.debt.kind'), cell: (c) => t(`kazna.debt.${c.kind}` as MessageKey) },
+    { key: 'cp', header: t('kazna.debt.cp'), cell: (c) => c.cp_name, wrap: true, align: 'left' },
+    { key: 'number', header: t('kazna.debt.contract'), cell: (c) => c.number, align: 'left' },
+    { key: 'branch', header: t('dash.branch'), cell: (c) => c.branch_name, wrap: true, align: 'left' },
+    { key: 'kind', header: t('kazna.debt.kind'), cell: (c) => t(`kazna.debt.${c.kind}` as MessageKey), align: 'left' },
     { key: 'amount', header: t('dash.amount'), cell: (c) => <b>{formatMoney(c.amount)}</b>, align: 'right' },
-    { key: 'term', header: t('kazna.debt.term'), cell: (c) => <Badge tone={c.overdue_days > 0 ? 'neg' : 'neutral'}>{term(c)}</Badge> },
+    { key: 'term', header: t('kazna.debt.term'), cell: (c) => <Badge tone={c.overdue_days > 0 ? 'neg' : 'neutral'}>{term(c)}</Badge>, align: 'left' },
   ];
   return (
     <Card
@@ -62,7 +62,7 @@ export function DebtCard({ contracts, limit, hasData, ctx, className }: { contra
       }
     >
       {hasData ? (
-        <Table caption={title} columns={columns} rows={rows} rowKey={(c) => c.contract_id} free empty={<p className="note">{t('kazna.debt.none')}</p>} />
+        <Table caption={title} columns={columns} rows={rows} rowKey={(c) => c.contract_id} free bare empty={<p className="note">{t('kazna.debt.none')}</p>} />
       ) : (
         <NoData kind="source" source={t('dash.source.debt')} />
       )}

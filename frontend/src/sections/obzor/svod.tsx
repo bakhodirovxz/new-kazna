@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { ObzorSvodOut } from '../../api/types';
 import { NoData } from '../../dash/DataState';
 import { Rank } from '../../dash/Rank';
@@ -21,6 +21,8 @@ export default function ObzorSvod({ section, page, filters, onBranch }: SectionP
   const [item, setItem] = useState<number | null>(null);
   const [all, setAll] = useState<'in' | 'out' | null>(null);
   const [mapSel, setMapSel] = useState<number | null>(null);
+  // Станция на карте следует за фильтром филиала из панели инструментов.
+  useEffect(() => setMapSel(null), [filters.br]);
   const ctx = { section, page, br: filters.br, per: filters.per };
   return (
     <SectionData query={query}>
@@ -29,11 +31,6 @@ export default function ObzorSvod({ section, page, filters, onBranch }: SectionP
         return (
           <>
             <CashKpis kpis={data.kpis} period={data.period} />
-            {data.kpis.has_data ? null : (
-              <Card>
-                <NoData kind="period" />
-              </Card>
-            )}
             <div className="grid">
               <CompareCards kpis={data.kpis} months={data.months} period={data.period} ctx={ctx} />
             </div>
@@ -49,12 +46,16 @@ export default function ObzorSvod({ section, page, filters, onBranch }: SectionP
               <FlowCard months={data.months} ctx={ctx} className="c8" />
               <ActivityCard activity={data.activity} className="c4" />
               <Card className="c4" title={t('obzor.branchesOut.title')} sub={filters.br === null ? t('obzor.branchesOut.subAll') : t('obzor.branchesOut.subOne')}>
-                <Rank
-                  label={t('obzor.branchesOut.title')}
-                  items={topBranches.map((b) => ({ id: b.branch_id, name: b.name, value: b.outflow }))}
-                  onSelect={(id) => toggleBranch(filters, Number(id), onBranch)}
-                  activeId={filters.br}
-                />
+                {topBranches.length ? (
+                  <Rank
+                    label={t('obzor.branchesOut.title')}
+                    items={topBranches.map((b) => ({ id: b.branch_id, name: b.name, value: b.outflow }))}
+                    onSelect={(id) => toggleBranch(filters, Number(id), onBranch)}
+                    activeId={filters.br}
+                  />
+                ) : (
+                  <NoData kind="period" />
+                )}
                 {filters.br === null ? (
                   <a className="more" href={buildHash({ kind: 'section', section: 'obzor', page: 'rasxod', br: null, per: filters.per })}>
                     {t('obzor.allBranches')}
@@ -62,13 +63,21 @@ export default function ObzorSvod({ section, page, filters, onBranch }: SectionP
                 ) : null}
               </Card>
               <Card className="c4" title={t('obzor.topIn.title')} sub={t('obzor.top.sub')}>
-                <Rank label={t('obzor.topIn.title')} items={data.items_in.slice(0, 5).map((i) => ({ id: i.item_id, name: i.name, value: i.amount }))} onSelect={(id) => setItem(Number(id))} />
+                {data.items_in.length ? (
+                  <Rank label={t('obzor.topIn.title')} items={data.items_in.slice(0, 5).map((i) => ({ id: i.item_id, name: i.name, value: i.amount }))} onSelect={(id) => setItem(Number(id))} opens="dialog" />
+                ) : (
+                  <NoData kind="period" />
+                )}
                 <button type="button" className="more" onClick={() => setAll('in')}>
                   {t('obzor.allItems')}
                 </button>
               </Card>
               <Card className="c4" title={t('obzor.topOut.title')} sub={t('obzor.top.sub')}>
-                <Rank label={t('obzor.topOut.title')} items={data.items_out.slice(0, 5).map((i) => ({ id: i.item_id, name: i.name, value: i.amount }))} onSelect={(id) => setItem(Number(id))} />
+                {data.items_out.length ? (
+                  <Rank label={t('obzor.topOut.title')} items={data.items_out.slice(0, 5).map((i) => ({ id: i.item_id, name: i.name, value: i.amount }))} onSelect={(id) => setItem(Number(id))} opens="dialog" />
+                ) : (
+                  <NoData kind="period" />
+                )}
                 <button type="button" className="more" onClick={() => setAll('out')}>
                   {t('obzor.allItems')}
                 </button>

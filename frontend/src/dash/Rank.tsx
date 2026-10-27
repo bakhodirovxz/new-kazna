@@ -16,10 +16,12 @@ export interface RankProps {
   format?: (value: number) => string;
   onSelect?: (id: string | number) => void;
   activeId?: string | number | null;
+  /** Строка открывает диалог, а не переключает выбор. */
+  opens?: 'dialog';
 }
 
 /** Prototip `rank()`: nom, summa, ulush va gorizontal chiziq; bosilsa — tanlash. */
-export function Rank({ label, items, format = (v) => formatMoney(v), onSelect, activeId }: RankProps) {
+export function Rank({ label, items, format = (v) => formatMoney(v), onSelect, activeId, opens }: RankProps) {
   const total = items.reduce((s, x) => s + x.value, 0);
   const max = Math.max(1e-9, ...items.map((x) => x.value));
   return (
@@ -41,7 +43,7 @@ export function Rank({ label, items, format = (v) => formatMoney(v), onSelect, a
         return (
           <li key={x.id}>
             {onSelect ? (
-              <button type="button" aria-pressed={activeId === x.id} onClick={() => onSelect(x.id)}>
+              <button type="button" aria-pressed={opens ? undefined : activeId === x.id} aria-haspopup={opens} onClick={() => onSelect(x.id)}>
                 {inner}
               </button>
             ) : (

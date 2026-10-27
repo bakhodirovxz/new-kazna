@@ -27,13 +27,17 @@ export default function ObzorRasxod({ section, page, filters, onBranch }: Sectio
             <ActivityCard activity={data.activity} className="c4" />
             <Card className="c6" title={t('obzor.rasxod.items')} sub={t('obzor.top.sub')}>
               {data.items.length ? (
-                <Rank label={t('obzor.rasxod.items')} items={data.items.map((i) => ({ id: i.item_id, name: i.name, value: i.amount }))} onSelect={(id) => setItem(Number(id))} />
+                <Rank label={t('obzor.rasxod.items')} items={data.items.map((i) => ({ id: i.item_id, name: i.name, value: i.amount }))} onSelect={(id) => setItem(Number(id))} opens="dialog" />
               ) : (
                 <NoData kind="period" />
               )}
             </Card>
             <Card className="c6" title={t('obzor.rasxod.banks')} sub={t('obzor.rasxod.banksSub')}>
-              <Rank label={t('obzor.rasxod.banks')} items={data.banks.map((b) => ({ id: b.bank_name, name: b.bank_name, value: b.amount }))} />
+              {data.banks.length ? (
+                <Rank label={t('obzor.rasxod.banks')} items={data.banks.map((b) => ({ id: b.bank_name, name: b.bank_name, value: b.amount }))} />
+              ) : (
+                <NoData kind="period" />
+              )}
             </Card>
             <BranchAmountTable className="c12" title={t('obzor.rasxod.branches')} label={t('obzor.kpi.outflow')} rows={data.branches} filters={filters} onBranch={onBranch} ctx={ctx} />
           </div>

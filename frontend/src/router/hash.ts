@@ -49,7 +49,7 @@ export function parseHash(raw: string): Route {
   const br = params.get('br');
   // TZ'dagi `per=5` shakli `m05` ga keltiriladi (R1/A3.1).
   const perRaw = params.get('per');
-  const per = perRaw !== null && /^(?:[1-9]|1[0-2])$/.test(perRaw) ? `m${perRaw.padStart(2, '0')}` : perRaw;
+  const per = perRaw !== null && /^(?:0?[1-9]|1[0-2])$/.test(perRaw) ? `m${perRaw.padStart(2, '0')}` : perRaw;
   return {
     kind: 'section',
     section: first,

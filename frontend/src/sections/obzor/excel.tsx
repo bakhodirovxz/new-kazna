@@ -27,7 +27,7 @@ function summaryColumns(): Column<BranchCashOut>[] {
     },
   });
   return [
-    { key: 'name', header: t('dash.branch'), cell: (r) => r.name, sortValue: (r) => r.name, wrap: true },
+    { key: 'name', header: t('dash.branch'), cell: (r) => r.name, sortValue: (r) => r.name, wrap: true, align: 'left' },
     num('opening', t('obzor.kpi.opening')),
     num('inflow', t('obzor.kpi.inflow')),
     num('outflow', t('obzor.kpi.outflow')),
@@ -39,10 +39,10 @@ function summaryColumns(): Column<BranchCashOut>[] {
 
 function detailColumns(): Column<DetailRowOut>[] {
   return [
-    { key: 'branch', header: t('dash.branch'), cell: (r) => r.branch_name, sortValue: (r) => r.branch_name, wrap: true },
-    { key: 'dir', header: t('obzor.excel.direction'), cell: (r) => (r.direction === 'in' ? t('obzor.excel.dirInOne') : t('obzor.excel.dirOutOne')), sortValue: (r) => r.direction },
-    { key: 'item', header: t('dash.item'), cell: (r) => r.item_name, sortValue: (r) => r.item_name, wrap: true },
-    { key: 'activity', header: t('obzor.excel.activity'), cell: (r) => (r.direction === 'in' ? '–' : t(`dash.activity.${r.activity}` as MessageKey)), sortValue: (r) => r.activity },
+    { key: 'branch', header: t('dash.branch'), cell: (r) => r.branch_name, sortValue: (r) => r.branch_name, wrap: true, align: 'left' },
+    { key: 'dir', header: t('obzor.excel.direction'), cell: (r) => (r.direction === 'in' ? t('obzor.excel.dirInOne') : t('obzor.excel.dirOutOne')), sortValue: (r) => r.direction, align: 'left' },
+    { key: 'item', header: t('dash.item'), cell: (r) => r.item_name, sortValue: (r) => r.item_name, wrap: true, align: 'left' },
+    { key: 'activity', header: t('obzor.excel.activity'), cell: (r) => (r.direction === 'in' ? '–' : t(`dash.activity.${r.activity}` as MessageKey)), sortValue: (r) => r.activity, align: 'left' },
     { key: 'amount', header: t('obzor.excel.amount'), cell: (r) => m1(r.amount), sortValue: (r) => r.amount, align: 'right' },
   ];
 }
@@ -94,10 +94,11 @@ function Detail({ rows, ctx }: { rows: DetailRowOut[]; ctx: { section: string; p
         rows={filtered}
         rowKey={(r) => `${r.branch_id}-${r.item_id}-${r.direction}`}
         initialSort={{ key: 'amount', dir: 'desc' }}
-        empty={<p className="note">{t('obzor.excel.nothing')}</p>}
+        empty={<p className="note">{rows.length === 0 ? t('obzor.excel.noDetail') : t('obzor.excel.nothing')}</p>}
+        bare
         footer={
           <tr>
-            <td colSpan={4}>{t('obzor.excel.rows', { count: filtered.length })}</td>
+            <td colSpan={4} className="l">{t('obzor.excel.rows', { count: filtered.length })}</td>
             <td>{t('obzor.excel.saldo', { value: m1(saldo) })}</td>
           </tr>
         }
@@ -124,7 +125,7 @@ export default function ObzorExcel({ section, page, filters, onBranch }: Section
               sub={t('obzor.excel.units', { period: data.period.label })}
               actions={
                 canXlsx ? (
-                  <a className="btn btn--primary" href={apiUrl('/obzor/excel.xlsx', sectionQuery(filters))} download>
+                  <a className="btn btn--secondary" href={apiUrl('/obzor/excel.xlsx', sectionQuery(filters))} download>
                     {t('obzor.excel.download')}
                   </a>
                 ) : null
@@ -148,15 +149,16 @@ export default function ObzorExcel({ section, page, filters, onBranch }: Section
                 onRowClick={(r) => toggleBranch(filters, r.branch_id, onBranch)}
                 activeKey={filters.br}
                 free
+                bare
                 footer={
                   <tr>
-                    <td>{data.total.name}</td>
-                    <td>{m1(data.total.opening)}</td>
-                    <td>{m1(data.total.inflow)}</td>
-                    <td>{m1(data.total.outflow)}</td>
-                    <td>{m1(data.total.net)}</td>
-                    <td>{m1(data.total.closing)}</td>
-                    <td className={(data.total.diff ?? 0) < 0 ? 'neg' : undefined}>{m1(data.total.diff)}</td>
+                    <td className="l">{data.total.name}</td>
+                    <td data-label={t('obzor.kpi.opening')}>{m1(data.total.opening)}</td>
+                    <td data-label={t('obzor.kpi.inflow')}>{m1(data.total.inflow)}</td>
+                    <td data-label={t('obzor.kpi.outflow')}>{m1(data.total.outflow)}</td>
+                    <td data-label={t('obzor.kpi.net')}>{m1(data.total.net)}</td>
+                    <td data-label={t('obzor.kpi.closing')}>{m1(data.total.closing)}</td>
+                    <td data-label={t('obzor.kpi.diff')} className={(data.total.diff ?? 0) < 0 ? 'neg' : undefined}>{m1(data.total.diff)}</td>
                   </tr>
                 }
               />

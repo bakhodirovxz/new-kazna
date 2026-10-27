@@ -23,7 +23,7 @@ export function BranchAmountTable({ title, label, rows, filters, onBranch, ctx, 
   const total = rows.reduce((s, r) => s + r.amount, 0);
   const max = Math.max(1e-9, ...rows.map((r) => r.amount));
   const columns: Column<BranchAmountOut>[] = [
-    { key: 'name', header: t('dash.branch'), cell: (r) => r.name, sortValue: (r) => r.name, wrap: true },
+    { key: 'name', header: t('dash.branch'), cell: (r) => r.name, sortValue: (r) => r.name, wrap: true, align: 'left' },
     { key: 'amount', header: label, cell: (r) => formatMoney(r.amount), sortValue: (r) => r.amount, align: 'right' },
     {
       key: 'share',
@@ -46,7 +46,7 @@ export function BranchAmountTable({ title, label, rows, filters, onBranch, ctx, 
       sub={t('obzor.branches.sub')}
       exportSlot={<CardExport title={title} ctx={ctx} csv={() => ({ headers: [t('dash.branch'), label], rows: rows.map((r) => [r.name, r.amount]) })} />}
     >
-      <Table caption={title} columns={columns} rows={rows} rowKey={(r) => r.branch_id} onRowClick={(r) => toggleBranch(filters, r.branch_id, onBranch)} activeKey={filters.br} free />
+      <Table caption={title} columns={columns} rows={rows} rowKey={(r) => r.branch_id} onRowClick={(r) => toggleBranch(filters, r.branch_id, onBranch)} activeKey={filters.br} free bare />
     </Card>
   );
 }

@@ -29,7 +29,7 @@ export function PlanFactCard({ rows, limit, onItem, ctx, className }: { rows: Pl
   const fact = rows.reduce((s, r) => s + r.fact, 0);
   const title = t('kazna.planFact.title');
   const columns: Column<PlanFactRowOut>[] = [
-    { key: 'name', header: t('dash.item'), cell: (r) => r.name, sortValue: (r) => r.name, wrap: true },
+    { key: 'name', header: t('dash.item'), cell: (r) => r.name, sortValue: (r) => r.name, wrap: true, align: 'left' },
     { key: 'plan', header: t('dash.plan'), cell: (r) => formatMoney(r.plan), sortValue: (r) => r.plan, align: 'right' },
     { key: 'fact', header: t('dash.fact'), cell: (r) => formatMoney(r.fact), sortValue: (r) => r.fact, align: 'right' },
     { key: 'exec', header: t('kazna.planFact.execution'), cell: (r) => <Exec value={r.execution} />, sortValue: (r) => r.execution, align: 'right' },
@@ -44,7 +44,7 @@ export function PlanFactCard({ rows, limit, onItem, ctx, className }: { rows: Pl
         <CardExport
           title={title}
           ctx={ctx}
-          csv={() => ({ headers: [t('dash.item'), t('dash.plan'), t('dash.fact'), t('kazna.planFact.execution'), t('kazna.planFact.deviation')], rows: rows.map((r) => [r.name, r.plan, r.fact, r.execution === null ? null : Math.round(r.execution * 1000) / 10, r.deviation]) })}
+          csv={() => ({ headers: [t('dash.item'), t('dash.plan'), t('dash.fact'), `${t('kazna.planFact.execution')}, %`, t('kazna.planFact.deviation')], rows: rows.map((r) => [r.name, r.plan, r.fact, r.execution === null ? null : Math.round(r.execution * 1000) / 10, r.deviation]) })}
         />
       }
     >
@@ -55,15 +55,16 @@ export function PlanFactCard({ rows, limit, onItem, ctx, className }: { rows: Pl
         rowKey={(r) => r.item_id}
         onRowClick={(r) => onItem(r.item_id)}
         free
+        bare
         footer={
           <tr>
-            <td>{t('kazna.planFact.total')}</td>
-            <td>{formatMoney(plan)}</td>
-            <td>{formatMoney(fact)}</td>
-            <td>
+            <td className="l">{t('kazna.planFact.total')}</td>
+            <td data-label={t('dash.plan')}>{formatMoney(plan)}</td>
+            <td data-label={t('dash.fact')}>{formatMoney(fact)}</td>
+            <td data-label={t('kazna.planFact.execution')}>
               <Exec value={plan ? fact / plan : null} />
             </td>
-            <td>
+            <td data-label={t('kazna.planFact.deviation')}>
               <Deviation value={plan - fact} />
             </td>
           </tr>

@@ -13,12 +13,12 @@ export function ItemDialog({ path, filters, onClose }: { path: string; filters: 
   const query = useSection<ItemBranchesOut>(path, filters);
   const data = query.data;
   const out = data?.item.direction === 'out';
-  const max = Math.max(1, ...(data?.rows.map((r) => r.fact) ?? [1]));
+  const max = Math.max(1e-9, ...(data?.rows.map((r) => r.fact) ?? [1]));
   return (
     <Modal
       open
       onClose={onClose}
-      title={data?.item.name ?? '…'}
+      title={data?.item.name ?? t('common.loading')}
       note={data ? t('obzor.item.note', { direction: out ? t('obzor.item.out') : t('obzor.item.in'), period: data.period.label.toLowerCase() }) : undefined}
     >
       {query.isError ? <ErrorBanner error={query.error} onRetry={() => void query.refetch()} /> : null}
@@ -66,7 +66,7 @@ export function ItemDialog({ path, filters, onClose }: { path: string; filters: 
 export function AllItemsDialog({ title, items, onPick, onClose }: { title: string; items: ItemAmountOut[]; onPick(id: number): void; onClose(): void }) {
   return (
     <Modal open onClose={onClose} title={title} note={t('obzor.top.sub')}>
-      <Rank label={title} items={items.map((i) => ({ id: i.item_id, name: i.name, value: i.amount }))} onSelect={(id) => onPick(Number(id))} />
+      <Rank label={title} items={items.map((i) => ({ id: i.item_id, name: i.name, value: i.amount }))} onSelect={(id) => onPick(Number(id))} opens="dialog" />
     </Modal>
   );
 }

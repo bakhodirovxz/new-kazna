@@ -1,5 +1,4 @@
 import type { OrderStatusOut } from '../../../api/types';
-import { NoData } from '../../../dash/DataState';
 import { formatMoney } from '../../../dash/money';
 import { t } from '../../../i18n';
 import { formatNumber } from '../../../i18n/format';
@@ -13,7 +12,7 @@ export function OrdersCard({ orders, className }: { orders: OrderStatusOut[]; cl
   return (
     <Card className={className} title={t('kazna.orders.title')} sub={t('kazna.orders.sub')}>
       {count === 0 ? (
-        <NoData kind="source" source={t('dash.source.orders')} />
+        <p className="note">{t('kazna.orders.none')}</p>
       ) : (
         <>
           <div className="bigline">

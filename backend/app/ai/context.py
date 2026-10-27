@@ -59,9 +59,6 @@ RECORD_KEYS = frozenset({"lots", "cancelled"})
 # Kadry: kichik guruhda (headcount < min_group) o'rtacha ish haqi bitta odamni oshkor qiladi.
 HR_HEADCOUNT_KEYS = ("fact", "headcount")
 HR_PAY_KEYS = frozenset({"avg_salary", "avg", "payroll", "overtime_per_employee"})
-# shortcut: `kadry.min_group` S4 sozlamasi bu shoxda yo'q, 5 — S4 standarti; S4 qo'shilgach
-# `_min_group` uni sysconfig'dan o'qiydi (kalit reyestrda bo'lsa).
-HR_MIN_GROUP_DEFAULT = 5
 DATE_RE = re.compile(r"^\d{4}-\d{2}(-\d{2})?(T[\d:.]+(Z|[+-]\d{2}:\d{2})?)?$")
 # Faqat qurilgan bo'limlar import qilinadi; qolganlari (S2–S4, finmodel) qo'shilganda ishlaydi.
 SECTION_MODULES: dict[Section, str] = {
@@ -97,9 +94,7 @@ class AiContext:
 def _min_group() -> int:
     from app.core import sysconfig
 
-    if "kadry.min_group" in sysconfig.REGISTRY:
-        return int(sysconfig.value("kadry.min_group"))
-    return HR_MIN_GROUP_DEFAULT
+    return int(sysconfig.value("kadry.min_group"))  # S4: k-anonimlik chegarasi (standart 5)
 
 
 def _small_group(mapping: Mapping[str, Any]) -> bool:

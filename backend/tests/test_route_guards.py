@@ -101,6 +101,7 @@ EXPECTED_ROUTES = frozenset({
     ("POST", "/api/v1/admin/users/{user_id}/unblock"),
     ("POST", "/api/v1/auth/2fa/enroll/begin"),
     ("POST", "/api/v1/auth/2fa/enroll/confirm"),
+    ("POST", "/api/v1/auth/2fa/enroll/finish"),
     ("POST", "/api/v1/auth/2fa/enroll/start"),
     ("POST", "/api/v1/auth/2fa/offer/dismiss"),
     ("POST", "/api/v1/auth/2fa/verify"),

@@ -1,14 +1,15 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, isApiError } from '../api/client';
 import type {
+  EnrollBeginIn,
   EnrollConfirmOut,
+  EnrollFinishIn,
   EnrollStartOut,
   LoginIn,
   LoginOut,
   MeOut,
   MfaIn,
   MfaTokenIn,
-  MfaTokenOut,
   PasswordChangeIn,
   SessionOut,
 } from '../api/types';
@@ -49,25 +50,36 @@ export function useVerifyMfa() {
   });
 }
 
-/** Kirgan foydalanuvchi 2FA'ni keyin ulaydi: challenge ochiladi va mavjud ulash sahifasiga o'tiladi. */
+/** Kirgan foydalanuvchi 2FA'ni keyin ulaydi: ulash sahifasiga sessiya rejimida o'tadi (token yo'q;
+ *  parol sahifada so'raladi, challenge serverda sessiyaga bog'langan). */
 export function useStartEnrollment() {
   const flow = useAuthFlow();
   const me = useMe();
-  const mutation = useMutation({
-    mutationFn: () => api<MfaTokenOut>('/auth/2fa/enroll/begin', { method: 'POST' }),
-    gcTime: 0, // token MutationCache'da qolmasin
-  });
-  return {
-    pending: mutation.isPending,
-    start: () =>
-      mutation.mutate(undefined, {
-        onSuccess: (result) => {
-          flow.begin({ mfaToken: result.mfa_token, step: 'mfa_enroll', username: me.data?.username ?? '', returnTo: null });
-          mutation.reset();
-          navigate({ kind: 'mfaEnroll' });
-        },
-      }),
+  return () => {
+    flow.begin({ mfaToken: '', step: 'session_enroll', username: me.data?.username ?? '', returnTo: null });
+    navigate({ kind: 'mfaEnroll' });
   };
+}
+
+export function useEnrollBegin() {
+  return useMutation({
+    mutationFn: (body: EnrollBeginIn) => api<EnrollStartOut>('/auth/2fa/enroll/begin', { method: 'POST', body }),
+    meta: { inline: true }, // 422/429 formada
+    gcTime: 0, // parol va sir MutationCache'da qolmasin
+  });
+}
+
+export function useEnrollFinish() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (body: EnrollFinishIn) => api<EnrollConfirmOut>('/auth/2fa/enroll/finish', { method: 'POST', body }),
+    meta: { silent: true },
+    gcTime: 0,
+    onSuccess: (result) => {
+      client.clear();
+      client.setQueryData(meKey, result.user);
+    },
+  });
 }
 
 export function useDismissMfaOffer() {

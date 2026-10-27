@@ -59,8 +59,12 @@ class LoginOut(BaseModel):
     user: MeOut | None = None
 
 
-class MfaTokenOut(BaseModel):
-    mfa_token: str
+class EnrollBeginIn(_In):
+    password: str = Field(min_length=1, max_length=256)
+
+
+class EnrollFinishIn(_In):
+    code: str = Field(min_length=6, max_length=16)
 
 
 class EnrollConfirmOut(BaseModel):

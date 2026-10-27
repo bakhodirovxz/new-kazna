@@ -3,7 +3,7 @@ import { createContext, useContext, useMemo, useState, useSyncExternalStore, typ
 /** Login → 2FA oralig'idagi holat. mfa_token faqat xotirada: sahifa yangilansa — login qaytadan. */
 export interface Challenge {
   mfaToken: string;
-  step: 'mfa_verify' | 'mfa_enroll';
+  step: 'mfa_verify' | 'mfa_enroll' | 'session_enroll'; // session_enroll: kirgan foydalanuvchi, token yo'q
   username: string;
   returnTo: string | null;
 }

@@ -11,14 +11,15 @@ from fastapi import APIRouter, Cookie, Header, Response
 from app.auth import service, sessions
 from app.auth.context import CSRF_COOKIE, CSRF_HEADER, SESSION_COOKIE, Ctx, build_context, csrf_ok
 from app.auth.schemas import (
+    EnrollBeginIn,
     EnrollConfirmOut,
+    EnrollFinishIn,
     EnrollStartOut,
     LoginIn,
     LoginOut,
     MeOut,
     MfaIn,
     MfaTokenIn,
-    MfaTokenOut,
     PasswordChangeIn,
     SessionOut,
     me_out,
@@ -64,8 +65,22 @@ def verify(body: MfaIn, response: Response, db: DB, meta: Meta) -> MeOut:
 
 
 @router.post("/2fa/enroll/begin")
-def enroll_begin(ctx: Ctx, db: DB, meta: Meta) -> MfaTokenOut:
-    return MfaTokenOut(mfa_token=service.enroll_begin(db, ctx, meta, datetime.now(UTC)))
+def enroll_begin(body: EnrollBeginIn, ctx: Ctx, db: DB, meta: Meta) -> EnrollStartOut:
+    start = service.enroll_begin(db, ctx, body.password, meta, datetime.now(UTC))
+    return EnrollStartOut(
+        otpauth_uri=start.otpauth_uri, qr_svg_data_uri=start.qr_svg_data_uri, secret=start.secret
+    )
+
+
+@router.post("/2fa/enroll/finish")
+def enroll_finish(
+    body: EnrollFinishIn, response: Response, ctx: Ctx, db: DB, meta: Meta
+) -> EnrollConfirmOut:
+    now = datetime.now(UTC)
+    new, user, codes = service.enroll_finish(db, ctx, body.code, meta, now)
+    _set_session_cookies(response, new)
+    me = me_out(build_context(db, user, new.id, now), db)
+    return EnrollConfirmOut(user=me, backup_codes=codes)
 
 
 @router.post("/2fa/offer/dismiss", status_code=204)

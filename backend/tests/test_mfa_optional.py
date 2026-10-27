@@ -139,26 +139,92 @@ def test_offer_off_when_required(client: TestClient, make_user: Callable[..., Se
     assert client.get(f"{A}/me").json()["mfa_offer"] is False
 
 
-def test_later_enrollment_for_logged_in_user(
+def _begin(client: TestClient, user: SeedUser, password: str | None = None) -> Any:
+    return client.post(f"{A}/2fa/enroll/begin", json={"password": password or user.password})
+
+
+def test_later_enrollment_is_session_bound_and_keeps_absolute_expiry(
     client: TestClient, make_user: Callable[..., SeedUser]
 ) -> None:
     user = make_user("rukovodstvo", totp=False)
     _as_user(client, user)
-    begin = client.post(f"{A}/2fa/enroll/begin")
+    with get_engine("app").connect() as conn:
+        before = conn.execute(text(
+            "SELECT absolute_expires_at FROM core.sessions "
+            "WHERE user_id = :u AND revoked_at IS NULL"),
+            {"u": user.id}).scalar_one()
+    begin = _begin(client, user)
     assert begin.status_code == 200, begin.text
-    token = begin.json()["mfa_token"]
-    secret = client.post(f"{A}/2fa/enroll/start", json={"mfa_token": token}).json()["secret"]
-    done = client.post(f"{A}/2fa/enroll/confirm",
-                       json={"mfa_token": token, "code": pyotp.TOTP(secret).now()})
+    assert "mfa_token" not in begin.json()  # token yo'q: sessiyaga bog'langan
+    secret = begin.json()["secret"]
+    done = client.post(f"{A}/2fa/enroll/finish", json={"code": pyotp.TOTP(secret).now()})
     assert done.status_code == 200, done.text
     assert done.json()["user"]["mfa_enabled"] is True and done.json()["backup_codes"]
     assert _audit(user.id, "auth.mfa.enrolled") == 1
+    with get_engine("app").connect() as conn:
+        after = conn.execute(text(
+            "SELECT absolute_expires_at FROM core.sessions "
+            "WHERE user_id = :u AND revoked_at IS NULL"),
+            {"u": user.id}).scalars().all()
+    assert after == [before]  # yangi 12 soatlik sessiya berilmadi, eskisi bekor qilindi
     client.headers[CSRF_HEADER] = client.cookies[CSRF_COOKIE]
-    assert client.post(f"{A}/2fa/enroll/begin").status_code == 409  # allaqachon ulangan
+    assert _begin(client, user).status_code == 409  # allaqachon ulangan
+
+
+def test_enroll_finish_from_another_session_is_rejected(
+    client: TestClient, make_user: Callable[..., SeedUser]
+) -> None:
+    user = make_user("rukovodstvo", totp=False)
+    _as_user(client, user)
+    secret = _begin(client, user).json()["secret"]
+    other = TestClient(client.app, base_url="https://testserver")
+    _as_user(other, user)
+    r = other.post(f"{A}/2fa/enroll/finish", json={"code": pyotp.TOTP(secret).now()})
+    assert r.status_code == 401 and r.json()["error"]["code"] == "mfa_expired"
+
+
+def test_logout_and_new_login_kill_open_enroll_challenge(
+    client: TestClient, make_user: Callable[..., SeedUser]
+) -> None:
+    user = make_user("rukovodstvo", totp=False)
+    _as_user(client, user)
+    _begin(client, user)
+
+    def open_challenges() -> int:
+        with get_engine("app").connect() as conn:
+            return int(conn.execute(text(
+                "SELECT count(*) FROM core.mfa_challenges WHERE user_id = :u AND used_at IS NULL"),
+                {"u": user.id}).scalar_one())
+
+    assert open_challenges() == 1
+    assert client.post(f"{A}/logout").status_code == 204
+    assert open_challenges() == 0
+    # yangi parolli kirish ham eskirgan challenge'larni tozalaydi
+    _as_user(client, user)
+    _begin(client, user)
+    again = TestClient(client.app, base_url="https://testserver")
+    _as_user(again, user)
+    assert open_challenges() == 0
+
+
+def test_enroll_begin_requires_current_password_and_counts_toward_lockout(
+    client: TestClient, make_user: Callable[..., SeedUser]
+) -> None:
+    user = make_user("rukovodstvo", totp=False)
+    _as_user(client, user)
+    bad = _begin(client, user, "Noto'g'ri-Parol-1")
+    assert bad.status_code == 422 and bad.json()["error"]["code"] == "invalid_current_password"
+    with get_engine("app").connect() as conn:
+        failed = conn.execute(text("SELECT failed_logins FROM core.users WHERE id = :u"),
+                              {"u": user.id}).scalar_one()
+    assert failed == 1
+    assert _audit(user.id, "auth.password.change_fail") == 1
+    assert _begin(client, user).status_code == 200
 
 
 def test_begin_and_dismiss_require_session(client: TestClient) -> None:
-    assert client.post(f"{A}/2fa/enroll/begin").status_code == 401
+    assert client.post(f"{A}/2fa/enroll/begin", json={"password": "x"}).status_code == 401
+    assert client.post(f"{A}/2fa/enroll/finish", json={"code": "123456"}).status_code == 401
     assert client.post(f"{A}/2fa/offer/dismiss").status_code == 401
 
 

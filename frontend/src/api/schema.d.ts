@@ -632,6 +632,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/obzor/vnimanie": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Vnimanie */
+        get: operations["vnimanie_api_v1_obzor_vnimanie_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/obzor/vnimanie/count": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Vnimanie Count */
+        get: operations["vnimanie_count_api_v1_obzor_vnimanie_count_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/kazna/svod": {
         parameters: {
             query?: never;
@@ -984,6 +1018,30 @@ export interface components {
             /** Amount */
             amount: number;
         };
+        /** AlertCountOut */
+        AlertCountOut: {
+            /** Count */
+            count: number;
+            /** Critical */
+            critical: number;
+        };
+        /** AlertOut */
+        AlertOut: {
+            /** Code */
+            code: string;
+            /** Level */
+            level: string;
+            /** Title */
+            title: string;
+            /** Message */
+            message: string;
+            /** Section */
+            section: string;
+            /** Page */
+            page: string;
+            /** Value */
+            value: number | null;
+        };
         /** AlertRuleOut */
         AlertRuleOut: {
             /** Code */
@@ -1022,6 +1080,14 @@ export interface components {
             level?: ("critical" | "warning") | null;
             /** Enabled */
             enabled?: boolean | null;
+        };
+        /** AlertsOut */
+        AlertsOut: {
+            period: components["schemas"]["ReportPeriodOut"];
+            /** Items */
+            items: components["schemas"]["AlertOut"][];
+            /** Checked */
+            checked: string[];
         };
         /** AuditOut */
         AuditOut: {
@@ -2092,9 +2158,9 @@ export interface components {
             /** Lon */
             lon: number | null;
             /** Inflow */
-            inflow: number;
+            inflow: number | null;
             /** Outflow */
-            outflow: number;
+            outflow: number | null;
             /** Closing */
             closing: number | null;
             /** Receivable */
@@ -3581,6 +3647,82 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ItemBranchesOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    vnimanie_api_v1_obzor_vnimanie_get: {
+        parameters: {
+            query?: {
+                br?: number | null;
+                per?: string;
+            };
+            header?: {
+                "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                "__Host-ugk_session"?: string | null;
+                "__Host-ugk_csrf"?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlertsOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    vnimanie_count_api_v1_obzor_vnimanie_count_get: {
+        parameters: {
+            query?: {
+                br?: number | null;
+                per?: string;
+            };
+            header?: {
+                "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                "__Host-ugk_session"?: string | null;
+                "__Host-ugk_csrf"?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlertCountOut"];
                 };
             };
             /** @description Validation Error */

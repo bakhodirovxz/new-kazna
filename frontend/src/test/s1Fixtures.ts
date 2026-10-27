@@ -1,4 +1,5 @@
 import type {
+  AlertsOut,
   CalendarOut,
   CashKpisOut,
   ItemBranchesOut,
@@ -79,6 +80,15 @@ export const EXCEL: ObzorExcelOut = {
     { branch_id: 2, branch_name: 'Чарвакская ГЭС', direction: 'in', item_id: 11, item_name: 'Реализация электроэнергии', activity: 'operating', amount: 70 },
     { branch_id: 2, branch_name: 'Чарвакская ГЭС', direction: 'out', item_id: 21, item_name: 'Налоги и обязательные платежи', activity: 'centralized', amount: 25 },
     { branch_id: 3, branch_name: 'Каскад Чирчикских ГЭС', direction: 'out', item_id: 22, item_name: 'Прочие операционные расходы', activity: 'operating', amount: 5 },
+  ],
+};
+
+export const ALERTS: AlertsOut = {
+  period: PERIOD_M08,
+  checked: ['Остаток ниже месячного расходования', 'Исполнение плана платежей'],
+  items: [
+    { code: 'contracts_overdue_90d', level: 'critical', title: 'Просроченные договоры', message: '1 договор просрочен более 90 дней на сумму 60,0 млн', section: 'kazna', page: 'dogovory', value: 1 },
+    { code: 'payment_plan_execution', level: 'warning', title: 'Исполнение плана платежей', message: 'исполнение 40,0%, отклонение 18,0 млн', section: 'kazna', page: 'platezhi', value: 0.4 },
   ],
 };
 

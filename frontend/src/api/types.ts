@@ -95,3 +95,6 @@ export type KaznaPlatezhiOut = Schemas['KaznaPlatezhiOut'];
 export type KaznaCalendarOut = Schemas['KaznaCalendarOut'];
 export type KaznaDogovoryOut = Schemas['KaznaDogovoryOut'];
 export type KaznaCelevyeOut = Schemas['KaznaCelevyeOut'];
+export type AlertOut = Schemas['AlertOut'];
+export type AlertsOut = Schemas['AlertsOut'];
+export type AlertCountOut = Schemas['AlertCountOut'];

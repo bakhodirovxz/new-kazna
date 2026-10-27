@@ -27,7 +27,7 @@ function Row({ label, value, negative }: { label: string; value: number | null; 
 export function StationPanel({ stations, selected, onSelect, filters, onBranch }: StationPanelProps) {
   const station = stations.find((s) => s.branch_id === selected);
   if (!station) {
-    const list = stations.filter((s) => s.kind !== 'head').sort((a, b) => b.outflow - a.outflow);
+    const list = stations.filter((s) => s.kind !== 'head').sort((a, b) => (b.outflow ?? -1) - (a.outflow ?? -1));
     return (
       <div className="gp">
         <div className="gp-h">
@@ -36,7 +36,7 @@ export function StationPanel({ stations, selected, onSelect, filters, onBranch }
             <p className="note">{t('obzor.station.allNote', { count: list.length })}</p>
           </div>
         </div>
-        <Rank label={t('obzor.station.byOutflow')} items={list.map((s) => ({ id: s.branch_id, name: s.name, value: s.outflow }))} onSelect={(id) => onSelect(Number(id))} />
+        <Rank label={t('obzor.station.byOutflow')} items={list.map((s) => ({ id: s.branch_id, name: s.name, value: s.outflow ?? 0, note: s.outflow === null ? '—' : undefined }))} onSelect={(id) => onSelect(Number(id))} />
       </div>
     );
   }

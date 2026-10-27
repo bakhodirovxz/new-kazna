@@ -249,7 +249,7 @@ def test_ops_check_does_not_bootstrap(
         raise AssertionError("bootstrap_runtime must not run for ops-check")
 
     monkeypatch.setattr(cli, "bootstrap_runtime", boom)
-    monkeypatch.setattr(cli, "build_notifier", lambda settings: RecordingNotifier())
+    monkeypatch.setattr(cli, "build_notifier", lambda: RecordingNotifier())
     cli.main(["ops-check", "--json"])
     assert '"problems"' in capsys.readouterr().out
     cli.main(["restore-test-status"])
@@ -285,7 +285,7 @@ def test_ops_check_flags_stuck_running_request() -> None:
 def test_ops_check_tls_cert_through_cli(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    monkeypatch.setattr(cli, "build_notifier", lambda settings: RecordingNotifier())
+    monkeypatch.setattr(cli, "build_notifier", lambda: RecordingNotifier())
     # _cert() NOW (2026-09-25) ga nisbatan; haqiqiy soatga nisbatan muddati o'tgan -> critical
     assert cli.main(["ops-check", "--tls-cert", str(_cert(tmp_path, 3))]) == 1
     assert "tls_cert_expiring" in capsys.readouterr().out
@@ -295,7 +295,7 @@ def test_cli_ops_check_reports_when_db_is_down(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     notifier = RecordingNotifier()
-    monkeypatch.setattr(cli, "build_notifier", lambda settings: notifier)
+    monkeypatch.setattr(cli, "build_notifier", lambda: notifier)
 
     def boom(**kwargs: Any) -> list[ops.Problem]:
         raise ConnectionError("postgresql://user:secret@10.0.0.5/db unreachable")
@@ -376,7 +376,7 @@ def test_cli_ops_check_notifies_only_on_problems(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     notifier = RecordingNotifier()
-    monkeypatch.setattr(cli, "build_notifier", lambda settings: notifier)
+    monkeypatch.setattr(cli, "build_notifier", lambda: notifier)
     monkeypatch.setattr(ops, "ops_check", lambda **kwargs: [])
     assert cli.main(["ops-check", "--notify"]) == 0
     assert notifier.kinds == []

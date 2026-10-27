@@ -298,7 +298,7 @@ def _etl_run(source: str, mode: str, no_retry: bool, allow_full_replace: bool = 
     except (ValueError, ConfigError) as exc:
         _out(f"Xato: {exc}")
         return 2
-    runner = Runner(connector, mode=Mode(mode), notifier=build_notifier(get_settings()),
+    runner = Runner(connector, mode=Mode(mode), notifier=build_notifier(),
                     delays=() if no_retry else RETRY_DELAYS)
     try:
         result = runner.run()
@@ -365,7 +365,7 @@ def _ops_check(as_json: bool, notify: bool, tls_cert: Path | None, extra: list[s
         for note in notes:
             _out(note)
     if notify and problems:
-        build_notifier(get_settings()).notify(Notification(
+        build_notifier().notify(Notification(
             "ops_check", f"UGEKAZNA: замечаний — {len(problems)}", ops.report(problems)))
     return 1 if problems else 0
 

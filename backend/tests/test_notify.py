@@ -7,6 +7,7 @@ from app.core.config import get_settings
 from app.etl.notify import (
     CompositeNotifier,
     EmailNotifier,
+    LiveEmailNotifier,
     LogNotifier,
     Notification,
     build_notifier,
@@ -96,15 +97,10 @@ def test_composite_continues_after_failing_notifier() -> None:
     assert received == ["etl_quality"]
 
 
-def test_build_notifier_adds_email_only_when_configured() -> None:
-    plain = build_notifier(get_settings().model_copy(update={"smtp_host": ""}))
-    assert isinstance(plain, CompositeNotifier)
-    assert [type(n) for n in plain.notifiers] == [LogNotifier]
-    full = build_notifier(
-        get_settings().model_copy(update={"smtp_host": "relay", "smtp_to": "a@uge.uz"})
-    )
-    assert isinstance(full, CompositeNotifier)
-    assert [type(n) for n in full.notifiers] == [LogNotifier, EmailNotifier]
+def test_build_notifier_is_live() -> None:
+    notifier = build_notifier()
+    assert isinstance(notifier, CompositeNotifier)
+    assert [type(n) for n in notifier.notifiers] == [LogNotifier, LiveEmailNotifier]
 
 
 @pytest.mark.parametrize("raw", ["a@uge.uz, b@uge.uz", " a@uge.uz ,b@uge.uz,"])

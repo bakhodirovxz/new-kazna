@@ -35,6 +35,7 @@ from app.etl.connectors import make_connector
 from app.etl.db import etl_transaction
 from app.etl.errors import FILE_FULL_REFUSED, EtlBusyError, safe_error, sqlstate_of
 from app.etl.notify import Notification, Notifier, build_notifier
+from app.etl.probes import process_integration_checks
 from app.etl.runner import Runner, RunResult
 from app.etl.types import Mode, SourceConnector
 from app.maintenance import cleanup_sessions, cleanup_staging
@@ -237,6 +238,8 @@ def build_scheduler(settings: Settings, notifier: Notifier, *,
                           **opts)
     scheduler.add_job(_guarded("etl_requests", lambda: process_requests(notifier)),
                       "interval", seconds=30, id="etl_requests", **opts)
+    scheduler.add_job(_guarded("integration_checks", process_integration_checks),
+                      "interval", seconds=10, id="integration_checks", **opts)
     scheduler.add_job(_guarded("partitions", lambda: maintain_partitions(today_tashkent())),
                       CronTrigger(hour=3, minute=30, timezone=TASHKENT), id="partitions", **opts)
     scheduler.add_job(_guarded("cleanup", cleanup_job),
@@ -257,7 +260,7 @@ def main() -> None:
     bootstrap_runtime()
     heartbeat()
     log.info("stuck_requests_closed", count=recover_stuck_requests())
-    scheduler = build_scheduler(settings, build_notifier(settings))
+    scheduler = build_scheduler(settings, build_notifier())
     log.info("worker_started", env=settings.env, jobs=sorted(j.id for j in scheduler.get_jobs()))
     scheduler.start()
 

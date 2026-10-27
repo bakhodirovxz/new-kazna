@@ -11,7 +11,8 @@ from email.message import EmailMessage
 from email.utils import formataddr
 from typing import Any, Literal, Protocol
 
-from app.core.config import Settings
+from app.core import integrations, sysconfig
+from app.core.db import get_engine
 from app.core.logging import get_logger
 
 log = get_logger("ugekazna.notify")
@@ -134,19 +135,87 @@ class CompositeNotifier:
                           error=type(exc).__name__)
 
 
-def build_notifier(settings: Settings) -> Notifier:
-    notifiers: list[Notifier] = [LogNotifier()]
-    if settings.smtp_host and settings.smtp_recipients:
-        notifiers.append(
-            EmailNotifier(
-                host=settings.smtp_host,
-                port=settings.smtp_port,
-                sender=settings.smtp_from,
-                recipients=settings.smtp_recipients,
-                username=settings.smtp_user,
-                password=settings.smtp_password.get_secret_value(),
-                starttls=settings.smtp_starttls,
-                ssl=settings.smtp_ssl,
-            )
-        )
-    return CompositeNotifier(notifiers)
+@dataclass(frozen=True, slots=True)
+class SmtpConfig:
+    host: str
+    port: int
+    sender: str
+    recipients: list[str]
+    username: str
+    password: str
+    starttls: bool
+    ssl: bool
+
+
+def smtp_config() -> SmtpConfig | None:
+    """Joriy SMTP sozlamasi (panel > env > standart); host yoki qabul qiluvchi yo'q — None."""
+    with get_engine("app").connect() as conn:
+        host = str(sysconfig.current(conn, "smtp.host"))
+        recipients = list(sysconfig.current(conn, "notify.email_to"))
+        if not host or not recipients:
+            return None
+        return SmtpConfig(
+            host=host, port=int(sysconfig.current(conn, "smtp.port")),
+            sender=str(sysconfig.current(conn, "smtp.from")), recipients=recipients,
+            username=str(sysconfig.current(conn, "smtp.user")),
+            password=integrations.secret(conn, "smtp.password"),
+            starttls=bool(sysconfig.current(conn, "smtp.starttls")),
+            ssl=bool(sysconfig.current(conn, "smtp.ssl")))
+
+
+class LiveEmailNotifier:
+    """Har xabarda joriy sozlama — panel o'zgarishi worker'ni qayta ishga tushirmasdan ishlaydi."""
+
+    def __init__(self, loader: Callable[[], SmtpConfig | None] = smtp_config,
+                 smtp_factory: Callable[..., Any] = smtplib.SMTP,
+                 smtp_ssl_factory: Callable[..., Any] = smtplib.SMTP_SSL) -> None:
+        self._loader = loader
+        self._factory = smtp_factory
+        self._ssl_factory = smtp_ssl_factory
+
+    def notify(self, notification: Notification) -> None:
+        cfg = self._loader()
+        if cfg is None:
+            return
+        EmailNotifier(host=cfg.host, port=cfg.port, sender=cfg.sender, recipients=cfg.recipients,
+                      username=cfg.username, password=cfg.password, starttls=cfg.starttls,
+                      ssl=cfg.ssl, smtp_factory=self._factory,
+                      smtp_ssl_factory=self._ssl_factory).notify(notification)
+
+
+def smtp_probe(loader: Callable[[], SmtpConfig | None] = smtp_config,
+               smtp_factory: Callable[..., Any] = smtplib.SMTP,
+               smtp_ssl_factory: Callable[..., Any] = smtplib.SMTP_SSL) -> str:
+    """Ulanish + TLS + login (xat yuborilmaydi). Faqat xavfsiz kod qaytaradi."""
+    cfg = loader()
+    if cfg is None:
+        return "not_configured"
+    if cfg.password and not (cfg.starttls or cfg.ssl):
+        return "insecure_refused"
+    context = ssl.create_default_context()
+    try:
+        if cfg.ssl:
+            client = smtp_ssl_factory(cfg.host, cfg.port, context=context, timeout=10.0)
+        else:
+            client = smtp_factory(cfg.host, cfg.port, timeout=10.0)
+        with client as smtp:
+            if cfg.starttls and not cfg.ssl:
+                smtp.starttls(context=context)
+            if cfg.password:
+                smtp.login(cfg.username or cfg.sender, cfg.password)
+            smtp.noop()
+    except smtplib.SMTPAuthenticationError:
+        return "auth_failed"
+    except ssl.SSLError:
+        return "tls_failed"
+    except TimeoutError:
+        return "timeout"
+    except smtplib.SMTPException:
+        return "protocol_error"
+    except OSError:
+        return "connect_failed"
+    return "ok"
+
+
+def build_notifier() -> Notifier:
+    return CompositeNotifier([LogNotifier(), LiveEmailNotifier()])

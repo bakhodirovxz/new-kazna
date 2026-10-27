@@ -6,10 +6,11 @@ from pathlib import Path
 
 from app.core.config import ConfigError, Settings, get_settings
 from app.etl.file_connector import FileConnector
+from app.etl.manual_connector import ManualConnector
 from app.etl.synthetic import SyntheticConnector
 from app.etl.types import SourceConnector
 
-KNOWN_SOURCES = ("synthetic", "file")
+KNOWN_SOURCES = ("synthetic", "file", "manual")
 
 
 def make_connector(source: str, settings: Settings | None = None) -> SourceConnector:
@@ -20,4 +21,6 @@ def make_connector(source: str, settings: Settings | None = None) -> SourceConne
         return SyntheticConnector(seed=settings.synthetic_seed)
     if source == "file":
         return FileConnector(Path(settings.etl_file_dir))
+    if source == "manual":
+        return ManualConnector()
     raise ValueError(f"noma'lum manba: {source}")

@@ -6,7 +6,7 @@ retire-keys    — ishlatilmayotgan eski DEK'larni yo'q qilish
 rewrap-keys    — KEK rotatsiyasi (keyin master_kek sirini almashtirib, qayta ishga tushiring)
 audit-verify   — audit zanjirini tekshirish (buzilgan bo'lsa chiqish kodi 2)
 cleanup        — eskirgan sessiya, 2FA challenge va staging qatorlarini o'chirish
-etl-run        — ETL yuklash: --source synthetic|file --mode full|incremental [--no-retry]
+etl-run        — ETL yuklash: --source synthetic|file|manual --mode full|incremental [--no-retry]
                [--allow-full-replace] (file + full uchun majburiy)
 rollback-build — aktiv build'ni oldingisiga (yoki --build ID ga) qaytarish
 restore-test-record — tiklash testi natijasini yozish (scripts/restore_test.sh chaqiradi)

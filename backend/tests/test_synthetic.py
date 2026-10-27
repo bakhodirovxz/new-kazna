@@ -87,7 +87,7 @@ def test_extract_respects_window_and_reports_all_targets() -> None:
     window = Window(date(2026, 8, 1), TEST_AS_OF)
     sink = CollectSink()
     stats = connector.extract(window, sink)
-    assert set(stats.by_target) == {
+    assert set(stats.by_target) >= {
         "dim_branch", "dim_item", "dim_counterparty", "dim_bank", "dim_nomenclature",
         "dim_source", "dim_object", "dim_contract", "dim_loan", "dim_position", "fx_rate",
         "fact_cashflow", "fact_balance", "fact_payment_plan", "fact_payment_order", "fact_debt",

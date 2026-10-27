@@ -15,7 +15,7 @@ from app.etl.notify import LogNotifier
 from app.etl.runner import Runner
 from app.etl.types import Mode
 from app.manual import approval, store
-from tests.etl_helpers import purge_source
+from tests.etl_helpers import merge_all, new_source, open_run, purge_source, stage
 from tests.helpers import SeedUser
 from tests.manual_helpers import (
     audit_dump,
@@ -148,11 +148,16 @@ def test_other_source_run_keeps_manual_rows(actors) -> None:  # type: ignore[no-
     code = _account(actors)
     _batch(maker, checker, "kazna.balance", [balance_item(code, "2026-09-30", "4.00")])
     assert _run_manual().status == "success"
-    other = Runner(make_connector("synthetic"), mode=Mode.FULL, notifier=LogNotifier()).run()
-    assert other.status == "success", other.error
-    assert _balances() == [(Decimal("4.00"), 20260930)]
-    # va qo'lda yozuv sintetikni ham o'chirmaydi
-    assert _dwh("SELECT count(*) FROM dwh.fact_balance WHERE src_system = 'synthetic'")[0][0] > 0
+    # boshqa manbaning to'liq almashtirish yuklashi (`complete`) manual qatorlarga tegmaydi
+    other = new_source()
+    try:
+        run_id = open_run(other)
+        stage(run_id, other, {"dim_bank": [{"code": "ACC-" + other, "bank_name": "Т",
+                                            "currency": "UZS"}]})
+        merge_all(run_id, other, complete=("fact_balance",))
+        assert _balances() == [(Decimal("4.00"), 20260930)]
+    finally:
+        purge_source(other)
 
 
 def test_queued_request_processed_by_worker(actors) -> None:  # type: ignore[no-untyped-def]

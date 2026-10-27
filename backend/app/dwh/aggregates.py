@@ -10,6 +10,7 @@ UI faqat shu agregatlarni (pub view orqali) o'qiydi — faktlarga so'rov yuborma
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from datetime import date
 from typing import Any
@@ -17,6 +18,7 @@ from typing import Any
 from sqlalchemy import text
 from sqlalchemy.engine import Connection
 
+from app.core import sysconfig
 from app.dwh.dates import date_id, month_id, month_start
 
 
@@ -70,6 +72,8 @@ _CARRY_FORWARD = (
 
 def build_all(conn: Connection, build_id: int, params: BuildParams) -> dict[str, int]:
     bound = params.bind(build_id)
+    # Kalendar turlari: panel > standart (reyestr); SQL jsonb parametr sifatida oladi.
+    bound["calendar_kinds"] = json.dumps(sysconfig.current(conn, "kazna.calendar_kinds"))
     out: dict[str, int] = {}
     for aggregate in AGGREGATES:
         # nosemgrep: avoid-sqlalchemy-text

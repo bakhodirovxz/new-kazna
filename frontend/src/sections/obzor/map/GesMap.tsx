@@ -31,6 +31,9 @@ function Marker({ s, x, y, r, on, onSelect }: { s: StationOut; x: number; y: num
   const ly = side === 't' ? y - off - 2 : side === 'b' ? y + off + 11 : y + 4.5;
   const anchor = side === 'l' ? 'end' : side === 'r' ? 'start' : 'middle';
   const text = tip(s);
+  // WCAG 2.5.3: ko'rinadigan qisqa nom accessible name boshida butun so'z bo'lib turishi shart
+  // («Ташкент» ≠ «Ташкентских» — axe so'z bo'yicha solishtiradi).
+  const label = `${s.short_name}. ${text}`;
   const toggle = () => onSelect(on ? null : s.branch_id);
   const onKeyDown = (event: KeyboardEvent<SVGGElement>) => {
     if (event.key === 'Enter' || event.key === ' ') {
@@ -39,7 +42,7 @@ function Marker({ s, x, y, r, on, onSelect }: { s: StationOut; x: number; y: num
     }
   };
   return (
-    <g className={cx('ges', on && 'is-on')} role="button" tabIndex={0} aria-pressed={on} aria-label={text} onClick={toggle} onKeyDown={onKeyDown}>
+    <g className={cx('ges', on && 'is-on')} role="button" tabIndex={0} aria-pressed={on} aria-label={label} onClick={toggle} onKeyDown={onKeyDown}>
       <title>{text}</title>
       {on ? <circle className="ges__sel" cx={x} cy={y} r={r + 6} /> : null}
       <circle className="ges__ring" cx={x} cy={y} r={r + 3} />

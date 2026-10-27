@@ -31,6 +31,10 @@ export interface Series {
   data: number[];
   color: string;
   type?: 'bar' | 'line';
+  /** Uzuk-uzuk chiziq (reja). S3 shoxi ham qo'shadi — birlashtirishda bitta qoladi. */
+  dashed?: boolean;
+  /** O'ng o'qdagi chiziq (masalan, o'rtacha ish haqi ФОТ ustunlari ustida). */
+  axis?: 'right';
 }
 
 export function cssColor(name: string, fallback: string): string {
@@ -62,15 +66,29 @@ const whiteBackground: Plugin<'bar' | 'line'> = {
   },
 };
 
-export function barConfig({ labels, series, stacked = false }: { labels: Array<string | string[]>; series: Series[]; stacked?: boolean }): AnyChartConfig {
+export function barConfig({
+  labels,
+  series,
+  stacked = false,
+  format = formatMoney,
+  rightFormat,
+}: {
+  labels: Array<string | string[]>;
+  series: Series[];
+  stacked?: boolean;
+  format?: (value: number, digits: number) => string;
+  rightFormat?: (value: number, digits: number) => string;
+}): AnyChartConfig {
+  const right = rightFormat ?? format;
+  const hasRight = series.some((s) => s.axis === 'right');
   return {
     type: 'bar',
     data: {
       labels,
       datasets: series.map((s) =>
         s.type === 'line'
-          ? { type: 'line' as const, label: s.label, data: s.data, borderColor: s.color, backgroundColor: s.color, borderWidth: 3, pointRadius: 3, tension: 0.25, order: 0 }
-          : { type: 'bar' as const, label: s.label, data: s.data, backgroundColor: s.color, borderRadius: 3, maxBarThickness: 36, order: 1 },
+          ? { type: 'line' as const, label: s.label, data: s.data, borderColor: s.color, backgroundColor: s.color, borderWidth: s.dashed ? 2 : 3, borderDash: s.dashed ? [6, 5] : [], pointRadius: s.dashed ? 0 : 3, tension: 0.25, order: 0, yAxisID: s.axis === 'right' ? 'y1' : 'y' }
+          : { type: 'bar' as const, label: s.label, data: s.data, backgroundColor: s.color, borderRadius: 3, maxBarThickness: 36, order: 1, yAxisID: 'y' },
       ),
     },
     options: {
@@ -78,11 +96,14 @@ export function barConfig({ labels, series, stacked = false }: { labels: Array<s
       interaction: { mode: 'index', intersect: false },
       plugins: {
         legend: { display: false },
-        tooltip: { callbacks: { label: (item) => `${item.dataset.label ?? ''}: ${formatMoney(item.parsed.y, 2)}` } },
+        tooltip: { callbacks: { label: (item) => `${item.dataset.label ?? ''}: ${(item.dataset.yAxisID === 'y1' ? right : format)(item.parsed.y, 2)}` } },
       },
       scales: {
         x: { stacked, grid: { display: false } },
-        y: { stacked, beginAtZero: true, ticks: { maxTicksLimit: 6, callback: (value) => formatMoney(Number(value), 0) } },
+        y: { stacked, beginAtZero: true, ticks: { maxTicksLimit: 6, callback: (value) => format(Number(value), 0) } },
+        ...(hasRight
+          ? { y1: { position: 'right' as const, beginAtZero: true, grid: { display: false }, ticks: { maxTicksLimit: 6, callback: (value: string | number) => right(Number(value), 1) } } }
+          : {}),
       },
     },
     plugins: [whiteBackground],
@@ -95,9 +116,11 @@ export interface ChartCanvasProps {
   table: CsvTable;
   size?: 'md' | 'sm';
   chartRef?: MutableRefObject<ChartHandle | null>;
+  /** Yashirin jadvaldagi raqamlar formati (standart — pul). */
+  format?: (value: number, digits: number) => string;
 }
 
-export function ChartCanvas({ config, label, table, size = 'md', chartRef }: ChartCanvasProps) {
+export function ChartCanvas({ config, label, table, size = 'md', chartRef, format = formatMoney }: ChartCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const tableId = useId();
 
@@ -135,7 +158,7 @@ export function ChartCanvas({ config, label, table, size = 'md', chartRef }: Cha
             {table.rows.map((row, i) => (
               <tr key={i}>
                 {row.map((value, j) => (
-                <td key={j}>{typeof value === 'number' ? formatMoney(value, 2) : value}</td>
+                <td key={j}>{typeof value === 'number' ? format(value, 2) : value}</td>
               ))}
             </tr>
           ))}

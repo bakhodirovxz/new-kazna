@@ -1,0 +1,13 @@
+/* S4: АИП obyekti — moliyaviy bajarilish polosasi va jismoniy bajarilish belgisi (prototip objTable). */
+.fp { width: 13rem; max-width: 100%; }
+.fp__h { display: flex; justify-content: space-between; gap: 0.8rem; font-size: 0.9rem; margin-bottom: 0.2rem; }
+.fp__t { position: relative; height: 0.55rem; border-radius: 0.3rem; background: #e9f1fb; }
+.fp__t i { display: block; height: 100%; border-radius: 0.3rem; background: linear-gradient(90deg, #2f8ef5, #1d6df2); }
+.fp__t u { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--ink); }
+/* Bosqichlar lentasi (prototip stageCard). */
+.stg { display: flex; gap: 3px; margin: 0.45rem 0 0.25rem; }
+.stg span { flex: 1; height: 0.55rem; border-radius: 0.2rem; background: var(--soft); }
+.stg span.is-done { background: var(--brand2); }
+.stg span.is-late { background: var(--neg); }
+.obj-note { display: block; color: var(--muted); font-size: 0.85rem; }
+.legend i.dash { height: 0.22rem; }

@@ -106,3 +106,15 @@ export type KaznaCelevyeOut = Schemas['KaznaCelevyeOut'];
 export type AlertOut = Schemas['AlertOut'];
 export type AlertsOut = Schemas['AlertsOut'];
 export type AlertCountOut = Schemas['AlertCountOut'];
+
+// S4: backend hali shu shoxda yo'q — qo'lda yozilgan tiplar (bo'lim bo'yicha bitta fayl). Integratsiyada
+// quyidagi 3 qatorni `Schemas['…']` aliaslariga almashtiring (nomlar o'sha).
+export type {
+  ZakKpisOut, ZakMonthOut, ZakMethodOut, ZakLotOut, ZakNamedOut, ZakBranchOut, ZakSvodOut, ZakLotyOut, ZakPostavshikiOut, ZakEkonomiyaOut,
+} from './types.zakupki';
+export type {
+  InvKpisOut, InvObjectOut, InvCumOut, InvSourceOut, InvStageOut, InvObjectStagesOut, InvSvodOut, InvObektyOut, InvIstochnikiOut, InvRiskiOut,
+} from './types.investicii';
+export type {
+  HrKpisOut, HrMonthOut, HrCategoryOut, HrBranchOut, KadrySvodOut, KadryChislennostOut, KadryFotOut, KadryDvizhenieOut,
+} from './types.kadry';

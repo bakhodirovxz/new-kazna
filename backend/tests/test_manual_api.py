@@ -235,4 +235,29 @@ def test_route_guards_cover_data_router() -> None:
         for call in _calls(dep):
             perms |= set(getattr(call, "required_perms", ()))
         assert set(ALL_DATA_PERMS) <= perms and "audit:read" in perms, path
-    assert seen == 12
+    assert seen == 15
+
+
+def test_approved_batch_diff_relative_to_prior(client_for, make_user: MakeUser) -> None:  # type: ignore[no-untyped-def]
+    maker = client_for(make_user("spec_kazna"))
+    checker = client_for(make_user("nach_otdela"))
+
+    def run(items: list[dict], **extra) -> dict:  # type: ignore[type-arg]
+        body = _body("kazna.balance", [balance_item(BANK, "2026-09-30", "1.00")], submit=True)
+        body["items"] = items
+        batch = maker.post("/api/v1/data/batches", json=body | extra).json()
+        r = checker.post(f"/api/v1/data/batches/{batch['batch_id']}/approve",
+                         json={"expected_version": batch["version"]})
+        assert r.status_code == 200, (r.text, batch)
+        return checker.get(f"/api/v1/data/batches/{batch['batch_id']}").json()
+
+    first = run([{"values": balance_item(BANK, "2026-09-30", "1500.00")}])
+    assert [(c["op"], c["before"]) for c in first["items"]] == [("add", None)]
+    entry_id = first["items"][0]["entry_id"]
+    second = run([{"entry_id": entry_id, "expected_version": 1, "values": balance_item(
+        BANK, "2026-09-30", "1700.00")}], reason="korrektirovka")
+    (change,) = second["items"]
+    assert change["op"] == "change"
+    assert change["before"]["balance"] == "1500.00" and change["after"]["balance"] == "1700.00"
+    again = checker.get(f"/api/v1/data/batches/{first['batch_id']}").json()
+    assert again["items"][0]["op"] == "add"

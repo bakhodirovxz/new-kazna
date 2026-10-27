@@ -37,6 +37,7 @@ from app.core.errors import (
 from app.core.request_meta import ClientMeta
 from app.manual.entities import ENTITIES, FieldDef, ManualEntity, business_key
 from app.manual.schemas import (
+    MAX_IMPORT_ROWS,
     MAX_ITEMS,
     BatchDetailOut,
     BatchOut,
@@ -173,23 +174,25 @@ def batch_entries(db: Session, batch_id: int) -> list[Row]:
         "WHERE e.batch_id = :b ORDER BY e.entry_id"), {"b": batch_id}).mappings())
 
 
-def _before(db: Session, entity: ManualEntity, row: Row) -> dict[str, Any] | None:
-    if row["approved_version"] is None:
-        return None
-    prev = db.execute(text(
-        "SELECT payload, masks FROM core.manual_entry WHERE entry_id = :e AND version = :v"),
-        {"e": row["entry_id"], "v": row["approved_version"]}).mappings().first()
-    return None if prev is None else public_values(prev["payload"], prev["masks"])
+def _prior(db: Session, entry_id: int, version: int) -> Row | None:
+    """Paketdan OLDINGI tasdiqlangan holat: bu versiyadan kichik eng so'nggi tasdiqlangan versiya
+    (tasdiqlangach `approved_version` paketning o'ziga ko'chadi -- diff o'ziga solishtirilmasin)."""
+    return db.execute(text(
+        "SELECT p.payload, p.masks FROM core.manual_entry p "
+        "JOIN core.manual_batch b ON b.batch_id = p.batch_id "
+        "WHERE p.entry_id = :e AND p.version < :v AND b.status = 'approved' "
+        "ORDER BY p.version DESC LIMIT 1"), {"e": entry_id, "v": version}).mappings().first()
 
 
 def changes(db: Session, entity: ManualEntity, batch_id: int) -> list[ChangeOut]:
     out = []
     for r in batch_entries(db, batch_id):
+        prev = _prior(db, r["entry_id"], r["version"])
         op: Literal["add", "change", "delete"] = (
-            "delete" if r["deleted"] else "add" if r["approved_version"] is None else "change")
+            "delete" if r["deleted"] else "add" if prev is None else "change")
         out.append(ChangeOut(
             entry_id=r["entry_id"], version=r["version"], op=op,
-            before=_before(db, entity, r),
+            before=None if prev is None else public_values(prev["payload"], prev["masks"]),
             after=None if r["deleted"] else public_values(r["payload"], r["masks"])))
     return out
 
@@ -416,7 +419,7 @@ def create_batch(
     need(ctx, entity, "write")
     ctx.assert_branch(branch_id)
     ratelimit.check("data_write", str(ctx.user_id), ratelimit.data_write_per_user())
-    if not 1 <= len(items) <= MAX_ITEMS:
+    if not 1 <= len(items) <= (MAX_IMPORT_ROWS if origin == "import" else MAX_ITEMS):
         raise ValidationFailed("invalid_value", fields=["items"])
     planned = _prepare(db, entity, branch_id, items, own_batch=None, seen_versions={})
     file_meta = file_meta or {}

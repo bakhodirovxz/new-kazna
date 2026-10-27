@@ -66,7 +66,8 @@ def test_svod_shape_and_etag(app_factory: Callable[[], TestClient],
     assert [m["month_id"] for m in body["months"]] == [202600 + m for m in range(1, 10)]
     assert [a["activity"] for a in body["activity"]] == ["centralized", "operating", "investing"]
     assert {s["branch_id"] for s in body["stations"]} >= set(range(1, 17))
-    assert all(s["production"] is None for s in body["stations"])
+    prod = {s["branch_id"]: s["production"] for s in body["stations"]}
+    assert prod[1] is None and prod[2] is not None and prod[2]["execution"] is not None
     assert body["items_out"] and body["items_in"]
     again = client.get("/api/v1/obzor/svod", params={"per": "m08"},
                        headers={"If-None-Match": r.headers["ETag"]})

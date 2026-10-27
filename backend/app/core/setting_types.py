@@ -144,7 +144,7 @@ def method_norms(value: dict[str, int]) -> dict[str, int]:
 
 def normalize_org(name: str) -> str:
     """Tashkilot nomini solishtirish uchun: apostrof variantlari, bo'shliqlar, registr."""
-    for ch in "ʻʼ‘’`":
+    for ch in "ʻʼ‘’`´":
         name = name.replace(ch, "'")
     return " ".join(name.casefold().split())
 
@@ -185,3 +185,26 @@ def external_base_url(value: str) -> str:
                 or ip.is_reserved):
             raise ValueError("hr.base_url: ichki xizmat manzillari taqiqlangan")
     return value
+
+
+# S3: АСКУЭ stansiyalari ↔ filiallar (`askue.stations`). `code` — kunlik eksport kodi,
+# `name` — jonli manba (treplex.uz) nomi; bir filialga bir nechta stansiya bog'lanishi mumkin.
+STATION_KINDS: tuple[str, ...] = ("ges", "cascade")
+normalize_name = normalize_org  # yagona normallashtirish (S3 askue, S4 hr/zakupki)
+
+
+class AskueStation(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
+    code: Annotated[str, Field(pattern=r"^[A-Za-z0-9_.-]{1,40}$")]
+    name: Annotated[str, Field(min_length=1, max_length=200)]
+    branch_code: Annotated[str, Field(min_length=1, max_length=32)]
+
+
+def askue_stations(value: list[AskueStation]) -> list[dict[str, str]]:
+    codes = [s.code for s in value]
+    names = [normalize_name(s.name) for s in value]
+    if len(set(codes)) != len(codes):
+        raise ValueError("askue.stations: stansiya kodi takrorlangan")
+    if len(set(names)) != len(names) or not all(names):
+        raise ValueError("askue.stations: stansiya nomi bo'sh yoki takrorlangan")
+    return [s.model_dump() for s in value]

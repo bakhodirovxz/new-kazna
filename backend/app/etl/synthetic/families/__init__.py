@@ -17,6 +17,8 @@ from app.etl.synthetic.families import (
     loans,
     payments,
     procurement,
+    production,
+    stock,
 )
 from app.etl.synthetic.model import SynthModel
 from app.etl.types import StagingSink, Window
@@ -35,4 +37,6 @@ FAMILIES: list[tuple[str, Family]] = [
     ("procurement", procurement.generate),
     ("investment", investment.generate),
     ("hr", hr.generate),
+    ("production", production.generate),
+    ("stock", stock.generate),
 ]

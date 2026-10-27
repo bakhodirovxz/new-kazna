@@ -1,0 +1,11 @@
+{
+  "data": [
+    {"account_code": "1050", "account_name": "Запасные части", "is_total": false, "opening_sum": 48000000, "closing_sum": 96000000,
+     "nomenclature_code": "00-00012345", "nomenclature_name": "Подшипник SKF 23140", "unit": "шт", "warehouse_name": "Центральный склад",
+     "closing_qty": 2, "min_qty": 4, "last_move_date": "2026-09-10", "debit_sum": 48000000, "credit_sum": 0},
+    {"account_code": "1010", "account_name": "Сырьё и материалы", "is_total": false, "opening_sum": 0, "closing_sum": 12345678,
+     "nomenclature_name": "Электроды МР-3", "unit": "кг", "closing_qty": 350.5, "credit_sum": 2000000},
+    {"account_code": "1010", "account_name": "Сырьё и материалы", "is_total": false, "opening_sum": 0, "closing_sum": -5000000,
+     "nomenclature_name": "Сторно", "unit": "кг"}
+  ]
+}

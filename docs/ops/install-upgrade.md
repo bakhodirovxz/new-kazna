@@ -102,6 +102,9 @@
    cd /opt/ugekazna/current && ln -sfn /opt/ugekazna/shared/prod.env deploy/prod.env
    $P up -d
    ```
+   Выгрузки АСКУЭ: том `askue_inbox` создаётся сам; для записи поставщиком на хосте — один раз
+   `install -d -o <пользователь-sftp> -g 10001 -m 2750 /srv/ugekazna/askue/inbox` и файл
+   переопределения из `docs/integration/askue-connector.md`.
 5. Проверки: `$P ps -a` (все сервисы `healthy`, `migrate` — `exited (0)`), вход, `make ops-check STACK=prod`,
    `make audit-verify STACK=prod`.
 

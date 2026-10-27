@@ -201,5 +201,7 @@ from app.dwh import (  # noqa: E402, F401
     investment_aggregates,
     loan_aggregates,
     procurement_aggregates,
+    production_aggregates,
+    stock_aggregates,
     treasury_aggregates,
 )

@@ -11,6 +11,9 @@ from app.core import integrations, sysconfig
 from app.core.config import ConfigError, Settings, get_settings
 from app.core.db import get_engine
 from app.dwh.reference import current_setting
+from app.etl.askue.connector import AskueConnector
+from app.etl.askue.export import DirectoryExport
+from app.etl.askue.registry import AskueStation
 from app.etl.banks.connector import BankFileConnector
 from app.etl.banks.directbank import DIRECTBANK_MESSAGE
 from app.etl.banks.registry import BankAccount
@@ -23,13 +26,14 @@ from app.etl.hr.registry import HrOrg
 from app.etl.hr.source import HrApiSource, MehnatSource
 from app.etl.onec.client import OneCClient, OneCConfig
 from app.etl.onec.connector import OneCConnector, OrgMap
+from app.etl.onec.sklad import OneCSkladConnector, sklad_config
 from app.etl.synthetic import SyntheticConnector
 from app.etl.types import SourceConnector
 from app.etl.zakupki.connector import ProcurementConnector
 from app.etl.zakupki.portal import XaridPortal
 
 KNOWN_SOURCES = ("synthetic", "file", "onec", "banks", "cbu", "directbank", "xarid", "hr",
-                 "mehnat")
+                 "mehnat", "askue", "onec_sklad")
 
 
 def _xarid(settings: Settings) -> ProcurementConnector:
@@ -97,12 +101,42 @@ def _hr(settings: Settings) -> HrConnector:
     return HrConnector(HrApiSource(client, path), [HrOrg.model_validate(o) for o in orgs])
 
 
+def _askue(settings: Settings) -> AskueConnector:
+    with get_engine("etl").connect() as conn:
+        stations = sysconfig.current(conn, "askue.stations")
+        days = int(sysconfig.current(conn, "askue.inbox_days"))
+        caps = {r.code: r.capacity_mw for r in conn.execute(text(
+            "SELECT code, capacity_mw FROM dwh.dim_branch WHERE capacity_mw IS NOT NULL"))}
+    if not stations:
+        raise ConfigError("askue.stations bo'sh: `python -m app.cli askue-stations --file …` "
+                          "bilan sozlang")
+    return AskueConnector(DirectoryExport(Path(settings.askue_inbox_dir), max_age_days=days),
+                          [AskueStation.model_validate(s) for s in stations], capacities=caps)
+
+
+def _onec_sklad() -> OneCSkladConnector:
+    # U6: manzil va hisob ma'lumotlari faqat panel/integrations'dan, ishlatish paytida o'qiladi.
+    with get_engine("etl").connect() as conn:
+        config = sklad_config(conn)  # sozlanmagan bo'lsa ConfigError
+        orgs = sysconfig.current(conn, "onec.orgs")
+        months = int(sysconfig.current(conn, "onec.sklad_months"))
+    if not orgs:
+        raise ConfigError("onec.orgs bo'sh: Администрирование → Настройки → «Организации 1С»")
+    return OneCSkladConnector(OneCClient(config), [OrgMap(**org) for org in orgs], months=months)
+
+
+
+
 def make_connector(source: str, settings: Settings | None = None) -> SourceConnector:
     settings = settings or get_settings()
     if source == "synthetic":
         if settings.env == "prod":
             raise ConfigError("SyntheticConnector prod muhitida taqiqlangan")
         return SyntheticConnector(seed=settings.synthetic_seed)
+    if source == "onec_sklad":
+        return _onec_sklad()
+    if source == "askue":
+        return _askue(settings)
     if source == "file":
         return FileConnector(Path(settings.etl_file_dir))
     if source == "onec":

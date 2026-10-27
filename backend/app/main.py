@@ -40,6 +40,8 @@ from app.sections.kadry import router as kadry_router
 from app.sections.kazna import router as kazna_router
 from app.sections.kredity import router as kredity_router
 from app.sections.obzor import router as obzor_router
+from app.sections.proizvodstvo import router as proizvodstvo_router
+from app.sections.sklad import router as sklad_router
 from app.sections.zakupki import router as zakupki_router
 
 API_PREFIX = "/api/v1"
@@ -83,6 +85,8 @@ def create_app() -> FastAPI:
     app.include_router(zakupki_router, prefix=API_PREFIX)
     app.include_router(investicii_router, prefix=API_PREFIX)
     app.include_router(kadry_router, prefix=API_PREFIX)
+    app.include_router(proizvodstvo_router, prefix=API_PREFIX)
+    app.include_router(sklad_router, prefix=API_PREFIX)
     app.include_router(exports_xlsx_router, prefix=API_PREFIX)
     app.include_router(exports_log_router, prefix=API_PREFIX)
     app.include_router(ai_router, prefix=API_PREFIX)

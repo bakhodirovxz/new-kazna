@@ -1,0 +1,15 @@
+{
+  "date": "25.09.2026 10:40",
+  "cascades": [
+    {
+      "name": "Chirchiq-Bo'zsuv GESlar kaskadi",
+      "all-power": "412.5",
+      "all-agg": "5/3/1",
+      "stations": [
+        {"ges": "Chorvoq GES", "power": "380.5", "agg": "3/1/0"},
+        {"ges": "Chirchiq GES-7", "power": 32, "agg": "2/0/1"},
+        {"ges": "Yangi GES", "power": "0", "agg": "0/2/0"}
+      ]
+    }
+  ]
+}

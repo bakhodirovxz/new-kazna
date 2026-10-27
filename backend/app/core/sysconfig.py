@@ -31,9 +31,11 @@ from app.core.logging import get_logger
 from app.core.setting_types import (
     BANKS,
     DEFAULT_METHOD_NORMS,
+    AskueStation,
     BankAccount,
     HrOrg,
     OneCOrg,
+    askue_stations,
     bank_accounts,
     bank_formats,
     branch_codes,
@@ -51,6 +53,7 @@ Kind = Literal["int", "float", "bool", "str", "cron", "date", "list", "json"]
 Apply = Literal["live", "next_run"]
 Source = Literal["panel", "env", "default"]
 KEY_RE = re.compile(r"^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$")
+ONEC_URL_RE = r"^(https?://[A-Za-z0-9.-]+(:[0-9]{1,5})?(/[A-Za-z0-9._~/-]*)?)?$"
 EMAIL_RE = r"^[^\s,<>@]+@[^\s,<>@]+\.[^\s,<>@]+$"  # app/core/config.py bilan bir xil
 CACHE_TTL = 30.0  # s: boshqa jarayonlar o'zgarishni shu muddatda ko'radi
 
@@ -217,6 +220,26 @@ _DEFS: tuple[SettingDef, ...] = (
              title="Расписание загрузки кадровых данных"),
     cron_def("etl.onec_zakupki_cron", "40 2 * * *", category="etl",
              title="Расписание загрузки плана закупок 1С"),
+    # S3: АСКУЭ, jonli quvvat va 1C ombori
+    SettingDef("askue.stations", [],
+               TypeAdapter(Annotated[list[AskueStation], AfterValidator(askue_stations)]),
+               "json", category="askue", title="Станции АСКУЭ и филиалы", apply="next_run"),
+    int_def("askue.inbox_days", 7, 1, 60, category="askue",
+            title="Перечитывать выгрузки АСКУЭ за последние", unit="дн.", apply="next_run"),
+    int_def("askue.live_keep_days", 35, 1, 400, category="askue",
+            title="Хранить снимки текущей мощности", unit="дн.", apply="next_run"),
+    int_def("askue.live_stale_minutes", 30, 5, 1440, category="askue",
+            title="Снимок мощности устарел через", unit="мин"),
+    cron_def("askue.live_cron", "*/10 * * * *", category="askue",
+             title="Расписание опроса текущей мощности"),
+    cron_def("etl.askue_cron", "15 7 * * *", category="etl",
+             title="Расписание загрузки выгрузок АСКУЭ"),
+    int_def("onec.sklad_months", 13, 1, 36, category="sklad",
+            title="Глубина загрузки остатков склада 1С", unit="мес.", apply="next_run"),
+    cron_def("etl.onec_sklad_full_cron", "30 3 * * *", category="etl",
+             title="Расписание полной загрузки склада 1С"),
+    cron_def("etl.onec_sklad_incremental_cron", "30 10,13,16 * * *", category="etl",
+             title="Расписание инкрементальной загрузки склада 1С"),
     # Sifat va saqlash
     float_def("quality.control_tolerance", 0.001, 0.0, 0.01, category="quality",
               title="Допуск сверки контрольных сумм (доля)", guarded=True, apply="next_run"),
@@ -267,6 +290,11 @@ _DEFS: tuple[SettingDef, ...] = (
             guarded=True, title="Предупреждать об истечении TLS-сертификата за", unit="дн."),
     int_def("ops.tls_critical_days", 7, 7, 30, category="ops", perm=Perm.ADMIN_SECURITY,
             guarded=True, title="Критично при истечении TLS-сертификата за", unit="дн."),
+    # S3 integratsiya maydonlari (sirlar — integrations.py, faqat panel)
+    str_def("askue.live_url", "", r"^(https://[A-Za-z0-9./_-]+)?$", 300,
+            title="Адрес источника текущей мощности (https)", **_SMTP),
+    str_def("onec_sklad.base_url", "", ONEC_URL_RE, 300,
+            title="Адрес HTTP-сервиса 1С: склад", **_SMTP),
     # SMTP (integratsiya maydonlari — faqat /admin/integrations orqali o'zgaradi)
     str_def("smtp.host", "", r"^[A-Za-z0-9.-]{0,253}$", 253, title="Сервер SMTP",
             env="smtp_host", **_SMTP),

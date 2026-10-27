@@ -53,6 +53,8 @@ PREFIX_PERMS = {"/api/v1/admin": "admin:", "/api/v1/audit": "audit:read",
                 "/api/v1/zakupki": "section:zakupki:view",
                 "/api/v1/investicii": "section:investicii:view",
                 "/api/v1/kadry": "section:kadry:view",
+                "/api/v1/proizvodstvo": "section:proizvodstvo:view",
+                "/api/v1/sklad": "section:sklad:view",
                 "/api/v1/exports": "export:csv"}
 # R2-1: `_resolve` yakuniy yozuvi `APIRoute` bo'lmasa, shu yerda ANIQ ro'yxatga kiritilmagan
 # bo'lsa, test yiqiladi. Hozircha bo'sh — hech qanday xom (APIRoute bo'lmagan) route yo'q.
@@ -103,6 +105,14 @@ EXPECTED_ROUTES = frozenset({
     ("GET", "/api/v1/kadry/chislennost"),
     ("GET", "/api/v1/kadry/fot"),
     ("GET", "/api/v1/kadry/dvizhenie"),
+    ("GET", "/api/v1/proizvodstvo/svod"),
+    ("GET", "/api/v1/proizvodstvo/stancii"),
+    ("GET", "/api/v1/proizvodstvo/realiz"),
+    ("GET", "/api/v1/proizvodstvo/moshchnost"),
+    ("GET", "/api/v1/sklad/svod"),
+    ("GET", "/api/v1/sklad/ostatki"),
+    ("GET", "/api/v1/sklad/minimum"),
+    ("GET", "/api/v1/sklad/nelikvid"),
     ("GET", "/api/v1/obzor/excel.xlsx"),
     ("POST", "/api/v1/exports/log"),
     ("GET", "/api/v1/obzor/vnimanie"),

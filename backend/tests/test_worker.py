@@ -28,10 +28,12 @@ from tests.etl_helpers import (
     open_run,
     purge_source,
 )
+from tests.helpers import put_setting
 
 JOBS = {"etl_synthetic_full", "etl_onec_full", "etl_onec_incremental", "etl_requests", "partitions",
         "cleanup", "freshness", "heartbeat", "integration_checks", "schedules", "etl_banks",
-        "etl_cbu", "telegram_summary", "etl_hr", "ai_journal"}
+        "etl_cbu", "telegram_summary", "etl_hr", "ai_journal", "etl_askue", "askue_live",
+        "etl_onec_sklad_full", "etl_onec_sklad_incremental"}
 
 
 @pytest.fixture
@@ -311,3 +313,15 @@ def test_partitions_audit_records_effective_retention() -> None:
 def test_scheduler_always_adds_hr_job() -> None:
     jobs = {j.id: j for j in worker.build_scheduler(get_settings(), RecordingNotifier()).get_jobs()}
     assert jobs["etl_hr"].func is worker.run_hr_job
+
+
+def test_askue_job_is_scheduled_and_skips_when_not_configured(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    jobs = {j.id: j for j in worker.build_scheduler(get_settings(), RecordingNotifier()).get_jobs()}
+    assert "etl_askue" in jobs
+    # M10: stdlib/structlog chiqishi yopilgan capture oqimiga yozmasligi uchun log almashtiriladi
+    quiet = type("Quiet", (), {"info": staticmethod(lambda *a, **k: None)})()
+    monkeypatch.setattr(worker, "log", quiet)
+    put_setting("askue.stations", [])
+    assert worker.run_askue_job(RecordingNotifier()) is None  # sozlanmagan — o'tkazib yuboradi

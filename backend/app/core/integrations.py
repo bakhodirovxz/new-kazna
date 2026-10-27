@@ -78,6 +78,13 @@ _ALL: tuple[IntegrationDef, ...] = (
         "ai", "AI-анализ (провайдер)",
         fields=("ai.model", "ai.effort", "ai.max_tokens", "ai.fallbacks"), endpoint=(),
         secrets=(SecretDef("ai.api_key", "Ключ API", max_length=512),), check_in="api"),
+    IntegrationDef("askue_live", "Текущая мощность (treplex)", fields=("askue.live_url",),
+                   endpoint=("askue.live_url",), secrets=()),
+    IntegrationDef(
+        "onec_sklad", "1С: склад", fields=("onec_sklad.base_url",),
+        endpoint=("onec_sklad.base_url",),
+        secrets=(SecretDef("onec_sklad.username", "Пользователь 1С (склад)", max_length=128),
+                 SecretDef("onec_sklad.password", "Пароль 1С (склад)"))),
 )
 INTEGRATIONS: dict[str, IntegrationDef] = {i.name: i for i in _ALL}
 SECRETS: dict[str, tuple[IntegrationDef, SecretDef]] = {
@@ -167,5 +174,12 @@ def _onec_rule(conn: Connection) -> tuple[str, str] | None:
     return None
 
 
+def _onec_sklad_rule(conn: Connection) -> tuple[str, str] | None:
+    url = str(sysconfig.current(conn, "onec_sklad.base_url"))
+    if url.startswith("http://") and not get_settings().onec_allow_http:
+        return ("insecure_http", "onec_sklad.base_url")
+    return None
+
+
 RULES: dict[str, Callable[[Connection], tuple[str, str] | None]] = {
-    "smtp": _smtp_rule, "onec": _onec_rule}
+    "smtp": _smtp_rule, "onec": _onec_rule, "onec_sklad": _onec_sklad_rule}

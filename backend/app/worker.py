@@ -33,10 +33,11 @@ from app.core.logging import configure_logging, get_logger
 from app.dwh import partitions
 from app.dwh.dates import TASHKENT, today_tashkent
 from app.dwh.freshness import freshness
+from app.etl.askue.live import poll_power_job
 from app.etl.connectors import make_connector
 from app.etl.db import etl_transaction
 from app.etl.errors import FILE_FULL_REFUSED, EtlBusyError, safe_error, sqlstate_of
-from app.etl.notify import Notification, Notifier, build_notifier
+from app.etl.notify import Kind, Notification, Notifier, build_notifier
 from app.etl.probes import process_integration_checks
 from app.etl.runner import Runner, RunResult
 from app.etl.types import Mode, SourceConnector
@@ -183,6 +184,52 @@ def run_hr_job(notifier: Notifier) -> RunResult | None:
         except Exception as exc:
             _log_error("hr_notify_failed", exc)
     return result
+
+
+def notify_rejected_rows(run_id: int, notifier: Notifier, *, target: str, kind: Kind,
+                         subject: str, hint: str) -> int:
+    """Manba fayllaridagi rad etilgan qator/fayllar haqida bitta xabar (S3 spec 3.1)."""
+    with etl_transaction() as conn:
+        rows = conn.execute(text(
+            "SELECT code, count(*) AS n FROM core.etl_error WHERE run_id = :r "
+            "AND step = 'extract' AND target = :t GROUP BY code ORDER BY code"),
+            {"r": run_id, "t": target}).all()
+    total = sum(int(r.n) for r in rows)
+    if total:
+        parts = ", ".join(f"{r.code}: {r.n}" for r in rows)
+        notifier.notify(Notification(kind, subject,
+                                     f"Запуск №{run_id}: отклонено {total} ({parts}). {hint}"))
+    return total
+
+
+def notify_askue_errors(run_id: int, notifier: Notifier) -> int:
+    return notify_rejected_rows(
+        run_id, notifier, target="askue_file", kind="askue_rows_rejected",
+        subject="Строки выгрузки АСКУЭ отклонены",
+        hint="Подробности — «Состояние обменов» и docs/integration/askue-format.md.")
+
+
+def run_askue_job(notifier: Notifier) -> RunResult | None:
+    # U5: job shartsiz qo'shiladi; moslashtirish yoki inbox yo'q bo'lsa — o'tkazib yuboradi.
+    with get_engine("app").connect() as conn:
+        mapped = bool(sysconfig.current(conn, "askue.stations"))
+    if not mapped or not Path(get_settings().askue_inbox_dir).is_dir():
+        log.info("askue_skipped", reason="not_configured")
+        return None
+    result = run_etl_job("askue", Mode.INCREMENTAL, notifier)
+    if result is not None and result.run_id is not None:
+        notify_askue_errors(result.run_id, notifier)
+    return result
+
+
+def run_onec_sklad_job(mode: Mode, notifier: Notifier) -> RunResult | None:
+    # U5/U7: job shartsiz qo'shiladi; manzil/hisob ma'lumoti panelda yo'q bo'lsa — o'tkazadi.
+    with get_engine("app").connect() as conn:
+        ready = integrations.configured(conn, "onec_sklad")
+    if not ready:
+        log.info("onec_sklad_skipped", reason="not_configured")
+        return None
+    return run_etl_job("onec_sklad", mode, notifier)
 
 
 def _set_request(request_id: int, status: str, run_id: int | None = None,
@@ -356,6 +403,19 @@ def build_scheduler(settings: Settings, notifier: Notifier, *,
                  _guarded("telegram_summary", send_daily_summary), **opts)
     # S4: HR API — kuniga bir marta (U5: shartsiz, ichida configured tekshiruvi)
     add_cron_job(scheduler, "etl_hr", "etl.hr_cron", run_hr_job, args=(notifier,), **opts)
+    # TZ 8: АСКУЭ — ежесуточно; inbox'dagi oxirgi askue.inbox_days kun fayllari qayta o'qiladi.
+    add_cron_job(scheduler, "etl_askue", "etl.askue_cron",
+                 _guarded("etl_askue", lambda: run_askue_job(notifier)), **opts)
+    # Jonli quvvat — Runner'siz (ETL lock'ini band qilmaydi); askue.live_url bo'sh — job o'tkazadi.
+    add_cron_job(scheduler, "askue_live", "askue.live_cron",
+                 _guarded("askue_live", lambda: poll_power_job(settings)), **opts)
+    # TZ 8: 1C — kechasi to'liq (oxirgi onec.sklad_months oy), kunduzi inkremental 3 marta.
+    add_cron_job(scheduler, "etl_onec_sklad_full", "etl.onec_sklad_full_cron",
+                 _guarded("etl_onec_sklad_full", lambda: run_onec_sklad_job(Mode.FULL, notifier)),
+                 **opts)
+    add_cron_job(scheduler, "etl_onec_sklad_incremental", "etl.onec_sklad_incremental_cron",
+                 _guarded("etl_onec_sklad_incremental",
+                          lambda: run_onec_sklad_job(Mode.INCREMENTAL, notifier)), **opts)
     scheduler.add_job(_guarded("etl_requests", lambda: process_requests(notifier)),
                       "interval", seconds=30, id="etl_requests", **opts)
     scheduler.add_job(_guarded("integration_checks", process_integration_checks),

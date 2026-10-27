@@ -72,6 +72,7 @@ class Settings(BaseSettings):
 
     etl_statement_timeout_ms: int = 1_800_000
     etl_file_dir: str = "/data/inbox"
+    askue_inbox_dir: str = "/data/import/askue"  # S3: АСКУЭ kunlik eksporti (faqat o'qish)
     synthetic_seed: int = 916202617
 
     # S2: tashqi so'rovlar faqat worker'dan; proksi — ixtiyoriy korporativ HTTP proksi.

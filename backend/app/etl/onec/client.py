@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import ssl
+import time
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from decimal import Decimal
@@ -23,10 +24,12 @@ from sqlalchemy.engine import Connection
 
 from app.core import integrations, sysconfig
 from app.core.config import ConfigError, get_settings
+from app.core.setting_types import onec_url_host
 from app.etl.types import ConnectorUnavailableError
 
 TIMEOUT = httpx.Timeout(connect=5.0, read=180.0, write=30.0, pool=5.0)
 MAX_BYTES = 64 * 1024 * 1024
+DEADLINE = 300.0  # bitta so'rov uchun umumiy chegara (sekin "tomchilatib" javob qulfni ushlamasin)
 BOM = b"\xef\xbb\xbf"
 
 
@@ -58,14 +61,18 @@ class OneCUnavailableError(ConnectorUnavailableError):
         self.code = code
 
 
+class OneCCaError(ConfigError):
+    """CA to'plami o'qib bo'lmadi."""
+
+
 def verify_setting(ca_file: str) -> ssl.SSLContext | bool:
     path = Path(ca_file)
     if not ca_file or not path.is_file() or path.stat().st_size == 0:
-        return True  # tizim CA to'plami
+        return True  # httpx standarti: certifi CA to'plami (OS do'koni EMAS)
     try:
         return ssl.create_default_context(cafile=str(path))
     except (ssl.SSLError, OSError) as exc:
-        raise ConfigError(f"onec_ca_bundle o'qib bo'lmadi: {type(exc).__name__}") from exc
+        raise OneCCaError(f"onec_ca_bundle o'qib bo'lmadi: {type(exc).__name__}") from exc
 
 
 def _preview(text: str) -> str:
@@ -114,16 +121,22 @@ class OneCConfig:
 
 class OneCClient:
     def __init__(self, config: OneCConfig, *, timeout: httpx.Timeout = TIMEOUT,
+                 deadline: float = DEADLINE,
                  transport: httpx.BaseTransport | None = None) -> None:
         parsed = urlsplit(config.base_url)
         if parsed.scheme not in ("https", "http") or not parsed.netloc:
             raise ConfigError("onec.base_url noto'g'ri")
+        try:
+            onec_url_host(config.base_url)
+        except ValueError as exc:
+            raise ConfigError(str(exc)) from exc
         if parsed.scheme == "http" and not config.allow_http:
             raise ConfigError("onec.base_url https bo'lishi shart (yoki ONEC_ALLOW_HTTP=true)")
         if not config.username or not config.password:
             raise ConfigError("onec.username/onec.password bo'sh")
         self.insecure = parsed.scheme == "http"
         self.max_bytes = config.max_bytes
+        self.deadline = deadline
         self.http = httpx.Client(
             base_url=config.base_url.rstrip("/"),
             auth=httpx.BasicAuth(config.username, config.password), timeout=timeout,
@@ -136,6 +149,7 @@ class OneCClient:
     def post(self, path: str, body: Mapping[str, Any]) -> Any:
         chunks: list[bytes] = []
         size = 0
+        started = time.monotonic()
         try:
             with self.http.stream("POST", path, json=dict(body)) as response:
                 status = response.status_code
@@ -144,6 +158,8 @@ class OneCClient:
                     if size > self.max_bytes:
                         raise OneCFormatError(f"1С {path}: ответ больше {self.max_bytes} байт")
                     chunks.append(chunk)
+                    if time.monotonic() - started > self.deadline:
+                        raise OneCUnavailableError(f"1С {path}: тайм-аут (общий)", "timeout")
         except httpx.TimeoutException as exc:
             raise OneCUnavailableError(f"1С {path}: тайм-аут", "timeout") from exc
         except httpx.TransportError as exc:

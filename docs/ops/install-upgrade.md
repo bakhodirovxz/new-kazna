@@ -88,13 +88,21 @@
 1. Проверить и загрузить новый пакет (шаг 1 раздела 2).
 2. Внеочередная копия перед миграциями: `$P exec -T backup ugk-backup once full`; сохранить метку
    (`$P exec -T backup ugk-backup latest`) и время начала обновления.
-3. Переключить релиз и запустить:
+3. Если релиз добавляет новые файлы секретов (например, `onec_ca_bundle.pem` — CA для 1С; пустой файл =
+   набор CA certifi), создать недостающие (существующие не затрагиваются) и выставить права, иначе
+   `$P up -d` не запустит весь стек:
+   ```bash
+   python3 scripts/gen_secrets.py /opt/ugekazna/shared/secrets
+   scripts/secrets_perms.sh /opt/ugekazna/shared/secrets
+   ```
+   Корпоративный CA для 1С: записать PEM в `onec_ca_bundle.pem` до `secrets_perms.sh`.
+4. Переключить релиз и запустить:
    ```bash
    ln -sfn /opt/ugekazna/releases/ugekazna-1.1.0 /opt/ugekazna/current
    cd /opt/ugekazna/current && ln -sfn /opt/ugekazna/shared/prod.env deploy/prod.env
    $P up -d
    ```
-4. Проверки: `$P ps -a` (все сервисы `healthy`, `migrate` — `exited (0)`), вход, `make ops-check STACK=prod`,
+5. Проверки: `$P ps -a` (все сервисы `healthy`, `migrate` — `exited (0)`), вход, `make ops-check STACK=prod`,
    `make audit-verify STACK=prod`.
 
 ## 4. Откат

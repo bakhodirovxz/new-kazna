@@ -532,6 +532,7 @@ export const ru = {
   'integrations.code.format_error': 'Ответ сервера не в ожидаемом формате',
   'integrations.code.not_configured': 'Интеграция не настроена',
   'integrations.code.insecure_refused': 'Пароль не передаётся без шифрования',
+  'integrations.code.ca_invalid': 'Файл CA для 1С не читается (onec_ca_bundle.pem)',
   'integrations.code.not_supported': 'Проверка не поддерживается',
   'integrations.code.error': 'Внутренняя ошибка проверки',
   'dash.unit.mln': 'млн',

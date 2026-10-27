@@ -22,7 +22,8 @@ PASSWORDS = (
     "pgbackrest_cipher_pass",
 )
 # Ichki SMTP relay parolsiz bo'lsa bo'sh qoladi; kerak bo'lsa operator to'ldiradi.
-EMPTY_OPTIONAL = ("smtp_password",)
+# onec_ca_bundle.pem bo'sh = certifi CA to'plami (korporativ CA bo'lsa operator PEM yozadi).
+EMPTY_OPTIONAL = ("smtp_password", "onec_ca_bundle.pem")
 
 
 def _write(path: Path, value: str) -> None:

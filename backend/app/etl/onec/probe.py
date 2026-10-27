@@ -9,7 +9,13 @@ from app.core.db import get_engine
 from app.core.integrations import configured
 from app.dwh.dates import today_tashkent
 from app.dwh.reference import current_setting
-from app.etl.onec.client import OneCClient, OneCConfig, OneCError, OneCUnavailableError
+from app.etl.onec.client import (
+    OneCCaError,
+    OneCClient,
+    OneCConfig,
+    OneCError,
+    OneCUnavailableError,
+)
 from app.etl.onec.models import PaymentsResponse, parse
 
 _TRANSPORT: httpx.BaseTransport | None = None  # testlarda MockTransport
@@ -27,8 +33,10 @@ def onec_probe() -> str:
         body["org_uid"] = orgs[0]["org_uid"]
     try:
         client = OneCClient(config, transport=_TRANSPORT)
+    except OneCCaError:
+        return "ca_invalid"
     except ConfigError:
-        return "insecure_refused"
+        return "insecure_refused"  # http:// taqiqlangan yoki manzil yaroqsiz
     try:
         parse(PaymentsResponse, client.post("/payments", body), "/payments")
     except (OneCError, OneCUnavailableError) as exc:

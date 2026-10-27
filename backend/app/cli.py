@@ -75,6 +75,7 @@ from app.etl.connectors import make_connector
 from app.etl.db import etl_transaction
 from app.etl.errors import FILE_FULL_REFUSED, EtlBusyError, safe_error
 from app.etl.notify import Notification, build_notifier
+from app.etl.onec.client import OneCError
 from app.etl.retry import RETRY_DELAYS
 from app.etl.runner import ETL_LOCK, Runner
 from app.etl.types import Mode
@@ -356,7 +357,13 @@ def _onec_check() -> int:
     except ConfigError as exc:
         _out(f"Konfiguratsiya xatosi: {exc}")
         return 2
-    health = connector.healthcheck()
+    try:
+        health = connector.healthcheck()
+    except (OneCError, ConfigError) as exc:  # masalan, 401 — traceback emas
+        _out(f"1C: XATO — {exc}")
+        return 1
+    finally:
+        connector.close()  # type: ignore[attr-defined]
     _out(f"1C: {'OK' if health.ok else 'XATO'} — {health.detail}")
     return 0 if health.ok else 1
 

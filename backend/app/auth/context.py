@@ -15,8 +15,7 @@ from sqlalchemy.orm import Session
 
 from app.auth import sessions
 from app.auth.models import Position, PositionBranch, Role, RolePermission, User
-from app.core import ratelimit
-from app.core.config import get_settings
+from app.core import ratelimit, sysconfig
 from app.core.db import DB, apply_rls
 from app.core.errors import AuthError, ForbiddenError, PasswordChangeRequired, ScopeViolationError
 
@@ -82,7 +81,7 @@ def load_scope(db: Session, user: User) -> tuple[str, frozenset[str], frozenset[
 
 def build_context(db: Session, user: User, session_id: uuid.UUID, now: datetime) -> AuthContext:
     role_code, perms, branches = load_scope(db, user)
-    max_age = timedelta(days=get_settings().password_max_age_days)
+    max_age = timedelta(days=int(sysconfig.value("security.password_max_age_days")))
     return AuthContext(
         user_id=user.id,
         username=user.username,
@@ -131,7 +130,7 @@ def get_ctx(
         session_cookie, csrf_cookie, csrf_header
     ):
         raise ForbiddenError("csrf_failed")
-    ratelimit.check("api_user", str(user.id), ratelimit.API_PER_USER)
+    ratelimit.check("api_user", str(user.id), ratelimit.api_per_user())
     ctx = build_context(db, user, sess.id, now)
     if ctx.must_change_password and request.url.path not in PASSWORD_CHANGE_ALLOWED:
         raise PasswordChangeRequired()

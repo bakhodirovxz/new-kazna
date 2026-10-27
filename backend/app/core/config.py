@@ -68,12 +68,6 @@ class Settings(BaseSettings):
     blind_index_key: SecretStr = SecretStr("")
     session_pepper: SecretStr = SecretStr("")
 
-    session_idle_minutes: int = 30
-    session_absolute_hours: int = 12
-    password_max_age_days: int = 90
-    login_max_failures: int = 5
-    login_lockout_minutes: int = 15
-
     etl_statement_timeout_ms: int = 1_800_000
     etl_file_dir: str = "/data/inbox"
     synthetic_seed: int = 916202617

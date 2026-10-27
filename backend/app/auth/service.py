@@ -18,8 +18,7 @@ from app.auth import passwords, sessions, totp
 from app.auth.context import AuthContext
 from app.auth.models import BackupCode, MfaChallenge, PasswordHistory, User, UserSession
 from app.auth.schemas import SessionOut
-from app.core import keystore, ratelimit
-from app.core.config import get_settings
+from app.core import keystore, ratelimit, sysconfig
 from app.core.crypto import CryptoError, Purpose, keyed_hash
 from app.core.errors import AuthError, ConflictError, NotFoundError, ValidationFailed
 from app.core.request_meta import ClientMeta
@@ -81,8 +80,7 @@ def _unknown_user_audit_details(normalized: str) -> dict[str, Any]:
 def login(
     db: Session, username: str, password: str, meta: ClientMeta, now: datetime
 ) -> LoginResult:
-    settings = get_settings()
-    ratelimit.check("login_ip", meta.ip or "unknown", ratelimit.LOGIN_PER_IP)
+    ratelimit.check("login_ip", meta.ip or "unknown", ratelimit.login_per_ip())
     uname = normalize_username(username)
     # I1: qator qulfi bilan o'qiladi — parallel noto'g'ri urinishlar (bir xil foydalanuvchi)
     # ketma-ketlashadi, aks holda `failed_logins += 1` yo'qolgan yangilanishga olib kelardi.
@@ -101,8 +99,8 @@ def login(
         reason = "inactive" if not user.is_active else "locked" if locked else "bad_password"
         if reason == "bad_password":
             user.failed_logins += 1
-            if user.failed_logins >= settings.login_max_failures:
-                user.locked_until = now + timedelta(minutes=settings.login_lockout_minutes)
+            if user.failed_logins >= int(sysconfig.value("security.login_max_failures")):
+                user.locked_until = now + _lockout()
                 user.failed_logins = 0
                 reason = "locked_now"
             db.commit()  # so'rov rollback bo'lsa ham hisoblagich saqlanadi
@@ -188,12 +186,11 @@ def _fail_attempt(
 ) -> NoReturn:
     """I3: noto'g'ri 2FA kodlari ham parol xatolari bilan bitta hisoblagichga qo'shiladi —
     aks holda cheksiz TOTP-brute-force turli yangi challenge'lar orqali mumkin bo'lardi."""
-    settings = get_settings()
     challenge.attempts += 1
     user.failed_logins += 1
     locked_now = False
-    if user.failed_logins >= settings.login_max_failures:
-        user.locked_until = now + timedelta(minutes=settings.login_lockout_minutes)
+    if user.failed_logins >= int(sysconfig.value("security.login_max_failures")):
+        user.locked_until = now + _lockout()
         user.failed_logins = 0
         locked_now = True
     db.commit()
@@ -231,6 +228,10 @@ def issue_backup_codes(db: Session, user_id: int) -> list[str]:
     return codes
 
 
+def _lockout() -> timedelta:
+    return timedelta(minutes=int(sysconfig.value("security.login_lockout_minutes")))
+
+
 def decrypt_totp_secret(user: User) -> str | None:
     if user.totp_secret_enc is None:
         return None
@@ -243,7 +244,7 @@ def decrypt_totp_secret(user: User) -> str | None:
 def verify_mfa(
     db: Session, token: str, code: str, meta: ClientMeta, now: datetime
 ) -> tuple[sessions.NewSession, User]:
-    ratelimit.check("mfa_ip", meta.ip or "unknown", ratelimit.MFA_PER_IP)
+    ratelimit.check("mfa_ip", meta.ip or "unknown", ratelimit.mfa_per_ip())
     challenge, user = _load_challenge(db, token, "verify", now)
     secret = decrypt_totp_secret(user)
     step = totp.verify(secret, code, user.totp_last_step, now.timestamp()) if secret else None
@@ -268,7 +269,7 @@ def verify_mfa(
 
 
 def enroll_start(db: Session, token: str, meta: ClientMeta, now: datetime) -> EnrollStart:
-    ratelimit.check("mfa_ip", meta.ip or "unknown", ratelimit.MFA_PER_IP)  # M12
+    ratelimit.check("mfa_ip", meta.ip or "unknown", ratelimit.mfa_per_ip())  # M12
     challenge, user = _load_challenge(db, token, "enroll", now)
     if user.totp_enabled:
         raise ConflictError("mfa_already_enabled")
@@ -286,7 +287,7 @@ def enroll_start(db: Session, token: str, meta: ClientMeta, now: datetime) -> En
 def enroll_confirm(
     db: Session, token: str, code: str, meta: ClientMeta, now: datetime
 ) -> tuple[sessions.NewSession, User, list[str]]:
-    ratelimit.check("mfa_ip", meta.ip or "unknown", ratelimit.MFA_PER_IP)
+    ratelimit.check("mfa_ip", meta.ip or "unknown", ratelimit.mfa_per_ip())
     challenge, user = _load_challenge(db, token, "enroll", now)
     if user.totp_enabled:
         raise ConflictError("mfa_already_enabled")
@@ -320,9 +321,8 @@ def enroll_confirm(
 def change_password(
     db: Session, ctx: AuthContext, current: str, new: str, meta: ClientMeta, now: datetime
 ) -> sessions.NewSession:
-    settings = get_settings()
     # I4: shifrlangan-parol "oracle"ni cheklaydigan maxsus limit — tekshiruvdan OLDIN.
-    ratelimit.check("password_change_user", str(ctx.user_id), ratelimit.PASSWORD_CHANGE_PER_USER)
+    ratelimit.check("password_change_user", str(ctx.user_id), ratelimit.password_change_per_user())
     user = db.get(User, ctx.user_id, with_for_update=True)
     if user is None:
         raise AuthError("session_expired")
@@ -332,8 +332,8 @@ def change_password(
         # sessiya orqali "oracle" bilan parolni taxmin qilishning oldini olish uchun).
         user.failed_logins += 1
         locked_now = False
-        if user.failed_logins >= settings.login_max_failures:
-            user.locked_until = now + timedelta(minutes=settings.login_lockout_minutes)
+        if user.failed_logins >= int(sysconfig.value("security.login_max_failures")):
+            user.locked_until = now + _lockout()
             user.failed_logins = 0
             locked_now = True
             sessions.revoke_all(db, user.id, "password_change_lockout", now)
@@ -347,7 +347,7 @@ def change_password(
             select(PasswordHistory.password_hash)
             .where(PasswordHistory.user_id == user.id)
             .order_by(PasswordHistory.created_at.desc(), PasswordHistory.id.desc())
-            .limit(passwords.HISTORY_DEPTH - 1)
+            .limit(passwords.history_depth() - 1)
         ).scalars(),
     ]
     problems = passwords.policy_problems(new, username=user.username, previous_hashes=history)
@@ -357,7 +357,7 @@ def change_password(
     db.flush()
     keep = select(PasswordHistory.id).where(PasswordHistory.user_id == user.id).order_by(
         PasswordHistory.created_at.desc(), PasswordHistory.id.desc()
-    ).limit(passwords.HISTORY_DEPTH - 1)
+    ).limit(passwords.history_depth() - 1)
     db.execute(
         delete(PasswordHistory).where(
             PasswordHistory.user_id == user.id, PasswordHistory.id.not_in(keep.scalar_subquery())

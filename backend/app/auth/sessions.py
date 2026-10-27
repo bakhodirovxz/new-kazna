@@ -13,8 +13,7 @@ from sqlalchemy import CursorResult, select, update
 from sqlalchemy.orm import Session
 
 from app.auth.models import User, UserSession
-from app.core import keystore
-from app.core.config import get_settings
+from app.core import keystore, sysconfig
 from app.core.crypto import Purpose, keyed_hash
 
 SLIDE_EVERY = timedelta(seconds=60)
@@ -70,10 +69,11 @@ def create(
     """`absolute_expires_at` — sessiya aylantirilganda (fix r2, M8) eskisining absolyut
     muddatini meros qilib olish uchun; berilsa, standart muddat bilan solishtirib
     ENG ERTASI olinadi (parol almashtirish sessiyani "abadiylashtirmasin")."""
-    settings = get_settings()
     token = secrets.token_urlsafe(32)
     session_id = uuid.uuid4()
-    default_absolute = now + timedelta(hours=settings.session_absolute_hours)
+    absolute_hours = int(sysconfig.value("security.session_absolute_hours"))
+    idle = timedelta(minutes=int(sysconfig.value("security.session_idle_minutes")))
+    default_absolute = now + timedelta(hours=absolute_hours)
     absolute = (
         min(default_absolute, absolute_expires_at)
         if absolute_expires_at is not None
@@ -86,7 +86,7 @@ def create(
             token_hmac=token_hmac(token),
             created_at=now,
             last_seen_at=now,
-            idle_expires_at=min(now + timedelta(minutes=settings.session_idle_minutes), absolute),
+            idle_expires_at=min(now + idle, absolute),
             absolute_expires_at=absolute,
             ip_enc=keystore.encrypt_str(Purpose.PII, ip, ip_aad(session_id)) if ip else None,
             ua_summary=ua_summary(ua)[:80],
@@ -117,7 +117,7 @@ def resolve(
     ):
         return None
     if slide and now - sess.last_seen_at >= SLIDE_EVERY:
-        idle = timedelta(minutes=get_settings().session_idle_minutes)
+        idle = timedelta(minutes=int(sysconfig.value("security.session_idle_minutes")))
         sess.last_seen_at = now
         sess.idle_expires_at = min(now + idle, sess.absolute_expires_at)
     return sess, user

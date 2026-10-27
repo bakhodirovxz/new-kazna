@@ -8,6 +8,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.auth import passwords
 from app.auth.context import AuthContext
 
 
@@ -47,6 +48,7 @@ class MeOut(BaseModel):
     permissions: list[str]
     branch_ids: list[int] | None
     must_change_password: bool
+    password_min_length: int
 
 
 class EnrollConfirmOut(BaseModel):
@@ -77,4 +79,5 @@ def me_out(ctx: AuthContext) -> MeOut:
         permissions=sorted(ctx.permissions),
         branch_ids=None if ctx.branch_ids is None else sorted(ctx.branch_ids),
         must_change_password=ctx.must_change_password,
+        password_min_length=passwords.min_length(),
     )

@@ -12,12 +12,20 @@ from importlib import resources
 from argon2 import PasswordHasher
 from argon2.exceptions import InvalidHashError, VerificationError, VerifyMismatchError
 
+from app.core import sysconfig
 from app.core.config import get_settings
 
 STANDARD_PARAMS = (3, 64 * 1024, 4)  # time_cost, memory_cost (KiB), parallelism
 FAST_TEST_PARAMS = (1, 8 * 1024, 1)
-MIN_LENGTH = 12
-HISTORY_DEPTH = 5
+
+
+def min_length() -> int:
+    return int(sysconfig.value("security.password_min_length"))
+
+
+def history_depth() -> int:
+    """Joriy parol + oldingilari: oxirgi N tasi qayta ishlatilmaydi."""
+    return int(sysconfig.value("security.password_history"))
 CONTEXT_WORDS = ("ugekazna", "gidroenergo", "password", "parol", "пароль", "qwerty", "admin")
 _TEMP_ALPHABET = string.ascii_letters + string.digits + "-_!@#%+="
 
@@ -77,7 +85,7 @@ def policy_problems(
     password: str, *, username: str, previous_hashes: Sequence[str] = ()
 ) -> list[str]:
     problems: list[str] = []
-    if len(password) < MIN_LENGTH:
+    if len(password) < min_length():
         problems.append("password_too_short")
     if _classes(password) < 3:
         problems.append("password_too_simple")

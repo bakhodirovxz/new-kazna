@@ -13,6 +13,7 @@ from dataclasses import dataclass
 
 import redis
 
+from app.core import sysconfig
 from app.core.config import get_settings
 from app.core.errors import RateLimitedError
 from app.core.logging import get_logger
@@ -27,10 +28,28 @@ class Limit:
     window: int
 
 
-LOGIN_PER_IP = Limit(events=10, window=60)
-MFA_PER_IP = Limit(events=20, window=60)
-API_PER_USER = Limit(events=300, window=60)
-PASSWORD_CHANGE_PER_USER = Limit(events=5, window=900)
+
+
+def _per(key: str, window: int) -> Limit:
+    return Limit(events=int(sysconfig.value(key)), window=window)
+
+
+def login_per_ip() -> Limit:
+    return _per("ratelimit.login_per_min", 60)
+
+
+def mfa_per_ip() -> Limit:
+    return _per("ratelimit.mfa_per_min", 60)
+
+
+def api_per_user() -> Limit:
+    return _per("ratelimit.api_per_min", 60)
+
+
+def password_change_per_user() -> Limit:
+    return _per("ratelimit.password_change_per_15min", 900)
+
+
 # Task 12 fix r1: POST /audit/verify to'liq jadval bo'yicha HMAC skanerlash — arzon amal
 # emas, shuning uchun boshqa endpointlarga qaraganda ancha qattiqroq cheklanadi: har
 # foydalanuvchi UCHUN va, DoS'dan himoya sifatida, BUTUN tizim uchun ham (identity "global").

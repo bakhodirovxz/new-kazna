@@ -33,6 +33,7 @@ from app.core.setting_types import (
     HrOrg,
     OneCOrg,
     calendar_kinds,
+    external_base_url,
     hr_orgs,
     method_norms,
     onec_orgs,
@@ -172,6 +173,11 @@ _DEFS: tuple[SettingDef, ...] = (
     SettingDef("hr.orgs", [], TypeAdapter(Annotated[list[HrOrg], AfterValidator(hr_orgs)]),
                "json", category="hr", title="Организации кадровой системы и филиалы",
                apply="next_run"),
+    # k-anonimlik (TZ 9, shaxsiy ma'lumot): guruh < chegara bo'lsa ФОТ/o'rtacha/oqimlar yashiriladi.
+    # Faqat qattiqlashtirish: 3 dan past bo'lmaydi, standart 5.
+    int_def("kadry.min_group", 5, 3, 1000, category="hr",
+            title="Минимальный размер группы для показа ФОТ и средней зарплаты", unit="чел.",
+            guarded=True),
     cron_def("etl.hr_cron", "30 6 * * *", category="etl",
              title="Расписание загрузки кадровых данных"),
     cron_def("etl.onec_zakupki_cron", "40 2 * * *", category="etl",
@@ -237,8 +243,11 @@ _DEFS: tuple[SettingDef, ...] = (
     bool_def("smtp.starttls", True, title="STARTTLS", env="smtp_starttls", **_SMTP),
     bool_def("smtp.ssl", False, title="SSL/TLS (SMTPS)", env="smtp_ssl", **_SMTP),
     # HR API (S4): manzil faqat https; login/parol — integrations sirlari
-    str_def("hr.base_url", "", r"^(https://[A-Za-z0-9.-]+(:[0-9]{1,5})?(/[A-Za-z0-9._~/-]*)?)?$",
-            300, title="Адрес кадровой системы (HR API)", **_SMTP),
+    SettingDef("hr.base_url", "", TypeAdapter(Annotated[
+        str, Field(strict=True, max_length=300,
+                   pattern=r"^(https://[A-Za-z0-9.-]+(:[0-9]{1,5})?(/[A-Za-z0-9._~/-]*)?)?$"),
+        AfterValidator(external_base_url)]), "str", title="Адрес кадровой системы (HR API)",
+        **_SMTP),
     str_def("hr.breakdown_path", "/dashboard/employees-by-category", r"^/[A-Za-z0-9/_-]{1,120}$",
             121, title="Путь выгрузки по категориям", **_SMTP),
 )

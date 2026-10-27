@@ -4,7 +4,7 @@ soatlar, ulushlar 0..1 — ФИО yoki shaxsga oid kalit yo'q
 
 from __future__ import annotations
 
-from app.sections.queries.hr import HrBranch, HrFigures
+from app.sections.queries.hr import HIDDEN_REASON, HrBranch, HrFigures, HrMonth, NamedValue
 from app.sections.schemas import ReportPeriodOut, _Out
 
 
@@ -16,30 +16,36 @@ class HrKpisOut(_Out):
     vacancies: float | None
     vacancy_share: float | None
     fill: float | None
-    payroll: float
+    payroll: float | None
     outflow: float
     payroll_share: float | None
     avg_salary: float | None
-    hired: int
-    fired: int
+    hired: int | None
+    fired: int | None
     turnover: float | None
-    overtime: float
+    overtime: float | None
     overtime_per_employee: float | None
+    suppressed: bool = False
+    suppressed_reason: str | None = None
 
 
 class HrMonthOut(_Out):
     month_id: int
-    payroll: float
+    payroll: float | None
     fact: float
     avg_salary: float | None
-    hired: int
-    fired: int
-    overtime: float
+    hired: int | None
+    fired: int | None
+    overtime: float | None
+    suppressed: bool = False
+    suppressed_reason: str | None = None
 
 
 class HrCategoryOut(_Out):
     name: str
-    value: float
+    value: float | None
+    suppressed: bool = False
+    suppressed_reason: str | None = None
 
 
 class HrBranchOut(_Out):
@@ -49,13 +55,15 @@ class HrBranchOut(_Out):
     fact: float
     vacancies: float | None
     fill: float | None
-    payroll: float
+    payroll: float | None
     avg_salary: float | None
-    hired: int
-    fired: int
+    hired: int | None
+    fired: int | None
     turnover: float | None
-    overtime: float
+    overtime: float | None
     overtime_per_employee: float | None
+    suppressed: bool = False
+    suppressed_reason: str | None = None
 
 
 class KadrySvodOut(_Out):
@@ -87,17 +95,41 @@ class KadryDvizhenieOut(_Out):
     branches: list[HrBranchOut]
 
 
+def _reason(hidden: bool) -> str | None:
+    return HIDDEN_REASON if hidden else None
+
+
 def hr_kpis_out(t: HrFigures) -> HrKpisOut:
+    hide = t.suppressed
     return HrKpisOut(
         has_data=t.has_data, snap_month=t.snap_month, plan=t.plan, fact=t.fact,
-        vacancies=t.vacancies, vacancy_share=t.vacancy_share, fill=t.fill, payroll=t.payroll,
-        outflow=t.outflow, payroll_share=t.payroll_share, avg_salary=t.avg_salary,
-        hired=t.hired, fired=t.fired, turnover=t.turnover, overtime=t.overtime,
-        overtime_per_employee=t.overtime_per_employee)
+        vacancies=t.vacancies, vacancy_share=t.vacancy_share, fill=t.fill,
+        payroll=None if hide else t.payroll, outflow=t.outflow, payroll_share=t.payroll_share,
+        avg_salary=t.avg_salary, hired=None if hide else t.hired, fired=None if hide else t.fired,
+        turnover=t.turnover, overtime=None if hide else t.overtime,
+        overtime_per_employee=t.overtime_per_employee, suppressed=hide,
+        suppressed_reason=_reason(hide and t.has_data))
 
 
 def hr_branch_out(b: HrBranch) -> HrBranchOut:
+    hide = b.suppressed
     return HrBranchOut(
         branch_id=b.branch_id, name=b.name, plan=b.plan, fact=b.fact, vacancies=b.vacancies,
-        fill=b.fill, payroll=b.payroll, avg_salary=b.avg_salary, hired=b.hired, fired=b.fired,
-        turnover=b.turnover, overtime=b.overtime, overtime_per_employee=b.overtime_per_employee)
+        fill=b.fill, payroll=None if hide else b.payroll, avg_salary=b.avg_salary,
+        hired=None if hide else b.hired, fired=None if hide else b.fired, turnover=b.turnover,
+        overtime=None if hide else b.overtime, overtime_per_employee=b.overtime_per_employee,
+        suppressed=hide, suppressed_reason=_reason(hide))
+
+
+def hr_month_out(m: HrMonth) -> HrMonthOut:
+    hide = m.hidden
+    return HrMonthOut(
+        month_id=m.month_id, payroll=None if hide else m.payroll, fact=m.fact,
+        avg_salary=m.avg_salary, hired=None if hide else m.hired, fired=None if hide else m.fired,
+        overtime=None if hide else m.overtime, suppressed=hide and m.fact > 0,
+        suppressed_reason=_reason(hide and m.fact > 0))
+
+
+def hr_category_out(c: NamedValue) -> HrCategoryOut:
+    return HrCategoryOut(name=c.name, value=None if c.hidden else c.value, suppressed=c.hidden,
+                         suppressed_reason=_reason(c.hidden))

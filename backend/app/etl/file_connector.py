@@ -36,6 +36,7 @@ from app.etl.types import (
     Watermark,
     Window,
 )
+from app.etl.zakupki.codes import INDIVIDUAL_NAME
 
 NUMERIC_COLUMNS = frozenset({
     "amount", "balance", "capacity_mw", "lat", "lon", "rate", "amount_uzs", "total_cost",
@@ -64,6 +65,17 @@ def _iso_date(value: str, where: str) -> int:
         return date_id(date.fromisoformat(value))
     except ValueError:
         raise FileFormatError(f"{where}: неверная дата (ожидается ГГГГ-ММ-ДД)") from None
+
+
+_PINFL = re.compile(r"^\d{14}$")
+
+
+def _mask_individual(row: dict[str, Any]) -> None:
+    """Jismoniy shaxs/YaTT (14 xonali ПИНФЛ): ism va ПИНФЛ saqlanmaydi (TZ 9) — portal yo'li
+    (ProcurementConnector) bilan bir xil qoida."""
+    if _PINFL.fullmatch(str(row.get("inn") or "").strip()):
+        row["name"] = INDIVIDUAL_NAME
+        row["inn"] = None
 
 
 class FileConnector:
@@ -119,6 +131,8 @@ class FileConnector:
             counts[name] = 0
             for line, raw in self._rows(path):
                 row = self._convert(target, raw, f"{path.name}:{line}")
+                if name == "dim_counterparty":
+                    _mask_individual(row)
                 if target.kind == "fact" and row.get("date_id") is not None:
                     day = int(row["date_id"])
                     # forward maqsadlar (reja, АИП, bosqichlar) kelajak sanalarni ham oladi

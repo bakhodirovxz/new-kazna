@@ -8,7 +8,7 @@ from typing import Any
 from sqlalchemy import text
 
 from app.etl.db import etl_transaction
-from tests.etl_helpers import branch_row, merge_all, new_tag, open_run, stage
+from tests.etl_helpers import branch_row, cash_row, merge_all, new_tag, open_run, stage
 from tests.s1_helpers import rebuild
 
 DONE, ANNOUNCED, EVAL, CANCELLED = "договор заключён", "объявлен", "на оценке", "отменён"
@@ -156,3 +156,61 @@ def investment_scenario(source: str, *, publish: bool = False) -> InvScenario:
             {"a": f"OA-{tag}", "b": f"OB-{tag}"}).all())
     return InvScenario(source, tag, _branch_id(f"T-{tag}"), f"T-{tag}", run_id, build_id,
                        int(objs[f"OA-{tag}"]), int(objs[f"OB-{tag}"]))
+
+
+@dataclass(frozen=True, slots=True)
+class HrScenario:
+    source: str
+    tag: str
+    branch_id: int
+    branch_code: str
+    run_id: int
+    build_id: int
+    salary_code: str
+
+
+def hr_rows(tag: str) -> dict[str, list[dict[str, Any]]]:
+    branch = branch_row(tag)
+    code = branch["code"]
+    salary = f"SAL-{tag}"
+
+    def hr(src: str, day: int, pos: str, plan: int, fact: int, hired: int, fired: int,
+           overtime: float) -> dict[str, Any]:
+        return {"doc_type": "hr_month", "src_id": src, "date_id": day, "branch_code": code,
+                "pos_code": f"{pos}-{tag}", "headcount_plan": plan, "headcount_fact": fact,
+                "payroll": 0, "hired": hired, "fired": fired, "overtime_hours": overtime}
+
+    return {
+        "dim_branch": [branch],
+        "dim_position": [{"code": f"HP1-{tag}", "category": "Руководители", "department": "—"},
+                         {"code": f"HP2-{tag}", "category": "Оперативный персонал",
+                          "department": "—"}],
+        "dim_item": [{"code": salary, "name": f"Заработная плата тест {tag}",
+                      "activity": "operating", "direction": "out", "sort_order": 999}],
+        "fact_hr": [
+            hr("h71", 20260731, "HP1", 10, 9, 0, 1, 15),
+            hr("h72", 20260731, "HP2", 90, 82, 1, 1, 300),
+            hr("hx", 20260815, "HP2", 90, 85, 0, 0, 0),
+            hr("h81", 20260831, "HP1", 10, 9, 1, 0, 20),
+            hr("h82", 20260831, "HP2", 90, 81, 2, 3, 400),
+            hr("h91", 20260924, "HP1", 10, 10, 1, 0, 10),
+            hr("h92", 20260924, "HP2", 90, 80, 1, 2, 200),
+        ],
+        "fact_cashflow": [
+            cash_row("c1", 20260715, code, 170, item_code=salary),
+            cash_row("c2", 20260815, code, 180, item_code=salary),
+            cash_row("c3", 20260910, code, 150, item_code=salary),
+            cash_row("c4", 20260820, code, 420),
+            cash_row("c5", 20260912, code, 100),
+        ],
+    }
+
+
+def hr_scenario(source: str, *, publish: bool = False) -> HrScenario:
+    tag = new_tag()
+    run_id = open_run(source)
+    stage(run_id, source, hr_rows(tag))
+    merge_all(run_id, source)
+    build_id = rebuild(run_id, publish=publish)
+    return HrScenario(source, tag, _branch_id(f"T-{tag}"), f"T-{tag}", run_id, build_id,
+                      f"SAL-{tag}")

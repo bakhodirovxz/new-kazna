@@ -14,6 +14,7 @@ redis>=5.2,<7
 structlog>=24.4
 apscheduler>=3.10,<4
 openpyxl>=3.1,<4
+defusedxml>=0.7.1,<1  # openpyxl XML-bomb himoyasi (XLSX import)
 httpx>=0.28,<1  # CBU/Telegram mijozlari (worker); API ham app.etl.connectors orqali import qiladi
 # S5: AI-анализ — rasmiy Anthropic Python SDK (faqat api konteynerida).
 anthropic

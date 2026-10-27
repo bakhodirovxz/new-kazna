@@ -37,7 +37,9 @@ class SyntheticConnector:
     def extract(self, window: Window, sink: StagingSink) -> ExtractStats:
         counts: dict[str, int] = {}
         for _name, family in FAMILIES:
-            counts.update(family(self.model, window, sink))
+            for target, n in family(self.model, window, sink).items():
+                # Bir maqsadni bir nechta oila beradi (payments + calendar → fact_payment_plan).
+                counts[target] = counts.get(target, 0) + n
         return ExtractStats(sum(counts.values()), counts)
 
     def control_totals(self, window: Window) -> ControlTotals | None:

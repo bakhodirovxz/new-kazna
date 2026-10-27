@@ -14,6 +14,8 @@
 		# Oldida reverse proxy (masalan aaPanel Apache) bo'lsa — uning manzili (Docker gateway) prod.env da;
 		# standart 127.0.0.1/32 hech kimga ishonmaydi, X-Forwarded-For mijozdan olinmaydi.
 		trusted_proxies static {$UGK_TRUSTED_PROXIES:127.0.0.1/32}
+		# O'ngdan birinchi ishonchsiz manzil — mijoz soxta X-Forwarded-For qo'shsa ham client_ip o'zgarmaydi.
+		trusted_proxies_strict
 	}
 }
 
@@ -114,7 +116,10 @@ http://:8081 {
 	}
 
 	handle /api/* {
-		reverse_proxy api:8000
+		reverse_proxy api:8000 {
+			# api faqat Caddy hisoblagan mijoz IP'sini ko'radi (zanjir emas).
+			header_up X-Forwarded-For {client_ip}
+		}
 	}
 
 	# Frontend: ugekazna-web image'idagi /srv (frontend/Dockerfile `web` bosqichi).

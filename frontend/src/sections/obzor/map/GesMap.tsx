@@ -15,7 +15,7 @@ export interface GesMapProps {
 
 function tip(s: StationOut): string {
   if (s.kind === 'head') return t('obzor.map.tipHq', { name: s.name, balance: formatMoney(s.closing) });
-  return t('obzor.map.tip', { name: s.name, capacity: formatNumber(s.capacity_mw ?? 0), outflow: formatMoney(s.outflow) });
+  return t('obzor.map.tip', { name: s.name, capacity: s.capacity_mw == null ? '—' : formatNumber(s.capacity_mw), outflow: formatMoney(s.outflow) });
 }
 
 function lowPlan(s: StationOut): boolean {

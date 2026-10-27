@@ -58,8 +58,14 @@ export function StationPanel({ stations, selected, onSelect, filters, onBranch }
             <div>
               <span>{t('obzor.station.capacity')}</span>
               <b>
-                {formatNumber(station.capacity_mw ?? 0)}
-                <small>{t('obzor.station.mw')}</small>
+                {station.capacity_mw == null ? (
+                  '—'
+                ) : (
+                  <>
+                    {formatNumber(station.capacity_mw)}
+                    <small>{t('obzor.station.mw')}</small>
+                  </>
+                )}
               </b>
             </div>
           </div>

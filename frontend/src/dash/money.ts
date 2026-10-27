@@ -22,9 +22,11 @@ export function formatPct(ratio: number | null | undefined, digits = 1): string 
 
 export function yoyRatio(current: number, previous: number | null | undefined): number | null {
   if (previous === null || previous === undefined || previous === 0) return null;
-  return current / previous - 1;
+  // |previous| bo'yicha: manfiy bazada ham yaxshilanish musbat (ЧДП −100 → −50 = +50%).
+  return (current - previous) / Math.abs(previous);
 }
 
 export function formatDelta(ratio: number): string {
+  if (!Number.isFinite(ratio)) return '—';
   return `${ratio >= 0 ? '+' : '−'}${formatNumber(Math.abs(ratio) * 100, 1)}%`;
 }

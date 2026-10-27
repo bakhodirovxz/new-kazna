@@ -14,6 +14,10 @@ describe('money', () => {
     expect(formatPct(null)).toBe('—');
     expect(yoyRatio(105, 100)).toBeCloseTo(0.05);
     expect(yoyRatio(5, 0)).toBeNull();
+    expect(yoyRatio(-50, -100)).toBeCloseTo(0.5);
+    expect(yoyRatio(50, -100)).toBeCloseTo(1.5);
+    expect(yoyRatio(-150, -100)).toBeCloseTo(-0.5);
+    expect(formatDelta(Number.NaN)).toBe('—');
     expect(formatDelta(0.052)).toBe('+5,2%');
     expect(formatDelta(-0.031)).toBe('−3,1%');
   });

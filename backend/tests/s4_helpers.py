@@ -82,3 +82,77 @@ def procurement_scenario(source: str, *, publish: bool = False) -> ProcScenario:
     merge_all(run_id, source)
     build_id = rebuild(run_id, publish=publish)
     return ProcScenario(source, tag, _branch_id(f"T-{tag}"), f"T-{tag}", run_id, build_id)
+
+
+@dataclass(frozen=True, slots=True)
+class InvScenario:
+    source: str
+    tag: str
+    branch_id: int
+    branch_code: str
+    run_id: int
+    build_id: int
+    obj_a: int
+    obj_b: int
+
+
+def investment_rows(tag: str) -> dict[str, list[dict[str, Any]]]:
+    branch = branch_row(tag)
+    code = branch["code"]
+    a, b, sa, sb = f"OA-{tag}", f"OB-{tag}", f"SA-{tag}", f"SB-{tag}"
+
+    def row(src: str, obj: str, day: int, plan: float, fact: float,
+            phys: float | None = None, adv: float = 0, adv_date: int | None = None,
+            doc: str = "aip_month") -> dict[str, Any]:
+        return {"doc_type": doc, "src_id": src, "date_id": day, "branch_code": code,
+                "object_code": obj, "source_code": sa if obj == a else sb, "plan": plan,
+                "fact": fact, "physical_pct": phys, "advance": adv, "advance_date_id": adv_date}
+
+    def stg(n: int, name: str, day: int, fact: int | None) -> dict[str, Any]:
+        return {"doc_type": "aip_stage", "src_id": f"st{n}", "date_id": day,
+                "branch_code": code, "object_code": a, "stage_no": n, "stage_name": name,
+                "fact_date_id": fact}
+
+    return {
+        "dim_branch": [branch],
+        "dim_source": [{"code": sa, "name": f"Бюджет тест {tag}", "kind": "budget"},
+                       {"code": sb, "name": f"МФИ тест {tag}", "kind": "ifi"}],
+        "dim_object": [
+            {"code": a, "name": f"Объект А {tag}", "program_code": "АИП-Т-1",
+             "work_type": "modernization", "commissioning_year": 2026, "total_cost": 1000,
+             "source_code": sa},
+            {"code": b, "name": f"Объект Б {tag}", "program_code": "АИП-Т-2",
+             "work_type": "reconstruction", "commissioning_year": 2027, "total_cost": 500,
+             "source_code": sb}],
+        "fact_investment": [
+            row("a0", a, 20250101, 0, 300, doc="aip_opening"),
+            row("a1", a, 20251001, 100, 100),
+            row("a7", a, 20260701, 60, 50, 0.40, 30, 20260601),
+            row("a8", a, 20260801, 60, 40, None, 30, 20260601),
+            row("a9", a, 20260901, 60, 20, 0.45, 0, None),
+            row("a10", a, 20261001, 60, 0),
+            row("b0", b, 20250101, 0, 100, doc="aip_opening"),
+            row("b8", b, 20260801, 100, 90, 0.05, 20, 20260510),
+            row("b9", b, 20260901, 100, 30, None, 20, 20260510),
+        ],
+        "fact_object_stage": [
+            stg(1, "Проектно-сметная документация", 20260315, 20260310),
+            stg(2, "Тендер и договор", 20260615, 20260720),
+            stg(3, "Строительно-монтажные работы", 20260915, None),
+            stg(4, "Ввод в эксплуатацию", 20261215, None),
+        ],
+    }
+
+
+def investment_scenario(source: str, *, publish: bool = False) -> InvScenario:
+    tag = new_tag()
+    run_id = open_run(source)
+    stage(run_id, source, investment_rows(tag))
+    merge_all(run_id, source)
+    build_id = rebuild(run_id, publish=publish)
+    with etl_transaction() as conn:
+        objs = dict(conn.execute(text(
+            "SELECT code, object_id FROM dwh.dim_object WHERE code IN (:a, :b)"),
+            {"a": f"OA-{tag}", "b": f"OB-{tag}"}).all())
+    return InvScenario(source, tag, _branch_id(f"T-{tag}"), f"T-{tag}", run_id, build_id,
+                       int(objs[f"OA-{tag}"]), int(objs[f"OB-{tag}"]))

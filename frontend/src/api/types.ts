@@ -106,3 +106,83 @@ export type KaznaCelevyeOut = Schemas['KaznaCelevyeOut'];
 export type AlertOut = Schemas['AlertOut'];
 export type AlertsOut = Schemas['AlertsOut'];
 export type AlertCountOut = Schemas['AlertCountOut'];
+
+/*
+ * S2 «Кредиты»: qo'lda yozilgan javob turlari (backend app.sections.loan_schemas bilan bir xil nom/nullability).
+ * Backend birlashgach OpenAPI generatsiyasi bilan almashtiriladi: butun blok shu yerda — faqat shu faylni o'zgartirish yetadi.
+ * Summalar — mln so'm; `*_cur` — kredit valyutasida (mln birlik); null — ma'lumot yoki kurs yo'q. Sanalar — ISO.
+ */
+export interface LoanPaymentOut {
+  day: string;
+  loan_id: number;
+  creditor: string;
+  project: string;
+  branch_name: string;
+  principal: number | null;
+  interest: number | null;
+  total: number | null;
+}
+export interface LoanKpisOut {
+  as_of: string;
+  loans: number;
+  portfolio: number | null;
+  rate: number | null;
+  fx_share: number | null;
+  service: number;
+  paid: number;
+  paid_share: number | null;
+  next_payment: LoanPaymentOut | null;
+  peak_year: number | null;
+  peak_amount: number | null;
+  missing_fx: string[];
+  /** DSCR — Финмодель (S5) ulanmaguncha null. */
+  dscr: number | null;
+}
+export interface LoanYearOut {
+  year: number;
+  principal: number;
+  interest: number;
+}
+export interface NamedAmountOut {
+  name: string;
+  amount: number;
+}
+export interface LoanRowOut {
+  loan_id: number;
+  loan_code: string;
+  creditor: string;
+  project: string;
+  branch_id: number;
+  branch_name: string;
+  currency: string;
+  rate: number;
+  outstanding: number | null;
+  outstanding_cur: number;
+  original_cur: number;
+  repaid_share: number | null;
+  grace_until: string | null;
+  in_grace: boolean;
+  maturity: string;
+}
+export interface KreditySvodOut {
+  period: ReportPeriodOut;
+  has_loans: boolean;
+  kpis: LoanKpisOut;
+  schedule: LoanYearOut[];
+  currencies: NamedAmountOut[];
+  upcoming: LoanPaymentOut[];
+}
+export interface KredityReestrOut {
+  period: ReportPeriodOut;
+  has_loans: boolean;
+  kpis: LoanKpisOut;
+  loans: LoanRowOut[];
+  creditors: NamedAmountOut[];
+  currencies: NamedAmountOut[];
+}
+export interface KredityGrafikOut {
+  period: ReportPeriodOut;
+  has_loans: boolean;
+  schedule: LoanYearOut[];
+  upcoming: LoanPaymentOut[];
+}

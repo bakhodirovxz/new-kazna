@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from typing import Any
 
@@ -9,9 +10,16 @@ from sqlalchemy import select, text
 
 from app.auth.models import Role, RolePermission
 from app.core.db import get_engine, new_session
-
 from app.etl.db import etl_transaction
-from tests.etl_helpers import branch_row, cash_row, merge_all, new_tag, open_run, purge_source, stage
+from tests.etl_helpers import (
+    branch_row,
+    cash_row,
+    merge_all,
+    new_tag,
+    open_run,
+    purge_source,
+    stage,
+)
 from tests.s1_helpers import rebuild
 
 DONE, ANNOUNCED, EVAL, CANCELLED = "договор заключён", "объявлен", "на оценке", "отменён"
@@ -232,6 +240,24 @@ def section_branch_role(section: str) -> str:
             s.add(RolePermission(role_id=role.id, permission_code=f"section:{section}:view"))
             s.commit()
     return code
+
+
+def put_rule(code: str, **changes: Any) -> None:
+    """«Требует внимания» qoidasining yangi versiyasi (chegara o'zgartirish testlari)."""
+    with get_engine("app").begin() as conn:
+        row = conn.execute(text("SELECT * FROM core.alert_rules WHERE code = :c AND is_current"),
+                           {"c": code}).mappings().one()
+        data = {**dict(row), **changes}
+        conn.execute(text("UPDATE core.alert_rules SET is_current = false "
+                          "WHERE code = :c AND is_current"), {"c": code})
+        conn.execute(text(
+            "INSERT INTO core.alert_rules (code, version, title, section, page, threshold, level, "
+            "enabled) VALUES (:code, :v, :title, :section, :page, CAST(:th AS jsonb), :level, "
+            ":en)"),
+            {"code": code, "v": row["version"] + 1, "title": data["title"],
+             "section": data["section"], "page": data["page"],
+             "th": json.dumps(data["threshold"]), "level": data["level"],
+             "en": data["enabled"]})
 
 
 def purge_s4(source: str) -> None:

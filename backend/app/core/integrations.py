@@ -56,6 +56,11 @@ _ALL: tuple[IntegrationDef, ...] = (
         fields=("smtp.host", "smtp.port", "smtp.from", "smtp.user", "smtp.starttls", "smtp.ssl"),
         endpoint=("smtp.host", "smtp.port"),
         secrets=(SecretDef("smtp.password", "Пароль SMTP", env="smtp_password"),)),
+    IntegrationDef(
+        "onec", "1С: HTTP-сервисы", fields=("onec.base_url", "onec.max_mb"),
+        endpoint=("onec.base_url",),
+        secrets=(SecretDef("onec.username", "Пользователь 1С", max_length=128),
+                 SecretDef("onec.password", "Пароль 1С"))),
 )
 INTEGRATIONS: dict[str, IntegrationDef] = {i.name: i for i in _ALL}
 SECRETS: dict[str, tuple[IntegrationDef, SecretDef]] = {
@@ -117,6 +122,13 @@ def clear_secret(conn: Connection, name: str) -> bool:
                              "RETURNING name"), {"n": name}).first() is not None
 
 
+def configured(conn: Connection, name: str) -> bool:
+    """Manzil maydonlari to'ldirilgan va barcha sirlar mavjud (worker jobi shunga qarab)."""
+    integ = INTEGRATIONS[name]
+    return (all(sysconfig.current(conn, key) for key in integ.endpoint)
+            and all(secret(conn, sd.name) for sd in integ.secrets))
+
+
 def field_values(conn: Connection, name: str) -> dict[str, Any]:
     return {key: sysconfig.current(conn, key) for key in INTEGRATIONS[name].fields}
 
@@ -131,4 +143,12 @@ def _smtp_rule(conn: Connection) -> tuple[str, str] | None:
 
 # Integratsiya darajasidagi tekshiruv: (xato kodi, maydon) yoki None. Saqlashdan oldin, shu
 # tranzaksiyada (yangi qiymatlar bilan) chaqiriladi.
-RULES: dict[str, Callable[[Connection], tuple[str, str] | None]] = {"smtp": _smtp_rule}
+def _onec_rule(conn: Connection) -> tuple[str, str] | None:
+    url = str(sysconfig.current(conn, "onec.base_url"))
+    if url.startswith("http://") and not get_settings().onec_allow_http:
+        return ("insecure_http", "onec.base_url")  # Basic auth ochiq tarmoqda o'tmasin
+    return None
+
+
+RULES: dict[str, Callable[[Connection], tuple[str, str] | None]] = {
+    "smtp": _smtp_rule, "onec": _onec_rule}

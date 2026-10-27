@@ -6,7 +6,7 @@ partitsiyasi, ma'lumot yangiligi, oylik tiklash testi, faol DEK yoshi, ilova va 
 qotib qolgan ETL so'rovlari, prod'da qolgan `load_*` yuklama hisoblari, ixtiyoriy — TLS sertifikat
 muddati.
 Yagona yozuvchi — `record_restore_test`: `core.settings` dagi `last_restore_test` tizim yozuvi.
-Bu kalit `DEFAULT_SETTINGS` da yo'q — admin API uni ko'rsatmaydi va tahrirlay olmaydi (404).
+Bu kalit sysconfig `REGISTRY` da yo'q — admin API uni ko'rsatmaydi va tahrirlay olmaydi (404).
 """
 
 from __future__ import annotations
@@ -23,6 +23,7 @@ from cryptography import x509
 from sqlalchemy import text
 from sqlalchemy.engine import Connection
 
+from app.core import sysconfig
 from app.core.config import get_settings
 from app.core.db import get_engine
 from app.devtools import LOAD_PREFIX
@@ -107,7 +108,8 @@ def last_restore_test(conn: Connection) -> dict[str, Any] | None:
     return None if value is None else dict(value)
 
 
-def check_restore(value: dict[str, Any] | None, now: datetime) -> list[Problem]:
+def check_restore(value: dict[str, Any] | None, now: datetime, *,
+                  max_age: timedelta = RESTORE_MAX_AGE) -> list[Problem]:
     if value is None:
         return [Problem("restore_test_missing", "warning",
                         "Тест восстановления из резервной копии ещё не проводился")]
@@ -121,21 +123,22 @@ def check_restore(value: dict[str, Any] | None, now: datetime) -> list[Problem]:
             "restore_test_rto", "warning",
             f"Восстановление заняло {value.get('duration_seconds')} с — "
             f"больше RTO {RTO_SECONDS} с"))
-    if now - at > RESTORE_MAX_AGE:
+    if now - at > max_age:
         problems.append(Problem(
             "restore_test_overdue", "warning",
             f"Тест восстановления не проводился с {at:%d.%m.%Y} (норма — ежемесячно)"))
     return problems
 
 
-def check_tls(path: Path, now: datetime) -> list[Problem]:
+def check_tls(path: Path, now: datetime, *, warn: timedelta = TLS_WARN,
+              critical: timedelta = TLS_CRITICAL) -> list[Problem]:
     cert = x509.load_pem_x509_certificate(path.read_bytes())
     expires = cert.not_valid_after_utc
     left = expires - now
     message = f"TLS-сертификат истекает {expires:%d.%m.%Y}"
-    if left <= TLS_CRITICAL:
+    if left <= critical:
         return [Problem("tls_cert_expiring", "critical", message)]
-    if left <= TLS_WARN:
+    if left <= warn:
         return [Problem("tls_cert_expiring", "warning", message)]
     return []
 
@@ -233,6 +236,13 @@ def ops_check(
     env = env or get_settings().env
     problems: list[Problem] = []
     with get_engine("app").connect() as conn:
+        def _days(key: str) -> timedelta:
+            return timedelta(days=int(sysconfig.current(conn, key)))
+
+        restore_max_age = _days("ops.restore_max_age_days")
+        dek_max_age = _days("ops.dek_max_age_days")
+        tls_warn, tls_critical = _days("ops.tls_warn_days"), _days("ops.tls_critical_days")
+        skew_max = timedelta(seconds=int(sysconfig.current(conn, "ops.clock_skew_max_seconds")))
         default_rows = int(conn.execute(text(
             "SELECT count(*) FROM core.audit_log "
             "WHERE tableoid = 'core.audit_log_default'::regclass"
@@ -262,7 +272,7 @@ def ops_check(
                 f"Запросов загрузки в очереди дольше {minutes} минут "
                 f"(или в работе дольше {int(ETL_RUNNING_STUCK.total_seconds() // 3600)} ч): "
                 f"{stuck}"))
-        problems.extend(check_restore(last_restore_test(conn), now))
+        problems.extend(check_restore(last_restore_test(conn), now, max_age=restore_max_age))
         if env == "prod":
             # seed-load hisoblari: ochiq parol va TOTP siri (devtools) — prod'da bo'lmasligi shart.
             load_users = int(conn.execute(
@@ -279,10 +289,10 @@ def ops_check(
             "SELECT purpose, created_at FROM core.crypto_keys "
             "WHERE status = 'active' ORDER BY purpose"))
         for purpose, created_at in rows:
-            if now - created_at > DEK_MAX_AGE:
+            if now - created_at > dek_max_age:
                 problems.append(Problem(
                     "key_rotation_due", "warning",
-                    f"Ключ {purpose}: активная версия старше {DEK_MAX_AGE.days} дней"))
+                    f"Ключ {purpose}: активная версия старше {dek_max_age.days} дней"))
         row = conn.execute(text(
             "SELECT current_setting('archive_mode'), "
             "extract(epoch FROM current_setting('archive_timeout')::interval), "
@@ -304,13 +314,13 @@ def ops_check(
                 notes.append("wal_archiver: skipped (archive_mode=off)")
         db_now: datetime = conn.execute(text("SELECT clock_timestamp()")).scalar_one()
     skew = abs(db_now - app_clock())
-    if skew > CLOCK_SKEW_MAX:
+    if skew > skew_max:
         problems.append(Problem(
             "clock_skew", "critical",
             f"Часы приложения и СУБД расходятся на {int(skew.total_seconds())} с — "
             "проверьте chrony/NTP"))
     if tls_cert is not None:
-        problems.extend(check_tls(tls_cert, now))
+        problems.extend(check_tls(tls_cert, now, warn=tls_warn, critical=tls_critical))
     return problems
 
 

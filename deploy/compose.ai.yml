@@ -11,8 +11,11 @@ services:
     environment:
       AI_PROVIDER: anthropic
       AI_BASE_URL: ${AI_BASE_URL:-}
+      AI_EGRESS: "1"  # Settings.problems(): proksi bo'sh bo'lsa api ishga tushmaydi
+      AI_DIRECT_EGRESS: ${AI_DIRECT_EGRESS:-}
       HTTPS_PROXY: ${EGRESS_PROXY:-}
       EGRESS_PROXY: ${EGRESS_PROXY:-}
+      NO_PROXY: db,redis,caddy,localhost,127.0.0.1
     secrets: [db_app_password, redis_password, master_kek, blind_index_key, session_pepper,
               ai_ca_bundle]
 

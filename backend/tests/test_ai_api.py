@@ -233,3 +233,45 @@ def test_journal_endpoint_for_auditors(make_client: Any) -> None:
     assert page["items"][0]["username"] and page["items"][0]["status"] == "ok"
     economist = make_client(None, create_user("economist_filiala", branch_ids=(3,)))
     assert economist.get("/api/v1/audit/ai-requests").status_code == 403
+
+
+@pytest.mark.usefixtures("published_synthetic", "enabled")
+def test_over_limit_request_builds_no_context(
+        make_client: Any, monkeypatch: pytest.MonkeyPatch) -> None:
+    put_setting("ai.user_per_hour", 1)
+    client = make_client(FakeProvider(["x"]), create_user("rukovodstvo"))
+    assert client.post(URL, json=OBZOR).status_code == 200
+
+    def boom(*args: Any, **kwargs: Any) -> None:
+        raise AssertionError("kontekst qurilmasligi kerak")
+
+    monkeypatch.setattr("app.ai.service.assemble_context", boom)
+    r = client.post(URL, json=OBZOR)
+    assert r.status_code == 429 and r.json()["error"]["code"] == "ai_limit"
+
+
+@pytest.mark.usefixtures("enabled")
+def test_status_with_empty_ca_file_and_stored_key(
+        tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> None:
+    """compose.ai.yml bo'sh ai_ca_bundle.pem beradi — /ai/status 500 bermasligi kerak (I1)."""
+    from app.ai import provider as provider_module
+    from app.core import integrations
+    from app.core.config import get_settings
+
+    empty = tmp_path / "ai_ca_bundle.pem"
+    empty.write_text("")
+    settings = get_settings().model_copy(update={"ai_ca_file": str(empty)})
+    monkeypatch.setattr(provider_module, "get_settings", lambda: settings)
+    user = create_user("rukovodstvo")
+    app = create_app()
+    try:
+        with get_engine("app").begin() as conn:
+            integrations.store_secret(conn, "ai.api_key", "sk-ant-test-key", None)
+        with TestClient(app, base_url="https://testserver") as client:
+            token, csrf, _ = issue_session(user.id)
+            use_session(client, token, csrf)
+            r = client.get("/api/v1/ai/status")
+            assert r.status_code == 200 and r.json()["enabled"] is True
+    finally:
+        with get_engine("app").begin() as conn:
+            integrations.clear_secret(conn, "ai.api_key")

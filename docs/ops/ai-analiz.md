@@ -20,13 +20,14 @@
   `audit:read`). В журнале аудита — событие `ai.request` (без текста вопроса).
 
 ## Включение (после согласования информационной безопасности)
-1. Сетевой доступ: задать `EGRESS_PROXY` и `AI_BASE_URL` (если нужен шлюз) в `deploy/prod.env`,
+1. Сетевой доступ: `EGRESS_PROXY` обязателен (без него `api` в prod не запустится; прямой выход —
+   только `AI_DIRECT_EGRESS=ack` с правилом `DOCKER-USER`, см. host-hardening). Задать `EGRESS_PROXY` и `AI_BASE_URL` (если нужен шлюз) в `deploy/prod.env`,
    разрешить в прокси только `api.anthropic.com:443` (см. `docs/ops/host-hardening.md`). При TLS-инспекции —
    сертификат ЦС в `deploy/secrets/ai_ca_bundle.pem` (иначе пустой файл).
 2. Запуск с оверлеем `compose.ai.yml`: `docker compose -f deploy/compose.prod.yml -f
    deploy/compose.ai.yml --env-file deploy/prod.env up -d api`.
 3. Ключ API хранится в панели, не в файле и не в окружении: Администрирование → Интеграции →
-   «AI-анализ» → Изменить (причина + код 2FA) → поле «Ключ API». Затем «Проверить подключение».
+   «AI-анализ» → Изменить (причина + код 2FA) → поле «Ключ API». Затем «Проверить подключение» (работает только при включённом `ai.enabled`, не чаще раза в минуту).
 4. Включить функцию (аудируемое изменение; причина — номер письма ИБ): Администрирование →
    «Политика безопасности» → AI-анализ (`ai.enabled`), либо аварийно с сервера:
    `docker compose … exec api python -m app.cli ai-enable on --reason "Письмо ИБ № … от …"`.

@@ -29,6 +29,17 @@ def test_ai_config_problems(update: dict[str, Any], needle: str) -> None:
     assert any(needle in p for p in problems), problems
 
 
+def test_ai_egress_requires_proxy_in_prod() -> None:
+    base = get_settings().model_copy(update={"env": "prod", "ai_egress": True})
+    assert any("AI_EGRESS" in p for p in base.problems())
+    assert not any("AI_EGRESS" in p for p in base.model_copy(
+        update={"https_proxy": "http://proxy.local:3128"}).problems())
+    assert not any("AI_EGRESS" in p for p in base.model_copy(
+        update={"ai_direct_egress": "ack"}).problems())
+    assert not any("AI_EGRESS" in p for p in get_settings().model_copy(
+        update={"env": "prod"}).problems())  # overlay'siz — talab yo'q
+
+
 def test_ai_config_ok_variants() -> None:
     base = get_settings()
     for update in ({"ai_provider": "fake"}, {"ai_base_url": "https://gw.local"}):
@@ -43,22 +54,22 @@ def test_ai_settings() -> None:
     assert validate_setting("ai.org_per_day", 1000) == 1000
     for key, value in (("ai.enabled", "yes"), ("ai.enabled", 1), ("ai.user_per_hour", 0),
                        ("ai.org_per_day", 100001), ("ai.model", "Claude Opus!"),
-                       ("ai.effort", "max"), ("ai.max_tokens", 500), ("ai.fallbacks", "x")):
+                       ("ai.effort", "max"), ("ai.max_tokens", 500)):
         with pytest.raises(ValueError):
             validate_setting(key, value)
     for key in ("ai.enabled", "ai.user_per_hour", "ai.org_per_day"):
         d = sysconfig.REGISTRY[key]
         assert (d.category, d.perm, d.guarded) == ("ai", Perm.ADMIN_SECURITY, True)
     assert DEFAULT_SETTINGS["ai.model"] == "claude-opus-5-5"
-    assert (DEFAULT_SETTINGS["ai.effort"], DEFAULT_SETTINGS["ai.max_tokens"],
-            DEFAULT_SETTINGS["ai.fallbacks"]) == ("medium", 8000, True)
+    assert (DEFAULT_SETTINGS["ai.effort"], DEFAULT_SETTINGS["ai.max_tokens"]) == ("medium", 8000)
+    assert "ai.fallbacks" not in DEFAULT_SETTINGS  # model qotirilgan: server zaxirasi yo'q
 
 
 def test_ai_integration_registered() -> None:
     integ = integrations.INTEGRATIONS["ai"]
     assert integ.check_in == "api" and integ.endpoint == ()
     assert [s.name for s in integ.secrets] == ["ai.api_key"]
-    assert set(integ.fields) == {"ai.model", "ai.effort", "ai.max_tokens", "ai.fallbacks"}
+    assert set(integ.fields) == {"ai.model", "ai.effort", "ai.max_tokens"}
     for key in integ.fields:
         assert sysconfig.REGISTRY[key].perm == Perm.ADMIN_INTEGRATIONS
 
@@ -83,6 +94,14 @@ def test_ai_requests_grants() -> None:
             conn.execute(text("SELECT count(*) FROM core.ai_requests")).scalar_one()
             with pytest.raises(ProgrammingError):
                 conn.execute(text("DELETE FROM core.ai_requests"))
+        finally:
+            tx.rollback()
+    with get_engine("app").connect() as conn:
+        tx = conn.begin()
+        try:  # savol/user_id o'zgarmas (M4): faqat yakunlash ustunlari
+            conn.execute(text("UPDATE core.ai_requests SET status = status WHERE false"))
+            with pytest.raises(ProgrammingError):
+                conn.execute(text("UPDATE core.ai_requests SET question = 'x' WHERE false"))
         finally:
             tx.rollback()
     with get_engine("etl").connect() as conn:

@@ -46,6 +46,8 @@ def test_ai_overlay_extends_only_api(prod: dict[str, Any], overlay: dict[str, An
     env = api["environment"]
     assert env["AI_PROVIDER"] == "anthropic"
     assert env["HTTPS_PROXY"] == "${EGRESS_PROXY:-}"
+    assert env["AI_EGRESS"] == "1"  # Settings.problems(): proksisiz prod'da api ishga tushmaydi
+    assert {"db", "redis", "localhost"} <= set(env["NO_PROXY"].split(","))
     # U6/U10: API kaliti Docker secret yoki env emas — faqat panel (integrations)
     assert "ai_api_key" not in api["secrets"] and "ai_api_key" not in overlay["secrets"]
     assert not any("KEY" in key for key in env)
@@ -74,6 +76,7 @@ def test_docs_and_secrets() -> None:
             assert needle in content, (path, needle)
     hardening = repo_path("docs/ops/host-hardening.md").read_text(encoding="utf-8")
     assert "api.anthropic.com" in hardening and "compose.ai.yml" in hardening
+    assert "DOCKER-USER" in hardening and "AI_EGRESS" in hardening
     readme = repo_path("deploy/secrets.example/README.md").read_text(encoding="utf-8")
     assert "ai_ca_bundle" in readme and "Docker secret EMAS" in readme
     script = repo_path("scripts/prod_config.sh").read_text(encoding="utf-8")

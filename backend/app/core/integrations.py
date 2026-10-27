@@ -58,7 +58,7 @@ _ALL: tuple[IntegrationDef, ...] = (
         secrets=(SecretDef("smtp.password", "Пароль SMTP", env="smtp_password"),)),
     IntegrationDef(
         "ai", "AI-анализ (провайдер)",
-        fields=("ai.model", "ai.effort", "ai.max_tokens", "ai.fallbacks"), endpoint=(),
+        fields=("ai.model", "ai.effort", "ai.max_tokens"), endpoint=(),
         secrets=(SecretDef("ai.api_key", "Ключ API", max_length=512),), check_in="api"),
 )
 INTEGRATIONS: dict[str, IntegrationDef] = {i.name: i for i in _ALL}

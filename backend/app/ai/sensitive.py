@@ -28,6 +28,32 @@ def find_sensitive_text(value: str) -> list[str]:
     return [name for name, pattern in SENSITIVE_VALUE_RES if pattern.search(value)]
 
 
+# Foydalanuvchi savoli (erkin matn) uchun kengaytirilgan skaner. Kontekstga QO'LLANMAYDI:
+# u yerda sana-vaqt ("2026-09-24 09:15") raqamlari yopishib yolg'on topilma beradi.
+_PASSPORT_ANY_CASE = re.compile(r"(?<![A-Za-z])[A-Za-z]{2}\s?\d{7}(?!\d)")
+_DIGIT_SEPARATOR = re.compile(r"(?<=\d)[ \-](?=\d)")
+_PHONE = re.compile(
+    r"(?<!\d)(?:\+?998[\s\-()]*\d{2}[\s\-]*\d{3}[\s\-]*\d{2}[\s\-]*\d{2}"
+    r"|\(?\d{2}\)?[\s\-]\d{3}[\s\-]\d{2}[\s\-]\d{2})(?!\d)")
+_PATRONYMIC = r"(?:ович|евич|ьич|ич|овна|евна|ична|инична|оглы|кызы|угли)"
+_FIO = re.compile(
+    rf"\b[А-ЯЁ][а-яё]+\s+[А-ЯЁ][а-яё]+\s+[А-ЯЁ][а-яё]*{_PATRONYMIC}\b"
+    r"|\b[А-ЯЁ][а-яё]+\s+[А-ЯЁ]\.\s?[А-ЯЁ]\.")
+
+
+def find_sensitive_question(value: str) -> list[str]:
+    """INN/hisob bo'shliq yoki chiziq bilan yozilsa ham, telefon, kichik harfli pasport, ФИО."""
+    found = set(find_sensitive_text(value))
+    found |= set(find_sensitive_text(_DIGIT_SEPARATOR.sub("", value)))
+    if _PASSPORT_ANY_CASE.search(value):
+        found.add("passport")
+    if _PHONE.search(value):
+        found.add("phone")
+    if _FIO.search(value):
+        found.add("fio")
+    return sorted(found)
+
+
 def find_sensitive_keys(value: Any) -> list[str]:
     found: list[str] = []
     if isinstance(value, dict):

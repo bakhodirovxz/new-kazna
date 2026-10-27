@@ -85,6 +85,10 @@ class Settings(BaseSettings):
     ai_provider: Literal["anthropic", "openai_compatible", "fake"] = "anthropic"
     ai_base_url: str = ""
     ai_ca_file: str = "/run/secrets/ai_ca_bundle"
+    # compose.ai.yml belgilaydi (AI_EGRESS=1): api internetga chiqadi — proksi majburiy.
+    ai_egress: bool = False
+    ai_direct_egress: str = ""  # "ack" — proksisiz chiqishga ongli rozilik (host firewall bilan)
+    https_proxy: str = ""
 
     @property
     def smtp_recipients(self) -> list[str]:
@@ -145,6 +149,10 @@ class Settings(BaseSettings):
             out.append("AI_PROVIDER=fake faqat dev/test muhitida")
         if self.ai_base_url and not self.ai_base_url.startswith("https://"):
             out.append("AI_BASE_URL https:// bilan boshlanishi kerak")
+        if (self.env == "prod" and self.ai_egress and not self.https_proxy
+                and self.ai_direct_egress != "ack"):
+            out.append("AI_EGRESS: HTTPS_PROXY (EGRESS_PROXY) bo'sh — proksisiz chiqish "
+                       "AI_DIRECT_EGRESS=ack bilan tasdiqlanadi")
         if self.env == "prod":
             if not self.base_url.startswith("https://"):
                 out.append("base_url https bo'lishi shart")

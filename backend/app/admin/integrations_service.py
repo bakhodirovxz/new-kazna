@@ -19,7 +19,7 @@ from app.audit.service import AuditAction, log_event
 from app.auth.context import AuthContext
 from app.auth.stepup import require_step_up
 from app.core import sysconfig
-from app.core.errors import NotFoundError, ValidationFailed
+from app.core.errors import AiDisabledError, NotFoundError, RateLimitedError, ValidationFailed
 from app.core.integrations import (
     INTEGRATIONS,
     RULES,
@@ -136,6 +136,23 @@ def _check_inline(db: Session, actor: AuthContext, name: str,
     probe = API_PROBES.get(name)
     if probe is None:
         raise NotFoundError()
+    # M5: pulli chaqiruv — funksiya yoqilgan bo'lsin, va 1 daqiqada bir marta (qulf ostida).
+    if name == "ai" and sysconfig.current(db.connection(), "ai.enabled") is not True:
+        raise AiDisabledError()
+    db.execute(text("SELECT pg_advisory_xact_lock(hashtext('ugk_integration_check_' || :n))"),
+               {"n": name})
+    wait = db.execute(text(
+        "SELECT ceil(extract(epoch FROM (max(requested_at) + interval '60 seconds' - now()))) "
+        "FROM core.integration_checks WHERE name = :n "
+        "AND requested_at > now() - interval '60 seconds'"),
+        {"n": name}).scalar_one_or_none()
+    if wait is not None:
+        raise RateLimitedError(max(1, int(wait)))
+    # Qator oldindan yoziladi (qulf commit bilan ochiladi): parallel bosish 2-probe qilmaydi.
+    row = db.execute(text(
+        "INSERT INTO core.integration_checks (name, requested_by, status) "
+        f"VALUES (:n, :u, 'running') RETURNING {_CHECK_COLS}"),
+        {"n": name, "u": actor.user_id}).one()
     db.commit()  # probe davomida RLS/sessiya tranzaksiyasi ushlab turilmaydi
     try:
         code = probe()
@@ -143,10 +160,9 @@ def _check_inline(db: Session, actor: AuthContext, name: str,
         log.error("integration_probe_failed", name=name, error=type(exc).__name__)
         code = "error"
     row = db.execute(text(
-        "INSERT INTO core.integration_checks (name, requested_by, status, code, finished_at) "
-        f"VALUES (:n, :u, :s, :c, now()) RETURNING {_CHECK_COLS}"),
-        {"n": name, "u": actor.user_id, "s": "ok" if code == "ok" else "failed",
-         "c": code[:32]}).one()
+        "UPDATE core.integration_checks SET status = :s, code = :c, finished_at = now() "
+        f"WHERE id = :i RETURNING {_CHECK_COLS}"),
+        {"i": row.id, "s": "ok" if code == "ok" else "failed", "c": code[:32]}).one()
     db.commit()
     log_event(meta, AuditAction.INTEGRATION_CHECK_REQUESTED, user_id=actor.user_id,
               object_type="integration", object_id=name, details={"check_id": row.id})

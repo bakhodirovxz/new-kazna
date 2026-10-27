@@ -228,7 +228,6 @@ _DEFS: tuple[SettingDef, ...] = (
     SettingDef("ai.effort", "medium", TypeAdapter(Literal["low", "medium", "high"]), "str",
                title="Глубина рассуждения AI", **_AIINT),
     int_def("ai.max_tokens", 8000, 1000, 32000, title="Максимум токенов ответа AI", **_AIINT),
-    bool_def("ai.fallbacks", True, title="Резервная модель при отказе", **_AIINT),
 )
 REGISTRY: dict[str, SettingDef] = {d.key: d for d in _DEFS}
 

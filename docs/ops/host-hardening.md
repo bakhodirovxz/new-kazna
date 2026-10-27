@@ -111,6 +111,17 @@ COMMIT
 разрешённым доменом `api.anthropic.com`; правило `DOCKER-USER` для прокси уже задано для `worker`.
 Без прокси — разрешить адреса `api.anthropic.com` на порт 443 (списки IP сопровождаются).
 
+`compose.ai.yml` задаёт `AI_EGRESS=1`: в prod `api` не запустится, если `EGRESS_PROXY` пуст
+(`Settings.problems()`), кроме явного `AI_DIRECT_EGRESS=ack`. `NO_PROXY` исключает `db`, `redis`,
+`caddy`, `localhost`. Правило хоста — обязательная вторая линия: исходящий трафик контейнера `api`
+(адрес в сети `egress`, `docker network inspect`) разрешён только на адрес прокси и порт 3128/8080,
+остальное в `DOCKER-USER` запрещено:
+```
+-A DOCKER-USER -s <адрес api в egress> -d <адрес прокси> -p tcp --dport 3128 -j RETURN
+-A DOCKER-USER -s <адрес api в egress> -o ens18 -j DROP
+```
+Проверка: из контейнера `api` прямой запрос на внешний адрес без прокси не проходит.
+
 Применение: `ufw reload`. Проверка: `ufw status verbose`, `iptables -S DOCKER-USER`; с машины вне VPN
 порт 443 недоступен.
 

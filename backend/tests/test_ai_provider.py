@@ -6,7 +6,7 @@ import anthropic
 import pytest
 
 from app.ai import claude as claude_module
-from app.ai.claude import FALLBACK_BETA, TRUNCATED_NOTE, ClaudeProvider, map_error
+from app.ai.claude import TRUNCATED_NOTE, ClaudeProvider, ca_context, map_error
 from app.ai.fake import DEFAULT_ANSWER, FakeProvider
 from app.ai.provider import AiProviderError, build_provider
 from app.core import integrations
@@ -63,10 +63,10 @@ class _Client:
         self.beta = SimpleNamespace(messages=_Messages(stream))
 
 
-def _provider(stream: _Stream, *, fallbacks: bool = True) -> tuple[ClaudeProvider, _Client]:
+def _provider(stream: _Stream) -> tuple[ClaudeProvider, _Client]:
     client = _Client(stream)
-    return ClaudeProvider(client, model="claude-opus-5-5", effort="medium", max_tokens=8000,
-                          fallbacks=fallbacks), client
+    return ClaudeProvider(client, model="claude-opus-5-5", effort="medium",
+                          max_tokens=8000), client
 
 
 async def _collect(provider: Any, system: str = "SYS", prompt: str = "PROMPT") -> list[str]:
@@ -74,27 +74,18 @@ async def _collect(provider: Any, system: str = "SYS", prompt: str = "PROMPT") -
 
 
 @pytest.mark.anyio
-async def test_request_shape_with_fallbacks() -> None:
-    provider, client = _provider(_Stream(["Ответ ", "готов"], "end_turn"))
+async def test_request_pins_model_without_server_fallback() -> None:
+    stream = _Stream(["Ответ ", "готов"], "end_turn")
+    provider, client = _provider(stream)
     assert await _collect(provider) == ["Ответ ", "готов"]
-    assert client.messages.kwargs is None
-    assert client.beta.messages.kwargs == {
+    assert client.beta.messages.kwargs is None  # beta/fallbacks namespace ishlatilmaydi
+    assert client.messages.kwargs == {
         "model": "claude-opus-5-5", "max_tokens": 8000, "system": "SYS",
         "messages": [{"role": "user", "content": "PROMPT"}],
         "thinking": {"type": "adaptive"}, "output_config": {"effort": "medium"},
-        "betas": [FALLBACK_BETA], "extra_body": {"fallbacks": "default"},
     }
-
-
-@pytest.mark.anyio
-async def test_without_fallbacks_uses_stable_namespace() -> None:
-    stream = _Stream(["ok"], "end_turn")
-    provider, client = _provider(stream, fallbacks=False)
-    assert await _collect(provider) == ["ok"]
-    assert client.beta.messages.kwargs is None
-    kwargs = client.messages.kwargs
-    assert kwargs is not None and "betas" not in kwargs and "extra_body" not in kwargs
-    assert not {"temperature", "top_p", "top_k", "budget_tokens"} & set(kwargs)
+    assert not {"betas", "extra_body", "temperature", "top_p", "top_k"} & set(
+        client.messages.kwargs)
     assert stream.exited
 
 
@@ -186,3 +177,40 @@ async def test_fake_provider_behaviour() -> None:
         async for part in failing.stream("s", "p"):
             got.append(part)
     assert got == ["a"] and exc.value.code == "ai_timeout" and failing.closed == 1
+
+
+def test_ca_context_empty_missing_and_real(tmp_path: Any) -> None:
+    empty = tmp_path / "empty.pem"
+    empty.write_text("")
+    assert ca_context(str(empty)) is True  # bo'sh fayl — tizim CA'lari (I1)
+    assert ca_context(str(tmp_path / "missing.pem")) is True
+    assert ca_context("") is True
+
+
+def test_shared_client_reused_and_key_not_decrypted_for_status(
+        monkeypatch: pytest.MonkeyPatch, tmp_path: Any) -> None:
+    from app.ai import claude as mod
+
+    built: list[str] = []
+    monkeypatch.setattr(mod, "build_client", lambda s, key: built.append(key) or object())
+    monkeypatch.setattr(mod, "_shared", None)
+    opened: list[int] = []
+    real_secret = integrations.secret
+    monkeypatch.setattr(integrations, "secret",
+                        lambda conn, name: opened.append(1) or real_secret(conn, name))
+    try:
+        with get_engine("app").begin() as conn:
+            integrations.store_secret(conn, "ai.api_key", "sk-ant-test-key", None)
+        base = get_settings().model_copy(update={"ai_ca_file": str(tmp_path / "none")})
+        provider = ClaudeProvider.from_config(base)
+        assert provider is not None and opened == []  # holat o'qildi, kalit ochilmadi
+        first = ClaudeProvider.from_config(base)
+        assert first is not None
+        assert first.client is provider.client and len(built) == 1  # bitta mijoz
+        with get_engine("app").begin() as conn:
+            integrations.store_secret(conn, "ai.api_key", "sk-ant-other-key", None)
+        again = ClaudeProvider.from_config(base)
+        assert again is not None and again.client is not provider.client and len(built) == 2
+    finally:
+        with get_engine("app").begin() as conn:
+            integrations.clear_secret(conn, "ai.api_key")

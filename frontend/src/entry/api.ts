@@ -66,8 +66,14 @@ export function useHistory(entryId: number | null) {
   });
 }
 
-export function useBatches(box: 'mine' | 'inbox', status?: string, opts: { background?: boolean } = {}) {
+export function useBatches(
+  box: 'mine' | 'inbox',
+  status?: string,
+  opts: { background?: boolean; enabled?: boolean } = {},
+) {
   return useQuery({
+    enabled: opts.enabled ?? true,
+    refetchInterval: opts.background ? 60_000 : false,
     queryKey: [...entryKeys.batches, 'list', box, status ?? null],
     queryFn: ({ signal }) =>
       api<EntryPage<EntryBatch>>('/data/batches', { signal, query: { box, status }, background: opts.background }),
@@ -77,7 +83,7 @@ export function useBatches(box: 'mine' | 'inbox', status?: string, opts: { backg
 export function useBatch(id: number | null, opts: { poll?: boolean } = {}) {
   return useQuery({
     queryKey: [...entryKeys.batches, 'one', id],
-    queryFn: ({ signal }) => api<EntryBatchDetail>(`/data/batches/${id}`, { signal }),
+    queryFn: ({ signal }) => api<EntryBatchDetail>(`/data/batches/${id}`, { signal, background: opts.poll }),
     enabled: id !== null,
     refetchInterval: (query) => {
       const status = query.state.data?.publication?.status;

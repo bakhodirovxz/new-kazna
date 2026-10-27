@@ -102,8 +102,7 @@ _REPO_PATH = re.compile(
     r"|Makefile|\.gitlab-ci\.yml|\.gitleaks\.toml|\.trivyignore)"
 )
 # Reliz mashinasida yaratiladigan fayllar.
-_NOT_IN_REPO = ("deploy/secrets/", "build/")
-_HOST_FILES = {"deploy/prod.env", "deploy/release.env"}
+_HOST_FILES = {"deploy/prod.env", "deploy/release.env", "deploy/secrets", "build"}
 
 
 def _spans() -> list[tuple[str, str]]:
@@ -129,7 +128,8 @@ def test_cited_paths_exist() -> None:
     missing = []
     for doc, span in _spans():
         token = re.sub(r":\d+(?:-\d+)?$", "", span)
-        skipped = token in _HOST_FILES or token.startswith(_NOT_IN_REPO)
+        path = token.rstrip("/")
+        skipped = path in _HOST_FILES or path.startswith(("deploy/secrets/", "build/"))
         if not _REPO_PATH.fullmatch(token) or skipped:
             continue
         if not (REPO / token).exists():

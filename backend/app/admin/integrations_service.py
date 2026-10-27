@@ -28,9 +28,11 @@ from app.core.integrations import (
     secret_state,
     store_secret,
 )
+from app.core.logging import get_logger
 from app.core.request_meta import ClientMeta
 from app.core.sysconfig import REGISTRY
 
+log = get_logger("ugekazna.integrations")
 _CHECK_COLS = "id, name, status, code, requested_at, finished_at"
 
 
@@ -126,11 +128,36 @@ def update_integration(db: Session, actor: AuthContext, name: str, body: Integra
     return get_integration(db, name)
 
 
+def _check_inline(db: Session, actor: AuthContext, name: str,
+                  meta: ClientMeta) -> IntegrationCheckOut:
+    """check_in == "api": probe shu jarayonda (egress api'da), natija core.integration_checks ga."""
+    from app.ai.probe import API_PROBES
+
+    probe = API_PROBES.get(name)
+    if probe is None:
+        raise NotFoundError()
+    db.commit()  # probe davomida RLS/sessiya tranzaksiyasi ushlab turilmaydi
+    try:
+        code = probe()
+    except Exception as exc:
+        log.error("integration_probe_failed", name=name, error=type(exc).__name__)
+        code = "error"
+    row = db.execute(text(
+        "INSERT INTO core.integration_checks (name, requested_by, status, code, finished_at) "
+        f"VALUES (:n, :u, :s, :c, now()) RETURNING {_CHECK_COLS}"),
+        {"n": name, "u": actor.user_id, "s": "ok" if code == "ok" else "failed",
+         "c": code[:32]}).one()
+    db.commit()
+    log_event(meta, AuditAction.INTEGRATION_CHECK_REQUESTED, user_id=actor.user_id,
+              object_type="integration", object_id=name, details={"check_id": row.id})
+    return IntegrationCheckOut(**dict(row._mapping))
+
+
 def request_check(db: Session, actor: AuthContext, name: str,
                   meta: ClientMeta) -> IntegrationCheckOut:
     integ = _integration(name)
     if integ.check_in != "worker":
-        raise NotFoundError()  # api tomonidagi probe'lar (S5) o'z endpointida
+        return _check_inline(db, actor, name, meta)
     db.execute(text("SELECT pg_advisory_xact_lock(hashtext('ugk_integration_check_' || :n))"),
                {"n": name})
     row = db.execute(text(f"SELECT {_CHECK_COLS} FROM core.integration_checks WHERE name = :n "

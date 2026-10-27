@@ -15,6 +15,8 @@ from app.admin.etl_router import router as etl_router
 from app.admin.integrations_router import router as integrations_router
 from app.admin.keys_router import router as keys_router
 from app.admin.router import router as admin_router
+from app.ai.router import journal_router as ai_journal_router
+from app.ai.router import router as ai_router
 from app.audit.router import router as audit_router
 from app.auth.context import require_perm
 from app.auth.permissions import Perm
@@ -75,6 +77,8 @@ def create_app() -> FastAPI:
     app.include_router(kazna_router, prefix=API_PREFIX)
     app.include_router(exports_xlsx_router, prefix=API_PREFIX)
     app.include_router(exports_log_router, prefix=API_PREFIX)
+    app.include_router(ai_router, prefix=API_PREFIX)
+    app.include_router(ai_journal_router, prefix=API_PREFIX)
     app.include_router(etl_router, prefix=API_PREFIX)
     app.include_router(config_router, prefix=API_PREFIX)
     app.include_router(integrations_router, prefix=API_PREFIX)

@@ -8,6 +8,13 @@ import { apiError, json, mockApi } from '../test/mockApi';
 import { renderWithProviders } from '../test/render';
 import { SectionScreen } from './SectionScreen';
 import { ShellTools } from './ShellTools';
+import type * as Registry from '../sections/registry';
+
+// Оболочка проверяется на заглушке: реальные страницы разделов тестируются в src/sections.
+vi.mock('../sections/registry', async (importOriginal) => ({
+  ...(await importOriginal<typeof Registry>()),
+  resolveSectionPage: Object.assign(() => null, { reset: () => false }),
+}));
 
 function Harness({ me = ME_ADMIN, menu = MENU_FULL }: { me?: MeOut; menu?: MenuOut }) {
   const route = useRoute();

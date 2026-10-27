@@ -1,5 +1,5 @@
 import { act, screen, waitFor, within } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { MeOut, MenuOut } from '../api/types';
 import { useRoute } from '../router/store';
 import { expectNoAxeViolations } from '../test/axe';
@@ -9,6 +9,13 @@ import { renderWithProviders } from '../test/render';
 import { setViewport } from '../test/viewport';
 import { SectionScreen } from './SectionScreen';
 import { SideMenu } from './SideMenu';
+import type * as Registry from '../sections/registry';
+
+// Оболочка проверяется на заглушке: реальные страницы разделов тестируются в src/sections.
+vi.mock('../sections/registry', async (importOriginal) => ({
+  ...(await importOriginal<typeof Registry>()),
+  resolveSectionPage: Object.assign(() => null, { reset: () => false }),
+}));
 
 function Harness({ me = ME_ADMIN, menu = MENU_FULL }: { me?: MeOut; menu?: MenuOut }) {
   const route = useRoute();

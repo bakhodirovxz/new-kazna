@@ -25,7 +25,7 @@ from sqlalchemy import text
 
 from app.audit.service import AuditAction, AuditEvent, record
 from app.bootstrap import bootstrap_runtime
-from app.core import sysconfig
+from app.core import integrations, sysconfig
 from app.core.config import ConfigError, Settings, get_settings
 from app.core.db import get_engine
 from app.core.logging import configure_logging, get_logger
@@ -100,6 +100,11 @@ def _guarded(name: str, fn: Callable[[], object]) -> Callable[[], None]:
 
 def run_etl_job(source: str, mode: Mode, notifier: Notifier) -> RunResult | None:
     try:
+        if source == "onec":
+            with get_engine("etl").connect() as conn:
+                if not integrations.configured(conn, "onec"):
+                    log.info("etl_skipped_not_configured", source=source)
+                    return None
         return Runner(make_connector(source), mode=mode, notifier=notifier).run()
     except EtlBusyError:
         log.info("etl_skipped_busy", source=source)
@@ -265,6 +270,12 @@ def build_scheduler(settings: Settings, notifier: Notifier, *,
     if settings.env == "dev":
         add_cron_job(scheduler, "etl_synthetic_full", "etl.synthetic_cron", run_etl_job,
                      args=("synthetic", Mode.FULL, notifier), **opts)
+    # U5: shartsiz; sozlanmagan bo'lsa run_etl_job o'tkazib yuboradi (panelda sozlash — qayta
+    # ishga tushirishsiz). TZ 8: to'liq — tunda (06:00 gacha), inkremental — kunduzi 3 marta.
+    add_cron_job(scheduler, "etl_onec_full", "etl.onec_full_cron", run_etl_job,
+                 args=("onec", Mode.FULL, notifier), **opts)
+    add_cron_job(scheduler, "etl_onec_incremental", "etl.onec_incremental_cron", run_etl_job,
+                 args=("onec", Mode.INCREMENTAL, notifier), **opts)
     scheduler.add_job(_guarded("etl_requests", lambda: process_requests(notifier)),
                       "interval", seconds=30, id="etl_requests", **opts)
     scheduler.add_job(_guarded("integration_checks", process_integration_checks),

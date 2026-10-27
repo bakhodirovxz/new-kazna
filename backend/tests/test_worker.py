@@ -29,8 +29,8 @@ from tests.etl_helpers import (
     purge_source,
 )
 
-JOBS = {"etl_synthetic_full", "etl_requests", "partitions", "cleanup", "freshness", "heartbeat",
-        "integration_checks", "schedules"}
+JOBS = {"etl_synthetic_full", "etl_onec_full", "etl_onec_incremental", "etl_requests", "partitions",
+        "cleanup", "freshness", "heartbeat", "integration_checks", "schedules"}
 
 
 @pytest.fixture

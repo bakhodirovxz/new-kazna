@@ -142,3 +142,16 @@ def test_backup_socket_mount_is_read_only(compose: dict[str, Any]) -> None:
 def test_dev_compose_has_init() -> None:
     dev = yaml.safe_load(repo_path("deploy/compose.yml").read_text(encoding="utf-8"))
     assert dev["x-hardening"]["init"] is True
+
+
+def test_onec_ca_bundle_only_in_worker_and_no_credential_secrets(compose: dict[str, Any]) -> None:
+    # U6/U10: 1C login/paroli panelda (shifrlangan); Docker secret'da faqat CA to'plami.
+    assert "onec_ca_bundle" in compose["secrets"]
+    assert not {"onec_username", "onec_password"} & set(compose["secrets"])
+    for service, svc in compose["services"].items():
+        granted = "onec_ca_bundle" in svc.get("secrets", [])
+        assert granted == (service == "worker"), service
+    env = compose["services"]["worker"]["environment"]
+    assert env["ONEC_ALLOW_HTTP"] == "${ONEC_ALLOW_HTTP:-false}"
+    assert not any(k.startswith("ONEC_") and k != "ONEC_ALLOW_HTTP" for k in env)
+    assert "egress" in compose["services"]["worker"]["networks"]

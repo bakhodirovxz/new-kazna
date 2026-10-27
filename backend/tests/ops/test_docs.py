@@ -12,7 +12,10 @@ SECURITY_DOCS = {
     "access-control.md", "data-classification.md", "sast-exceptions.md", "asvs-l2.md",
     "incident-response.md", "secure-configuration.md", "sbom.md",
 }
-OPS_DOCS: set[str] = set()
+OPS_DOCS = {
+    "README.md", "host-hardening.md", "install-upgrade.md", "backup-restore.md", "monitoring.md",
+    "load-test.md",
+}
 STRIDE = ("Spoofing", "Tampering", "Repudiation", "Information disclosure", "Denial of service",
           "Elevation of privilege")
 
@@ -98,16 +101,14 @@ _REPO_PATH = re.compile(
     r"(?:(?:backend|frontend|deploy|scripts|docs|\.github|\.githooks)/[\w./-]+"
     r"|Makefile|\.gitlab-ci\.yml|\.gitleaks\.toml|\.trivyignore)"
 )
-# Reliz mashinasida yaratiladigan fayllar; docs/ops 14-vazifada yoziladi
-# (shundan keyin _PENDING_PREFIXES ni olib tashlang).
+# Reliz mashinasida yaratiladigan fayllar.
 _NOT_IN_REPO = ("deploy/prod.env", "deploy/release.env", "deploy/secrets/", "build/")
-_PENDING_PREFIXES = ("docs/ops/",)
 
 
 def _spans() -> list[tuple[str, str]]:
     return [
         (doc.name, span)
-        for doc in sorted(SECURITY.glob("*.md"))
+        for doc in _docs()
         for span in _CODE_SPAN.findall(doc.read_text(encoding="utf-8"))
     ]
 
@@ -127,8 +128,16 @@ def test_cited_paths_exist() -> None:
     missing = []
     for doc, span in _spans():
         token = re.sub(r":\d+(?:-\d+)?$", "", span)
-        if not _REPO_PATH.fullmatch(token) or token.startswith(_NOT_IN_REPO + _PENDING_PREFIXES):
+        if not _REPO_PATH.fullmatch(token) or token.startswith(_NOT_IN_REPO):
             continue
         if not (REPO / token).exists():
             missing.append((doc, token))
     assert not missing, sorted(set(missing))
+
+
+def test_host_hardening_covers_required_controls() -> None:
+    text = (OPS / "host-hardening.md").read_text(encoding="utf-8")
+    for needle in ("LUKS2", "aes-xts-plain64", "ufw", "DOCKER-USER", "PasswordAuthentication no",
+                   "auditd", "chrony", "unattended-upgrades", '"userns-remap"', '"live-restore"',
+                   '"no-new-privileges"', "max-size", "ugk-admins", "SIEM"):
+        assert needle in text, needle

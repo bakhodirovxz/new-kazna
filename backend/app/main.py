@@ -33,6 +33,7 @@ from app.health.router import router as health_router
 from app.meta.router import router as meta_router
 from app.sections.exports import log_router as exports_log_router
 from app.sections.exports import xlsx_router as exports_xlsx_router
+from app.sections.investicii import router as investicii_router
 from app.sections.kazna import router as kazna_router
 from app.sections.obzor import router as obzor_router
 from app.sections.zakupki import router as zakupki_router
@@ -75,6 +76,7 @@ def create_app() -> FastAPI:
     app.include_router(obzor_router, prefix=API_PREFIX)
     app.include_router(kazna_router, prefix=API_PREFIX)
     app.include_router(zakupki_router, prefix=API_PREFIX)
+    app.include_router(investicii_router, prefix=API_PREFIX)
     app.include_router(exports_xlsx_router, prefix=API_PREFIX)
     app.include_router(exports_log_router, prefix=API_PREFIX)
     app.include_router(etl_router, prefix=API_PREFIX)

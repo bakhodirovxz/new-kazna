@@ -28,13 +28,14 @@ from app.auth.permissions import Perm
 from app.core.config import get_settings
 from app.core.db import get_engine
 from app.core.logging import get_logger
-from app.core.setting_types import OneCOrg, calendar_kinds, onec_orgs
+from app.core.setting_types import AskueStation, OneCOrg, askue_stations, calendar_kinds, onec_orgs
 from app.dwh.dates import today_tashkent
 
 Kind = Literal["int", "float", "bool", "str", "cron", "date", "list", "json"]
 Apply = Literal["live", "next_run"]
 Source = Literal["panel", "env", "default"]
 KEY_RE = re.compile(r"^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$")
+ONEC_URL_RE = r"^(https?://[A-Za-z0-9.-]+(:[0-9]{1,5})?(/[A-Za-z0-9._~/-]*)?)?$"
 EMAIL_RE = r"^[^\s,<>@]+@[^\s,<>@]+\.[^\s,<>@]+$"  # app/core/config.py bilan bir xil
 CACHE_TTL = 30.0  # s: boshqa jarayonlar o'zgarishni shu muddatda ko'radi
 
@@ -116,6 +117,8 @@ def str_def(key: str, default: str, pattern: str, max_length: int, **kw: Any) ->
 _SEC: dict[str, Any] = {"category": "security", "perm": Perm.ADMIN_SECURITY, "guarded": True}
 _SMTP: dict[str, Any] = {"category": "integrations", "perm": Perm.ADMIN_INTEGRATIONS,
                          "guarded": True}
+_INTEG: dict[str, Any] = {"category": "integrations", "perm": Perm.ADMIN_INTEGRATIONS,
+                          "guarded": True}
 _EMAILS: TypeAdapter[Any] = TypeAdapter(Annotated[
     list[Annotated[str, Field(strict=True, pattern=EMAIL_RE, max_length=254)]],
     Field(max_length=20)])
@@ -155,6 +158,26 @@ _DEFS: tuple[SettingDef, ...] = (
              title="Расписание полной загрузки 1С"),
     cron_def("etl.onec_incremental_cron", "0 10,13,16 * * *", category="etl",
              title="Расписание инкрементальной загрузки 1С"),
+    # S3: АСКУЭ, jonli quvvat va 1C ombori
+    SettingDef("askue.stations", [],
+               TypeAdapter(Annotated[list[AskueStation], AfterValidator(askue_stations)]),
+               "json", category="askue", title="Станции АСКУЭ и филиалы", apply="next_run"),
+    int_def("askue.inbox_days", 7, 1, 60, category="askue",
+            title="Перечитывать выгрузки АСКУЭ за последние", unit="дн.", apply="next_run"),
+    int_def("askue.live_keep_days", 35, 1, 400, category="askue",
+            title="Хранить снимки текущей мощности", unit="дн.", apply="next_run"),
+    int_def("askue.live_stale_minutes", 30, 5, 1440, category="askue",
+            title="Снимок мощности устарел через", unit="мин"),
+    cron_def("askue.live_cron", "*/10 * * * *", category="askue",
+             title="Расписание опроса текущей мощности"),
+    cron_def("etl.askue_cron", "15 7 * * *", category="etl",
+             title="Расписание загрузки выгрузок АСКУЭ"),
+    int_def("onec.sklad_months", 13, 1, 36, category="sklad",
+            title="Глубина загрузки остатков склада 1С", unit="мес.", apply="next_run"),
+    cron_def("etl.onec_sklad_full_cron", "30 3 * * *", category="etl",
+             title="Расписание полной загрузки склада 1С"),
+    cron_def("etl.onec_sklad_incremental_cron", "30 10,13,16 * * *", category="etl",
+             title="Расписание инкрементальной загрузки склада 1С"),
     # Sifat va saqlash
     float_def("quality.control_tolerance", 0.001, 0.0, 0.01, category="quality",
               title="Допуск сверки контрольных сумм (доля)", guarded=True, apply="next_run"),
@@ -205,6 +228,11 @@ _DEFS: tuple[SettingDef, ...] = (
             guarded=True, title="Предупреждать об истечении TLS-сертификата за", unit="дн."),
     int_def("ops.tls_critical_days", 7, 7, 30, category="ops", perm=Perm.ADMIN_SECURITY,
             guarded=True, title="Критично при истечении TLS-сертификата за", unit="дн."),
+    # S3 integratsiya maydonlari (sirlar — integrations.py, faqat panel)
+    str_def("askue.live_url", "", r"^(https://[A-Za-z0-9./_-]+)?$", 300,
+            title="Адрес источника текущей мощности (https)", **_INTEG),
+    str_def("onec_sklad.base_url", "", ONEC_URL_RE, 300,
+            title="Адрес HTTP-сервиса 1С: склад", **_INTEG),
     # SMTP (integratsiya maydonlari — faqat /admin/integrations orqali o'zgaradi)
     str_def("smtp.host", "", r"^[A-Za-z0-9.-]{0,253}$", 253, title="Сервер SMTP",
             env="smtp_host", **_SMTP),

@@ -87,6 +87,9 @@ def test_settings_defaults_and_validation() -> None:
         "retention.fact_years", "retention.audit_months", "partitions.months_ahead",
         "kazna.calendar_kinds", "onec.orgs", "onec.income_enabled", "onec.page_limit",
         "etl.onec_full_cron", "etl.onec_incremental_cron",
+        "askue.stations", "askue.inbox_days", "askue.live_cron", "askue.live_keep_days",
+        "askue.live_stale_minutes", "etl.askue_cron", "onec.sklad_months",
+        "etl.onec_sklad_full_cron", "etl.onec_sklad_incremental_cron",
     } <= set(DEFAULT_SETTINGS)
 
 

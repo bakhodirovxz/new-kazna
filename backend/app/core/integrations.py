@@ -56,6 +56,13 @@ _ALL: tuple[IntegrationDef, ...] = (
         fields=("smtp.host", "smtp.port", "smtp.from", "smtp.user", "smtp.starttls", "smtp.ssl"),
         endpoint=("smtp.host", "smtp.port"),
         secrets=(SecretDef("smtp.password", "Пароль SMTP", env="smtp_password"),)),
+    IntegrationDef("askue_live", "Текущая мощность (treplex)", fields=("askue.live_url",),
+                   endpoint=("askue.live_url",), secrets=()),
+    IntegrationDef(
+        "onec_sklad", "1С: склад", fields=("onec_sklad.base_url",),
+        endpoint=("onec_sklad.base_url",),
+        secrets=(SecretDef("onec_sklad.username", "Пользователь 1С (склад)", max_length=128),
+                 SecretDef("onec_sklad.password", "Пароль 1С (склад)"))),
 )
 INTEGRATIONS: dict[str, IntegrationDef] = {i.name: i for i in _ALL}
 SECRETS: dict[str, tuple[IntegrationDef, SecretDef]] = {
@@ -131,4 +138,12 @@ def _smtp_rule(conn: Connection) -> tuple[str, str] | None:
 
 # Integratsiya darajasidagi tekshiruv: (xato kodi, maydon) yoki None. Saqlashdan oldin, shu
 # tranzaksiyada (yangi qiymatlar bilan) chaqiriladi.
-RULES: dict[str, Callable[[Connection], tuple[str, str] | None]] = {"smtp": _smtp_rule}
+def _onec_sklad_rule(conn: Connection) -> tuple[str, str] | None:
+    # shortcut: S1 `onec_allow_http` bayrog'i bu bazada yo'q — http:// har doim rad etiladi.
+    if str(sysconfig.current(conn, "onec_sklad.base_url")).startswith("http://"):
+        return ("insecure_http", "onec_sklad.base_url")
+    return None
+
+
+RULES: dict[str, Callable[[Connection], tuple[str, str] | None]] = {
+    "smtp": _smtp_rule, "onec_sklad": _onec_sklad_rule}

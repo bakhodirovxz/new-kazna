@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import re
 from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -38,3 +39,31 @@ def onec_orgs(value: list[OneCOrg]) -> list[dict[str, str]]:
         if len(set(values)) != len(values):
             raise ValueError(f"onec.orgs: {attr} takrorlangan")
     return [org.model_dump() for org in value]
+
+
+# S3: АСКУЭ stansiyalari ↔ filiallar (`askue.stations`). `code` — kunlik eksport kodi,
+# `name` — jonli manba (treplex.uz) nomi; bir filialga bir nechta stansiya bog'lanishi mumkin.
+STATION_KINDS: tuple[str, ...] = ("ges", "cascade")
+_APOSTROPHES = re.compile(r"[‘’ʻʼ`´]")
+
+
+def normalize_name(text: str) -> str:
+    """Nomlarni solishtirish uchun: apostrof variantlari, bo'shliqlar, registr."""
+    return " ".join(_APOSTROPHES.sub("'", text).split()).casefold()
+
+
+class AskueStation(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
+    code: Annotated[str, Field(pattern=r"^[A-Za-z0-9_.-]{1,40}$")]
+    name: Annotated[str, Field(min_length=1, max_length=200)]
+    branch_code: Annotated[str, Field(min_length=1, max_length=32)]
+
+
+def askue_stations(value: list[AskueStation]) -> list[dict[str, str]]:
+    codes = [s.code for s in value]
+    names = [normalize_name(s.name) for s in value]
+    if len(set(codes)) != len(codes):
+        raise ValueError("askue.stations: stansiya kodi takrorlangan")
+    if len(set(names)) != len(names) or not all(names):
+        raise ValueError("askue.stations: stansiya nomi bo'sh yoki takrorlangan")
+    return [s.model_dump() for s in value]

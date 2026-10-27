@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import contextlib
 import re
 import smtplib
+import socket
 import ssl
 import threading
 from collections.abc import Callable, Sequence
@@ -68,9 +70,19 @@ def _one_line(value: str) -> str:
 SMTP_DEADLINE = 30.0  # s: butun SMTP seansi (socket timeout'i har amalga alohida — M7)
 
 
-def _within_deadline(fn: Callable[[], Any]) -> Any:
-    """`fn` ni SMTP_DEADLINE ichida bajaradi, aks holda TimeoutError. Ip daemon: tugamasa ham
-    jarayonni ushlab turmaydi (shortcut: ip o'zi to'xtamaydi — socket timeout'i tugatadi)."""
+def _abort(client: Any) -> None:
+    """Muddati o'tgan seans: recv'da osilgan ipni uyg'otish uchun socket yopiladi."""
+    with contextlib.suppress(Exception):  # yopish xatosi muhim emas
+        sock = getattr(client, "sock", None)
+        if sock is not None:
+            sock.shutdown(socket.SHUT_RDWR)
+    with contextlib.suppress(Exception):
+        client.close()
+
+
+def _within_deadline(fn: Callable[[], Any], clients: list[Any]) -> Any:
+    """`fn` ni SMTP_DEADLINE ichida bajaradi, aks holda `clients` (fn qo'shgan mijozlar)
+    socket'i yopilib TimeoutError ko'tariladi."""
     out: list[Any] = []
     err: list[BaseException] = []
 
@@ -84,6 +96,8 @@ def _within_deadline(fn: Callable[[], Any]) -> Any:
     thread.start()
     thread.join(SMTP_DEADLINE)
     if thread.is_alive():
+        for client in clients:
+            _abort(client)
         raise TimeoutError("smtp deadline")
     if err:
         raise err[0]
@@ -131,24 +145,25 @@ class EmailNotifier:
         message["To"] = ", ".join(formataddr(("", r)) for r in self.recipients)
         message.set_content(notification.body)
 
+        clients: list[Any] = []
+
         def send() -> None:
             if self.ssl:
-                context = ssl.create_default_context()
-                with self._ssl_factory(
-                    self.host, self.port, context=context, timeout=self.timeout
-                ) as smtp:
-                    if self.password:
-                        smtp.login(self.username or self.sender, self.password)
-                    smtp.send_message(message)
+                client = self._ssl_factory(
+                    self.host, self.port, context=ssl.create_default_context(),
+                    timeout=self.timeout)
             else:
-                with self._factory(self.host, self.port, timeout=self.timeout) as smtp:
-                    if self.starttls:
-                        smtp.starttls(context=ssl.create_default_context())
-                    if self.password:
-                        smtp.login(self.username or self.sender, self.password)
-                    smtp.send_message(message)
+                client = self._factory(self.host, self.port, timeout=self.timeout)
+            clients.append(client)
+            with client as smtp:
+                if self.starttls and not self.ssl:
+                    smtp.starttls(context=ssl.create_default_context())
+                if self.password:
+                    smtp.login(self.username or self.sender, self.password)
+                smtp.send_message(message)
+
         try:
-            _within_deadline(send)
+            _within_deadline(send, clients)
         except (OSError, smtplib.SMTPException) as exc:
             # Xabarnoma xatosi ETL'ni yiqitmasligi kerak.
             log.error("notify_email_failed", kind=notification.kind, error=type(exc).__name__)
@@ -247,11 +262,14 @@ def smtp_probe(loader: Callable[[], SmtpConfig | None] = smtp_config,
         return "insecure_refused"
     context = ssl.create_default_context()
 
+    clients: list[Any] = []
+
     def run() -> None:
         if cfg.ssl:
             client = smtp_ssl_factory(cfg.host, cfg.port, context=context, timeout=10.0)
         else:
             client = smtp_factory(cfg.host, cfg.port, timeout=10.0)
+        clients.append(client)
         with client as smtp:
             if cfg.starttls and not cfg.ssl:
                 smtp.starttls(context=context)
@@ -260,7 +278,7 @@ def smtp_probe(loader: Callable[[], SmtpConfig | None] = smtp_config,
             smtp.noop()
 
     try:
-        _within_deadline(run)
+        _within_deadline(run, clients)
     except smtplib.SMTPAuthenticationError:
         return "auth_failed"
     except ssl.SSLError:

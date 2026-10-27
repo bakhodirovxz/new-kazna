@@ -1,4 +1,4 @@
-import { useId, useState, type FormEvent } from 'react';
+import { useEffect, useId, useRef, useState, type FormEvent } from 'react';
 import { isApiError } from '../api/client';
 import type { IntegrationCheckOut, IntegrationOut, SecretStatusOut, SettingOut } from '../api/types';
 import { t, type MessageKey } from '../i18n';
@@ -77,12 +77,14 @@ function IntegrationCard({ integration, onEdit }: { integration: IntegrationOut;
       <Table caption={t('integrations.fields')} columns={fieldColumns} rows={integration.fields} rowKey={(s) => s.key} free />
       <Table caption={t('integrations.secrets')} columns={secretColumns} rows={integration.secrets} rowKey={(s) => s.name} free />
       <FormError error={request.error} />
-      {status ? (
-        <p role="status">
-          <Badge tone={status.status === 'ok' ? 'ok' : status.status === 'failed' ? 'neg' : 'blue'}>{checkText(status)}</Badge>
-          {status.finished_at ? ` ${formatDateTime(status.finished_at)}` : null}
-        </p>
-      ) : null}
+      <p role="status">
+        {status ? (
+          <>
+            <Badge tone={status.status === 'ok' ? 'ok' : status.status === 'failed' ? 'neg' : 'blue'}>{checkText(status)}</Badge>
+            {status.finished_at ? ` ${formatDateTime(status.finished_at)}` : null}
+          </>
+        ) : null}
+      </p>
     </Card>
   );
 }
@@ -99,6 +101,12 @@ function IntegrationDialog({ integration, onClose }: { integration: IntegrationO
   const [otp, setOtp] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
   const formRef = useFocusFirstInvalid(errors);
+  const bannerRef = useRef<HTMLDivElement>(null);
+  const textFields = integration.fields.filter((f) => f.kind !== 'bool').map((f) => f.key);
+  const bannerShown = Boolean(update.error) && !Object.keys(errors).length;
+  useEffect(() => {
+    if (bannerShown) bannerRef.current?.focus();
+  }, [bannerShown, update.error]);
   const changed = integration.fields.filter((f) => values[f.key] !== initial[f.key]);
   const endpointChanged = changed.some((f) => integration.endpoint.includes(f.key));
 
@@ -128,7 +136,10 @@ function IntegrationDialog({ integration, onClose }: { integration: IntegrationO
         },
         onError: (error) => {
           if (isApiError(error, 422) && Array.isArray(error.params.fields)) {
-            setErrors(Object.fromEntries((error.params.fields as string[]).map((f) => [f, error.message])));
+            // Faqat xatosi ko'rsatiladigan maydonlar (bool maydonda xato joyi yo'q) — qolgani umumiy xabarda.
+            const shown = new Set([...textFields, ...integration.secrets.map((s) => s.name), 'reason', 'otp']);
+            const fields = (error.params.fields as string[]).filter((f) => shown.has(f));
+            setErrors(Object.fromEntries(fields.map((f) => [f, error.message])));
           }
         },
       },
@@ -148,7 +159,7 @@ function IntegrationDialog({ integration, onClose }: { integration: IntegrationO
       }
     >
       <form id={formId} ref={formRef} className="form-grid" noValidate onSubmit={submit} autoComplete="off">
-        <div className="span-2"><FormError error={update.error && !Object.keys(errors).length ? update.error : null} /></div>
+        <div className="span-2" ref={bannerRef} tabIndex={-1}><FormError error={bannerShown ? update.error : null} /></div>
         {integration.fields.map((f) => (
           <div key={f.key} className="span-2">
             <FieldEditor setting={f} value={values[f.key] ?? ''} onChange={(v) => setValues((prev) => ({ ...prev, [f.key]: v }))} error={errors[f.key]} />

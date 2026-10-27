@@ -13,7 +13,7 @@ import re
 import threading
 import time
 from dataclasses import dataclass
-from datetime import date
+from datetime import UTC, date, datetime
 from typing import Annotated, Any, Literal
 
 from apscheduler.triggers.cron import CronTrigger
@@ -71,7 +71,9 @@ class SettingDef:
 
 def check_cron(value: str) -> str:
     # A4.2: aniq timezone="UTC" — tzlocal qidiruvisiz; worker TASHKENT bilan rejalashtiradi.
-    CronTrigger.from_crontab(value, timezone="UTC")  # noto'g'ri bo'lsa ValueError
+    trigger = CronTrigger.from_crontab(value, timezone="UTC")  # noto'g'ri bo'lsa ValueError
+    if trigger.get_next_fire_time(None, datetime.now(UTC)) is None:
+        raise ValueError("cron hech qachon ishga tushmaydi")  # masalan "0 0 31 2 *"
     return value
 
 

@@ -1,9 +1,10 @@
-import { screen, within } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import type { IntegrationOut, SettingOut } from '../api/types';
 import { expectNoAxeViolations } from '../test/axe';
-import { json, mockApi } from '../test/mockApi';
+import { apiError, json, mockApi } from '../test/mockApi';
 import { renderWithProviders } from '../test/render';
+import { checkRefetchInterval } from './api';
 import IntegrationsPage from './IntegrationsPage';
 
 function field(key: string, title: string, kind: string, value: unknown, extra: Partial<SettingOut> = {}): SettingOut {
@@ -56,5 +57,53 @@ describe('IntegrationsPage', () => {
     await user.click(within(dialog).getByRole('button', { name: 'Сохранить' }));
     const put = server.calls.find((c) => c.method === 'PUT');
     expect(put?.body).toEqual({ values: { 'smtp.host': 'mail.uge.uz' }, secrets: {}, reason: 'Заявка ИТ-42', otp: '654321' });
+  });
+
+  async function openAndFill(user: ReturnType<typeof renderWithProviders>['user']) {
+    await user.click(await screen.findByRole('button', { name: 'Изменить' }));
+    const dialog = screen.getByRole('dialog', { name: 'Интеграция: Почтовый сервер (SMTP)' });
+    await user.type(within(dialog).getByLabelText('Пароль SMTP'), 'Relay-Pa55word!');
+    await user.type(within(dialog).getByLabelText('Причина изменения'), 'Заявка ИТ-42');
+    await user.type(within(dialog).getByLabelText('Код из приложения'), '654321');
+    return dialog;
+  }
+
+  it('keeps no password or OTP in the mutation cache after saving (I1)', async () => {
+    mockApi({ 'GET /admin/integrations': json([SMTP]), 'PUT /admin/integrations/smtp': json(SMTP) });
+    const { user, client } = renderWithProviders(<IntegrationsPage />);
+    const dialog = await openAndFill(user);
+    await user.click(within(dialog).getByRole('button', { name: 'Сохранить' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    await waitFor(() => expect(client.getMutationCache().getAll()).toHaveLength(0));
+  });
+
+  it('shows the server message for a field without an error slot, e.g. insecure_smtp (I2)', async () => {
+    const message = 'Пароль SMTP передаётся только по защищённому соединению (STARTTLS или SSL)';
+    mockApi({
+      'GET /admin/integrations': json([SMTP]),
+      'PUT /admin/integrations/smtp': apiError(422, 'insecure_smtp', message, { fields: ['smtp.starttls'] }),
+    });
+    const { user } = renderWithProviders(<IntegrationsPage />);
+    const dialog = await openAndFill(user);
+    await user.click(within(dialog).getByRole('button', { name: 'Сохранить' }));
+    const alert = await within(dialog).findByText(message);
+    expect(alert).toBeInTheDocument();
+    await waitFor(() => expect(alert.closest('[tabindex="-1"]')).toHaveFocus());
+  });
+
+  it('keeps a status live region mounted before the first check result (M6)', async () => {
+    mockApi({ 'GET /admin/integrations': json([SMTP]) });
+    renderWithProviders(<IntegrationsPage />);
+    const card = await screen.findByRole('region', { name: 'Почтовый сервер (SMTP)' });
+    const live = within(card).getAllByRole('status').find((el) => el.tagName === 'P');
+    expect(live).toBeDefined();
+    expect(live).toBeEmptyDOMElement();
+  });
+
+  it('stops polling after repeated errors and when the check is done (M6)', () => {
+    expect(checkRefetchInterval({ data: undefined, errorUpdateCount: 0 })).toBe(2_000);
+    expect(checkRefetchInterval({ data: undefined, errorUpdateCount: 3 })).toBe(false);
+    expect(checkRefetchInterval({ data: { status: 'ok' }, errorUpdateCount: 0 })).toBe(false);
+    expect(checkRefetchInterval({ data: { status: 'running' }, errorUpdateCount: 0 })).toBe(2_000);
   });
 });

@@ -77,10 +77,12 @@ export function FieldEditor({ setting, value, onChange, error }: FieldEditorProp
 
 export function SettingsList({ perm }: { perm: string }) {
   const settings = useSettings();
-  const [editing, setEditing] = useState<SettingOut | null>(null);
+  const [editingKey, setEditingKey] = useState<string | null>(null);
   if (settings.isError) return <ErrorBanner error={settings.error} lastSuccessAt={settings.dataUpdatedAt} onRetry={() => void settings.refetch()} />;
   if (settings.isPending) return <PageSkeleton />;
   const rows = settings.data.filter((s) => s.perm === perm);
+  // Jonli obyekt: 409 dan keyin ro'yxat qayta yuklanadi va dialog yangi versiya bilan qayta urinadi.
+  const editing = rows.find((s) => s.key === editingKey) ?? null;
   if (!rows.length) return <EmptyState title={t('settings.empty')} />;
   const rank = (c: string) => (ORDER.includes(c) ? ORDER.indexOf(c) : ORDER.length);
   const categories = [...new Set(rows.map((s) => s.category))].sort((a, b) => rank(a) - rank(b) || a.localeCompare(b));
@@ -95,10 +97,10 @@ export function SettingsList({ perm }: { perm: string }) {
     <>
       {categories.map((category) => (
         <Card key={category} title={categoryTitle(category)}>
-          <Table caption={categoryTitle(category)} captionHidden columns={columns} rows={rows.filter((s) => s.category === category)} rowKey={(s) => s.key} onRowClick={(s) => setEditing(s)} free />
+          <Table caption={categoryTitle(category)} captionHidden columns={columns} rows={rows.filter((s) => s.category === category)} rowKey={(s) => s.key} onRowClick={(s) => setEditingKey(s.key)} free />
         </Card>
       ))}
-      {editing ? <SettingDialog setting={editing} onClose={() => setEditing(null)} /> : null}
+      {editing ? <SettingDialog setting={editing} onClose={() => setEditingKey(null)} /> : null}
     </>
   );
 }

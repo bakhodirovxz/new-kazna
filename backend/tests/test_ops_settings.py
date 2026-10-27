@@ -25,6 +25,12 @@ def test_ops_keys_are_tighten_only() -> None:
     for key, (bound, side) in expected.items():
         d = sysconfig.REGISTRY[key]
         assert d.default == bound == getattr(d, side) and d.step_up and d.category == "ops", key
+    # ops.py konstantalari = reyestr standartlari (ikkinchi nusxa uzilib ketmasin)
+    assert ops.RESTORE_MAX_AGE.days == expected["ops.restore_max_age_days"][0]
+    assert ops.DEK_MAX_AGE.days == expected["ops.dek_max_age_days"][0]
+    assert ops.CLOCK_SKEW_MAX.total_seconds() == expected["ops.clock_skew_max_seconds"][0]
+    assert ops.TLS_WARN.days == expected["ops.tls_warn_days"][0]
+    assert ops.TLS_CRITICAL.days == expected["ops.tls_critical_days"][0]
 
 
 def test_check_restore_accepts_threshold() -> None:

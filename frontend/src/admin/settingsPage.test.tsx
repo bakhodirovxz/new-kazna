@@ -1,4 +1,4 @@
-import { screen, within } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import type { SettingOut } from '../api/types';
 import { expectNoAxeViolations } from '../test/axe';
@@ -74,5 +74,49 @@ describe('SettingsList', () => {
     await user.click(within(dialog).getByRole('button', { name: 'Сохранить' }));
     expect(await within(dialog).findByText('Неверный код подтверждения')).toBeInTheDocument();
     expect(server.calls.find((c) => c.method === 'PUT')?.body).toEqual({ value: 20, expected_version: 2, reason: 'Письмо ИБ №7', otp: '123456' });
+  });
+
+  it('refreshes the dialog version after a 409 so a retry can succeed (M5)', async () => {
+    let listCalls = 0;
+    const server = mockApi({
+      'GET /admin/settings': () => json([listCalls++ === 0 ? KEEP : { ...KEEP, value: 5, version: 3, source: 'panel' }]),
+      'GET /admin/settings/builds.keep/history': json([]),
+      'PUT /admin/settings/builds.keep': (req) =>
+        (req.body as { expected_version: number }).expected_version === 3
+          ? json({ ...KEEP, value: 4, version: 4, source: 'panel' })
+          : apiError(409, 'conflict_modified', 'Запись изменена другим пользователем, обновите страницу'),
+    });
+    const { user } = renderWithProviders(<SettingsList perm="admin:settings" />);
+    await user.click(await screen.findByText('Хранить сборок витрины'));
+    const dialog = screen.getByRole('dialog', { name: 'Настройка: Хранить сборок витрины' });
+    const input = within(dialog).getByLabelText('Значение');
+    await user.clear(input);
+    await user.type(input, '4');
+    await user.click(within(dialog).getByRole('button', { name: 'Сохранить' }));
+    expect(await within(dialog).findByText('Запись изменена другим пользователем, обновите страницу')).toBeInTheDocument();
+    await waitFor(() => expect(listCalls).toBeGreaterThan(1));
+    await user.click(within(dialog).getByRole('button', { name: 'Сохранить' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    const bodies = server.calls.filter((c) => c.method === 'PUT').map((c) => (c.body as { expected_version: number }).expected_version);
+    expect(bodies).toEqual([0, 3]);
+  });
+
+  it('keeps no OTP in the mutation cache after saving a setting (I1)', async () => {
+    mockApi({
+      'GET /admin/settings': json([IDLE]),
+      'GET /admin/settings/security.session_idle_minutes/history': json([]),
+      'PUT /admin/settings/security.session_idle_minutes': json({ ...IDLE, value: 20 }),
+    });
+    const { user, client } = renderWithProviders(<SettingsList perm="admin:security" />);
+    await user.click(await screen.findByText('Завершение сеанса при бездействии'));
+    const dialog = screen.getByRole('dialog', { name: 'Настройка: Завершение сеанса при бездействии' });
+    const input = within(dialog).getByLabelText('Значение');
+    await user.clear(input);
+    await user.type(input, '20');
+    await user.type(within(dialog).getByLabelText('Причина изменения'), 'Письмо ИБ №7');
+    await user.type(within(dialog).getByLabelText('Код из приложения'), '123456');
+    await user.click(within(dialog).getByRole('button', { name: 'Сохранить' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    await waitFor(() => expect(client.getMutationCache().getAll()).toHaveLength(0));
   });
 });

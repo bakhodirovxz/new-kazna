@@ -152,3 +152,10 @@ def test_ensure_reference_does_not_seed_settings() -> None:
             "SELECT count(*) FROM core.settings WHERE key LIKE 'security.%' "
             "OR key LIKE 'smtp.%'")).scalar_one()
     assert seeded == 0
+
+
+def test_cron_that_never_fires_is_rejected() -> None:
+    """Review r1 M1: 31 fevral — sintaksis to'g'ri, lekin job jimgina to'xtab qolardi."""
+    with pytest.raises(ValueError):
+        sysconfig.REGISTRY["maintenance.cleanup_cron"].validate("0 0 31 2 *")
+    assert sysconfig.REGISTRY["maintenance.cleanup_cron"].validate("0 4 * * *") == "0 4 * * *"

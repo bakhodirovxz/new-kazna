@@ -37,7 +37,7 @@ class LoginResult:
 @dataclass(frozen=True, slots=True)
 class EnrollStart:
     otpauth_uri: str = field(repr=False)
-    qr_svg_data_uri: str
+    qr_svg_data_uri: str = field(repr=False)  # QR otpauth URI'ni (TOTP siri) kodlaydi
     secret: str = field(repr=False)
 
 

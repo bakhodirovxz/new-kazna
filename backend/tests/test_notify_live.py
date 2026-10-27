@@ -173,9 +173,23 @@ def test_probe_has_an_overall_deadline(monkeypatch: pytest.MonkeyPatch) -> None:
     from app.etl import notify
 
     class Slow(FakeSMTP):
+        closed: ClassVar[bool] = False
+
         def noop(self) -> tuple[int, bytes]:
             time.sleep(2)
             return 250, b"ok"
 
+        def close(self) -> None:
+            Slow.closed = True
+
     monkeypatch.setattr(notify, "SMTP_DEADLINE", 0.2)
     assert smtp_probe(loader=lambda: CFG, smtp_factory=Slow) == "timeout"
+    assert Slow.closed  # M3: muddat tugagach socket yopiladi (ip osilib qolmaydi)
+
+
+def test_enroll_start_repr_hides_totp_material() -> None:
+    from app.auth.service import EnrollStart
+
+    text_repr = repr(EnrollStart(otpauth_uri="otpauth://x", qr_svg_data_uri="data:QR",
+                                 secret="SECRETBASE32"))
+    assert "QR" not in text_repr and "SECRETBASE32" not in text_repr

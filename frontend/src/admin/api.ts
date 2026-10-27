@@ -267,6 +267,7 @@ export function useUpdateSetting() {
   const invalidate = useInvalidate(adminKeys.settings);
   const onError = useRefetchOnConflict(adminKeys.settings);
   return useMutation({
+    gcTime: 0, // OTP (va sir) MutationCache'da qolmasin
     mutationFn: ({ key, body }: { key: string; body: SettingUpdate }) =>
       api<SettingOut>(`/admin/settings/${encodeURIComponent(key)}`, { method: 'PUT', body }),
     onSuccess: invalidate,
@@ -286,6 +287,7 @@ export function useIntegrations() {
 export function useUpdateIntegration() {
   const invalidate = useInvalidate(adminKeys.integrations);
   return useMutation({
+    gcTime: 0, // integratsiya siri va OTP MutationCache'da qolmasin
     mutationFn: ({ name, body }: { name: string; body: IntegrationUpdate }) =>
       api<IntegrationOut>(`/admin/integrations/${encodeURIComponent(name)}`, { method: 'PUT', body }),
     onSuccess: invalidate,
@@ -301,13 +303,21 @@ export function useRequestCheck() {
 }
 
 const CHECK_DONE = new Set(['ok', 'failed']);
+const CHECK_POLL_MS = 2_000;
+const CHECK_MAX_ERRORS = 3;
+
+/** Tekshiruv natijasi kelguncha 2 s da so'raydi; tugagach yoki ketma-ket xatolardan so'ng to'xtaydi. */
+export function checkRefetchInterval(state: { data?: { status: string } | undefined; errorUpdateCount: number }): number | false {
+  if (state.data && CHECK_DONE.has(state.data.status)) return false;
+  return state.errorUpdateCount >= CHECK_MAX_ERRORS ? false : CHECK_POLL_MS;
+}
 
 export function useIntegrationCheck(id: number | null) {
   return useQuery({
     queryKey: [...adminKeys.integrations, 'check', id],
     queryFn: ({ signal }) => api<IntegrationCheckOut>(`/admin/integrations/checks/${id ?? 0}`, { signal, background: true }),
     enabled: id !== null,
-    refetchInterval: (query) => (query.state.data && CHECK_DONE.has(query.state.data.status) ? false : 2_000),
+    refetchInterval: (query) => checkRefetchInterval(query.state),
   });
 }
 

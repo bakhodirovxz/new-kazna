@@ -13,7 +13,7 @@
 | Администраторы ОС — только группа `ugk-admins`; членство в группе `docker` эквивалентно root | `getent group ugk-admins docker` |
 | SSH только по ключам, без root, только из VPN | `sshd -T \| grep -E 'passwordauthentication\|permitrootlogin'` |
 | Межсетевой экран: 443/80 и SSH только из подсетей VPN, правила DOCKER-USER | `ufw status verbose`, `iptables -L DOCKER-USER` |
-| chrony синхронизирован (расхождение < 1 с) | `chronyc tracking` |
+| chrony синхронизирован (`System time` не более 0,1 с) | `chronyc tracking` |
 | auditd с правилами UGEKAZNA | `auditctl -l \| grep ugk` |
 | Автоматические обновления безопасности | `systemctl status unattended-upgrades` |
 
@@ -126,7 +126,7 @@ UGEKAZNA исключает их по конструкции, и чем это �
 
 | Мера | Реализация | Проверка |
 |---|---|---|
-| В образ веб-сервера попадает только собранная статика | `frontend/Dockerfile`: этап `web` копирует в `/srv` только `/app/dist` (результат `npm run build`); Caddy отдаёт только `/srv`. Исходники, `.git`, `.env` в образе отсутствуют | `deploy/tests/probe_caddy.py` (`make test-caddy`) запрашивает `/.git/config`, `/.git/HEAD`, `/.env`, `/deploy/compose.prod.yml`, `/backend/app/core/config.py`, `/src/main.tsx`: ответ только 403/404 и не страница SPA |
+| В образ веб-сервера попадает только собранная статика | `frontend/Dockerfile`: этап `web` копирует в `/srv` только `/app/dist` (результат `npm run build`); Caddy отдаёт только `/srv`. Исходники, `.git`, `.env` в образе отсутствуют | Проверка содержимого образа: `scripts/tests/caddy_prod_test.sh` (`find` по образу на `.git`, `*.map`, `src`); `deploy/tests/probe_caddy.py` (`make test-caddy`) запрашивает `/.git/config`, `/.git/HEAD`, `/.env`, `/deploy/compose.prod.yml`, `/backend/app/core/config.py`, `/src/main.tsx`: ответ только 403/404 и не страница SPA |
 | Образ API содержит только код приложения | `backend/Dockerfile` копирует `app/`, `migrations/`, `alembic.ini`, `pyproject.toml`; `backend/.dockerignore` исключает `tests`, `tools` | — |
 | Исходный код не монтируется в prod-контейнеры | `deploy/compose.prod.yml`: только именованные тома | `test_no_source_bind_mounts` |
 | Образы релиза собираются из `git archive HEAD`, а не из рабочего каталога | `scripts/release.sh` | `test_release_builds_from_clean_export` |

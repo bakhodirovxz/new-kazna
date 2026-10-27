@@ -59,7 +59,7 @@ ASVS_L2 = (
     | _ids("6.1", 3) | _ids("6.2", 6) | _ids("6.3", 2) | _ids("6.4", 2)
     | _ids("7.1", 4) | _ids("7.2", 2) | {"7.3.1", "7.3.4"} | _ids("7.4", 3)
     | _ids("8.1", 4) | _ids("8.2", 3) | _ids("8.3", 8)
-    | _ids("9.1", 3) | _ids("9.2", 5)
+    | _ids("9.1", 3) | _ids("9.2", 4)
     | _ids("10.2", 2) | _ids("10.3", 3)
     | _ids("11.1", 8)
     | _ids("12.1", 3) | {"12.2.1"} | _ids("12.3", 6) | _ids("12.4", 2) | _ids("12.5", 2)
@@ -98,11 +98,12 @@ def test_asvs_statuses_are_known() -> None:
 _CODE_SPAN = re.compile(r"`([^`\n]+)`")
 _TEST_NAME = re.compile(r"test_\w+")
 _REPO_PATH = re.compile(
-    r"(?:(?:backend|frontend|deploy|scripts|docs|\.github|\.githooks)/[\w./-]+"
+    r"(?:(?:backend|frontend|deploy|scripts|docs|loadtest|\.github|\.githooks)/[\w./-]+"
     r"|Makefile|\.gitlab-ci\.yml|\.gitleaks\.toml|\.trivyignore)"
 )
 # Reliz mashinasida yaratiladigan fayllar.
-_NOT_IN_REPO = ("deploy/prod.env", "deploy/release.env", "deploy/secrets/", "build/")
+_NOT_IN_REPO = ("deploy/secrets/", "build/")
+_HOST_FILES = {"deploy/prod.env", "deploy/release.env"}
 
 
 def _spans() -> list[tuple[str, str]]:
@@ -128,7 +129,8 @@ def test_cited_paths_exist() -> None:
     missing = []
     for doc, span in _spans():
         token = re.sub(r":\d+(?:-\d+)?$", "", span)
-        if not _REPO_PATH.fullmatch(token) or token.startswith(_NOT_IN_REPO):
+        skipped = token in _HOST_FILES or token.startswith(_NOT_IN_REPO)
+        if not _REPO_PATH.fullmatch(token) or skipped:
             continue
         if not (REPO / token).exists():
             missing.append((doc, token))
@@ -158,4 +160,4 @@ def test_relative_links_resolve() -> None:
 
 def test_user_guide_is_three_to_five_pages() -> None:
     words = len(re.findall(r"\w+", (OPS / "user-guide.md").read_text(encoding="utf-8")))
-    assert 900 <= words <= 2600, words  # ~300-500 so'z sahifasiga -> 3-5 sahifa (TZ 10)
+    assert 900 <= words <= 2200, words  # ~300-500 so'z sahifasiga -> 3-5 sahifa (TZ 10)

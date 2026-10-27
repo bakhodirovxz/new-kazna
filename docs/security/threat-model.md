@@ -92,7 +92,7 @@ flowchart LR
 | TB1 | VPN ↔ Caddy | TLS 1.2/1.3 (AEAD), HSTS, лимит тела 1 МБ, служебные пути закрыты |
 | TB2 | Caddy ↔ API | внутренняя сеть `web`; аутентификация сессией, CSRF, RBAC в API |
 | TB3 | API/worker ↔ СУБД | отдельные роли, SCRAM-SHA-256, RLS, `pg_hba` только `samenet` |
-| TB4 | контейнер ↔ хост | non-root, read-only, `cap_drop: ALL`, `no-new-privileges`; userns-remap — опция хоста |
+| TB4 | контейнер ↔ хост | non-root, read-only, `cap_drop: ALL`, `no-new-privileges`; userns-remap — требование к хосту |
 | TB5 | хост ↔ носитель копий | шифрование репозитория AES-256, отдельный диск (LUKS2 — требование к серверу) |
 | TB6 | worker ↔ внешние системы | только сеть `egress`, правила DOCKER-USER на хосте, STARTTLS |
 
@@ -125,7 +125,7 @@ E — Elevation of privilege (повышение привилегий).
 | S19 | F8 | T | Запись восстановленной тестовой копией WAL в рабочий репозиторий | архивирование отключено при восстановлении, репозиторий подключён только на чтение | `test_restore_disables_archiving` |
 | S20 | F4 | S | Обращение к Redis из других сетей | внутренняя сеть, пароль, ACL без опасных команд | `test_network_isolation` |
 | S21 | F6 | I | Вывод данных через исходящие соединения | выход во внешнюю сеть только у worker (сеть `egress`), правила DOCKER-USER на хосте | `test_network_isolation` |
-| S22 | контейнеры | E | Выход из контейнера | non-root, read-only, `cap_drop: ALL`, `no-new-privileges`; userns-remap — опция хоста | `test_every_service_is_hardened` |
+| S22 | контейнеры | E | Выход из контейнера | non-root, read-only, `cap_drop: ALL`, `no-new-privileges`; userns-remap — требование к хосту | `test_every_service_is_hardened` |
 | S23 | цепочка поставки | T | Вредоносная зависимость или образ | lock-файлы с хешами, образы по digest, Trivy, SBOM | `test_base_images_pinned_by_digest` |
 | S24 | время | T | Рассинхронизация часов: отказ записи аудита (окно ±5 мин), сбои TOTP | chrony на хосте (требование к серверу); `clock_skew` выявляет только расхождение часов приложения и СУБД (более 60 с — критично), дрейф хоста относительно реального времени контролирует chrony | `test_ops_check_detects_clock_skew` |
 | S25 | F11 оператор | R | Незафиксированные операции с ключами | события `admin.key.*` в журнале аудита (в том числе `result = "fail"`), auditd на хосте | `test_cli_key_operations_are_audited` |

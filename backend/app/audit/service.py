@@ -52,6 +52,7 @@ class AuditAction(StrEnum):
     LOGIN_OK = "auth.login.ok"
     MFA_FAIL = "auth.mfa.fail"
     MFA_ENROLLED = "auth.mfa.enrolled"
+    STEP_UP_FAILED = "auth.step_up.failed"
     BACKUP_CODE_USED = "auth.mfa.backup_code_used"
     LOGOUT = "auth.logout"
     PASSWORD_CHANGED = "auth.password.changed"  # noqa: S105 -- audit harakat kodi, parol emas

@@ -84,6 +84,7 @@ EXPECTED_ROUTES = frozenset({
     ("PUT", "/api/v1/admin/fin-assumptions"),
     ("GET", "/api/v1/admin/settings"),
     ("PUT", "/api/v1/admin/settings/{key}"),
+    ("GET", "/api/v1/admin/settings/{key}/history"),
     ("PATCH", "/api/v1/admin/positions/{position_id}"),
     ("PATCH", "/api/v1/admin/roles/{role_id}"),
     ("PATCH", "/api/v1/admin/users/{user_id}"),

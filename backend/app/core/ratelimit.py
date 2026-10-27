@@ -36,6 +36,7 @@ PASSWORD_CHANGE_PER_USER = Limit(events=5, window=900)
 # foydalanuvchi UCHUN va, DoS'dan himoya sifatida, BUTUN tizim uchun ham (identity "global").
 AUDIT_VERIFY_PER_USER = Limit(events=3, window=600)
 AUDIT_VERIFY_GLOBAL = Limit(events=10, window=3600)
+STEP_UP_PER_USER = Limit(events=5, window=900)
 
 _client_override: redis.Redis | None = None
 _lock = threading.Lock()

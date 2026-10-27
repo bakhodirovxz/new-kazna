@@ -17,12 +17,21 @@ from app.admin.dwh_schemas import (
     FinAssumptionOut,
     FinAssumptionsUpdate,
     SettingOut,
+    SettingVersionOut,
 )
 from app.audit.service import AuditAction, log_event
 from app.auth.context import AuthContext
-from app.core.errors import AppError, ConflictError, NotFoundError, ValidationFailed
+from app.auth.stepup import require_step_up
+from app.core import sysconfig
+from app.core.errors import (
+    AppError,
+    ConflictError,
+    ForbiddenError,
+    NotFoundError,
+    ValidationFailed,
+)
 from app.core.request_meta import ClientMeta
-from app.dwh.reference import DEFAULT_SETTINGS, validate_setting
+from app.core.sysconfig import REGISTRY, SettingDef, resolve
 
 _RULE_COLS = ("code, version, title, section, page, threshold, level, enabled, updated_by, "
               "updated_at")
@@ -144,45 +153,108 @@ def _setting_row(db: Session, key: str, lock: bool = False) -> Any:
                            f"WHERE key = :k AND is_current{suffix}"), {"k": key}).first()
 
 
-def list_settings(db: Session) -> list[SettingOut]:
-    out: list[SettingOut] = []
-    for key, default in DEFAULT_SETTINGS.items():
-        row = _setting_row(db, key)
-        if row is None:
-            out.append(SettingOut(key=key, value=default, version=0, updated_by=None,
-                                  updated_at=None))
-        else:
-            out.append(SettingOut(**dict(row._mapping)))
-    return out
+_ROW_COLS = "key, value, version, updated_by, updated_at"
 
 
-def update_setting(db: Session, actor: AuthContext, key: str, value: Any,
-                   meta: ClientMeta) -> SettingOut:
-    if key not in DEFAULT_SETTINGS:
+def require_reason(reason: str | None) -> str:
+    cleaned = " ".join((reason or "").split())
+    if len(cleaned) < 5:
+        raise ValidationFailed("reason_required", fields=["reason"])
+    return cleaned
+
+
+def _out(d: SettingDef, row: Any | None) -> SettingOut:
+    value, source = resolve(d, {} if row is None else {d.key: row.value})
+    return SettingOut(
+        key=d.key, value=value, version=0 if row is None else row.version,
+        updated_by=None if row is None else row.updated_by,
+        updated_at=None if row is None else row.updated_at,
+        default=resolve(d, {})[0], source=source, category=d.category, title=d.title,
+        kind=d.kind, perm=d.perm.value, guarded=d.guarded, step_up=d.step_up, apply=d.apply,
+        unit=d.unit, lo=d.lo, hi=d.hi)
+
+
+def setting_out(db: Session, key: str) -> SettingOut:
+    return _out(REGISTRY[key], _setting_row(db, key))
+
+
+def list_settings(db: Session, actor: AuthContext) -> list[SettingOut]:
+    rows = {r.key: r for r in db.execute(text(
+        f"SELECT {_ROW_COLS} FROM core.settings WHERE is_current")).all()}
+    return [_out(d, rows.get(d.key)) for d in REGISTRY.values()
+            if d.category != "integrations" and actor.has(d.perm)]
+
+
+def _readable(actor: AuthContext, key: str) -> SettingDef:
+    d = REGISTRY.get(key)
+    if d is None:
         raise NotFoundError()
-    try:
-        normalized = validate_setting(key, value)
-    except ValueError as exc:
-        raise ValidationFailed("invalid_setting", fields=["value"], key=key) from exc
-    row = _setting_row(db, key, lock=True)
+    if not actor.has(d.perm):
+        raise ForbiddenError()
+    return d
+
+
+def setting_history(db: Session, actor: AuthContext, key: str) -> list[SettingVersionOut]:
+    _readable(actor, key)
+    rows = db.execute(text("SELECT version, value, updated_by, updated_at FROM core.settings "
+                           "WHERE key = :k ORDER BY version DESC LIMIT 100"), {"k": key}).all()
+    return [SettingVersionOut(**dict(r._mapping)) for r in rows]
+
+
+def write_setting(db: Session, key: str, normalized: Any, user_id: int | None, *,
+                  row: Any = None, locked: bool = False) -> tuple[int | None, Any]:
+    """Yangi versiya (commit'siz). Qiymat o'zgarmasa (None, joriy). Parallel yozuv → 409.
+
+    `locked=True` — chaqiruvchi qatorni allaqachon FOR UPDATE bilan o'qigan (`row`): poygada
+    yutqazgan so'rov qayta o'qimaydi, (key, version) unique buzilishi → 409 (R2)."""
+    if not locked:
+        row = _setting_row(db, key, lock=True)
+    before = None if row is None else row.value
     if row is not None and row.value == normalized:
-        return SettingOut(**dict(row._mapping))
+        return None, before
     version = 1 if row is None else row.version + 1
     try:
-        db.execute(text("UPDATE core.settings SET is_current = false WHERE key = :k "
-                        "AND is_current"), {"k": key})
-        db.execute(text("INSERT INTO core.settings (key, version, value, updated_by) "
-                        "VALUES (:k, :v, CAST(:val AS jsonb), :u)"),
-                   {"k": key, "v": version, "val": json.dumps(normalized), "u": actor.user_id})
-        db.commit()  # commit-then-audit
+        with db.begin_nested():
+            db.execute(text("UPDATE core.settings SET is_current = false WHERE key = :k "
+                            "AND is_current"), {"k": key})
+            db.execute(text("INSERT INTO core.settings (key, version, value, updated_by) "
+                            "VALUES (:k, :v, CAST(:val AS jsonb), :u)"),
+                       {"k": key, "v": version, "val": json.dumps(normalized), "u": user_id})
     except IntegrityError as exc:
-        db.rollback()
         if getattr(exc.orig, "sqlstate", None) != "23505":  # faqat unique buzilishi — poyga
             raise
         raise ConflictError("conflict_modified") from exc
-    log_event(meta, AuditAction.SETTING_UPDATED, user_id=actor.user_id, object_type="setting",
-              object_id=key, details={"version": version,
-                                      "before": None if row is None else row.value,
-                                      "after": normalized})
-    new_row = _setting_row(db, key)
-    return SettingOut(**dict(new_row._mapping))
+    return version, before
+
+
+def update_setting(db: Session, actor: AuthContext, key: str, value: Any, meta: ClientMeta, *,
+                   expected_version: int | None = None, reason: str | None = None,
+                   otp: str | None = None) -> SettingOut:
+    d = REGISTRY.get(key)
+    if d is None or d.category == "integrations":  # integratsiya maydoni — /admin/integrations
+        raise NotFoundError()
+    if not actor.has(d.perm):
+        log_event(meta, AuditAction.ACCESS_DENIED, user_id=actor.user_id, result="denied",
+                  details={"setting": key, "required": [d.perm.value]})
+        raise ForbiddenError()
+    try:
+        normalized = d.validate(value)
+    except ValueError as exc:
+        raise ValidationFailed("invalid_setting", fields=["value"], key=key, lo=d.lo,
+                               hi=d.hi) from exc
+    cleaned = require_reason(reason) if d.guarded else None
+    if d.step_up:  # qiymat tekshiruvidan keyin: xato yozuv kodni "yoqib" yubormasin
+        require_step_up(db, actor, otp, meta)
+    row = _setting_row(db, key, lock=True)
+    if expected_version is not None and expected_version != (0 if row is None else row.version):
+        raise ConflictError("conflict_modified")
+    version, before = write_setting(db, key, normalized, actor.user_id, row=row, locked=True)
+    db.commit()  # commit-then-audit; step-up qadami ham saqlanadi
+    if version is not None:
+        details: dict[str, Any] = {"version": version, "before": before, "after": normalized}
+        if cleaned:
+            details["reason"] = cleaned
+        log_event(meta, AuditAction.SETTING_UPDATED, user_id=actor.user_id,
+                  object_type="setting", object_id=key, details=details)
+        sysconfig.invalidate()
+    return setting_out(db, key)

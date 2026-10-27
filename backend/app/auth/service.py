@@ -231,7 +231,7 @@ def issue_backup_codes(db: Session, user_id: int) -> list[str]:
     return codes
 
 
-def _decrypt_secret(user: User) -> str | None:
+def decrypt_totp_secret(user: User) -> str | None:
     if user.totp_secret_enc is None:
         return None
     try:
@@ -245,7 +245,7 @@ def verify_mfa(
 ) -> tuple[sessions.NewSession, User]:
     ratelimit.check("mfa_ip", meta.ip or "unknown", ratelimit.MFA_PER_IP)
     challenge, user = _load_challenge(db, token, "verify", now)
-    secret = _decrypt_secret(user)
+    secret = decrypt_totp_secret(user)
     step = totp.verify(secret, code, user.totp_last_step, now.timestamp()) if secret else None
     used_backup = False
     if step is not None:

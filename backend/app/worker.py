@@ -23,6 +23,7 @@ from apscheduler.schedulers.blocking import BlockingScheduler
 from apscheduler.triggers.cron import CronTrigger
 from sqlalchemy import text
 
+from app.ai.journal import purge as purge_ai_journal
 from app.audit.service import AuditAction, AuditEvent, record
 from app.bootstrap import bootstrap_runtime
 from app.core import sysconfig
@@ -273,6 +274,9 @@ def build_scheduler(settings: Settings, notifier: Notifier, *,
                  _guarded("partitions", lambda: maintain_partitions(today_tashkent())), **opts)
     add_cron_job(scheduler, "cleanup", "maintenance.cleanup_cron",
                  _guarded("cleanup", cleanup_job), **opts)
+    # S5: AI jurnali — 90 kun saqlash, osilib qolgan «running» yozuvlar yopiladi.
+    scheduler.add_job(_guarded("ai_journal", lambda: purge_ai_journal(datetime.now(UTC))),
+                      "interval", minutes=10, id="ai_journal", **opts)
     scheduler.add_job(_guarded("schedules", lambda: sync_schedules(scheduler)),
                       "interval", seconds=60, id="schedules", **opts)
     scheduler.add_job(_guarded("freshness", lambda: check_freshness(notifier)),

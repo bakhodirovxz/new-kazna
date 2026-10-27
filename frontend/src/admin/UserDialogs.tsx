@@ -10,6 +10,7 @@ import { Icon } from '../ui/icons';
 import { Modal } from '../ui/Modal';
 import { useToast } from '../ui/Toast';
 import { useCreateUser, useResetUserMfa, useResetUserPassword, useSetUserActive, useUpdateUser } from './api';
+import { useStepUp } from './StepUp';
 import { useFocusFirstInvalid } from './useFocusFirstInvalid';
 
 const USERNAME_RE = /^[a-z0-9._-]{3,64}$/;
@@ -30,6 +31,7 @@ interface CreateProps {
 export function UserCreateDialog({ positions, positionsFailed, onClose, onCreated }: CreateProps) {
   const formId = useId();
   const create = useCreateUser();
+  const stepUp = useStepUp();
   const [username, setUsername] = useState('');
   const [fullName, setFullName] = useState('');
   const [positionId, setPositionId] = useState<string | null>(null);
@@ -46,7 +48,7 @@ export function UserCreateDialog({ positions, positionsFailed, onClose, onCreate
     setErrors(found);
     if (found.username || found.fullName || found.position) return;
     create.mutate(
-      { username: login, full_name: fullName.trim(), position_id: Number(positionId) },
+      { username: login, full_name: fullName.trim(), position_id: Number(positionId), ...stepUp.body },
       {
         onSuccess: (result) => {
           const password = result.temporary_password;
@@ -54,6 +56,7 @@ export function UserCreateDialog({ positions, positionsFailed, onClose, onCreate
           onCreated(result.user, password);
         },
         onError: (error) => {
+          if (stepUp.onError(error)) return;
           if (isApiError(error, 409, 'username_taken')) setErrors({ username: error.message });
           else if (isApiError(error, 422)) {
             const fields = Array.isArray(error.params.fields) ? error.params.fields : [];
@@ -68,7 +71,7 @@ export function UserCreateDialog({ positions, positionsFailed, onClose, onCreate
     );
   };
 
-  const handled = isApiError(create.error, 409, 'username_taken') || (isApiError(create.error, 422) && Object.keys(errors).length > 0);
+  const handled = stepUp.isStepUp(create.error) || isApiError(create.error, 409, 'username_taken') || (isApiError(create.error, 422) && Object.keys(errors).length > 0);
   const otherError = create.error && !handled ? create.error : null;
 
   return (
@@ -92,6 +95,7 @@ export function UserCreateDialog({ positions, positionsFailed, onClose, onCreate
           <FormError error={otherError} />
           {positionsFailed ? <p className="note">{t('users.positionsFailed')}</p> : null}
         </div>
+        {stepUp.field}
         <TextInput
           label={t('users.username')}
           hint={t('users.usernameRule')}
@@ -136,6 +140,7 @@ export function UserEditDialog({ me, user, positions, positionsFailed, onClose, 
   const formId = useId();
   const toast = useToast();
   const update = useUpdateUser();
+  const stepUp = useStepUp();
   const setActive = useSetUserActive();
   const resetPassword = useResetUserPassword();
   const resetMfa = useResetUserMfa();
@@ -155,13 +160,14 @@ export function UserEditDialog({ me, user, positions, positionsFailed, onClose, 
     }
     setErrors({});
     update.mutate(
-      { id: user.id, body: { full_name: fullName.trim(), position_id: Number(positionId ?? user.position.id) } },
+      { id: user.id, body: { full_name: fullName.trim(), position_id: Number(positionId ?? user.position.id), ...stepUp.body } },
       {
         onSuccess: () => {
           toast.show(t('users.saved'), 'success');
           onClose();
         },
         onError: (error) => {
+          if (stepUp.onError(error)) return;
           if (isApiError(error, 422) && Array.isArray(error.params.fields) && error.params.fields.includes('full_name')) {
             setErrors({ name: error.message });
           }
@@ -239,9 +245,10 @@ export function UserEditDialog({ me, user, positions, positionsFailed, onClose, 
       >
         <form id={formId} ref={formRef} className="form-grid" noValidate onSubmit={save}>
           <div className="span-2">
-            <FormError error={update.error && !nameError ? update.error : null} />
+            <FormError error={update.error && !nameError && !stepUp.isStepUp(update.error) ? update.error : null} />
             {positionsFailed ? <p className="note">{t('users.positionsFailed')}</p> : null}
           </div>
+          {stepUp.field}
           <div className="span-2">
             <TextInput label={t('users.fullName')} required maxLength={200} value={fullName} error={nameError} onChange={(e) => setFullName(e.target.value)} />
           </div>

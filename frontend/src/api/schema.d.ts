@@ -2535,6 +2535,8 @@ export interface components {
         };
         /** PositionIn */
         PositionIn: {
+            /** Otp */
+            otp?: string | null;
             /** Code */
             code: string;
             /** Name */
@@ -2572,6 +2574,8 @@ export interface components {
         };
         /** PositionUpdate */
         PositionUpdate: {
+            /** Otp */
+            otp?: string | null;
             /** Name */
             name?: string | null;
             /** Role Id */
@@ -2654,6 +2658,8 @@ export interface components {
         };
         /** RoleIn */
         RoleIn: {
+            /** Otp */
+            otp?: string | null;
             /** Code */
             code: string;
             /** Name */
@@ -2680,6 +2686,8 @@ export interface components {
         };
         /** RoleUpdate */
         RoleUpdate: {
+            /** Otp */
+            otp?: string | null;
             /** Name */
             name?: string | null;
             /** Scope All */
@@ -2872,6 +2880,8 @@ export interface components {
         };
         /** UserCreate */
         UserCreate: {
+            /** Otp */
+            otp?: string | null;
             /** Username */
             username: string;
             /** Full Name */
@@ -2912,6 +2922,8 @@ export interface components {
         };
         /** UserUpdate */
         UserUpdate: {
+            /** Otp */
+            otp?: string | null;
             /** Full Name */
             full_name?: string | null;
             /** Position Id */

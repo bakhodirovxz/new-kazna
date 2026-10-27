@@ -7,19 +7,22 @@ import { Checkbox, FormError, TextInput } from '../ui/Field';
 import { Modal } from '../ui/Modal';
 import { useToast } from '../ui/Toast';
 import { useSaveRole } from './api';
+import { useStepUp } from './StepUp';
 import { useFocusFirstInvalid } from './useFocusFirstInvalid';
 import { CODE_RE } from './PositionDialog';
 
-type Group = 'sections' | 'export' | 'admin';
+type Group = 'sections' | 'export' | 'data' | 'admin';
 const GROUPS: ReadonlyArray<{ id: Group; titleKey: MessageKey }> = [
   { id: 'sections', titleKey: 'roles.permGroup.sections' },
   { id: 'export', titleKey: 'roles.permGroup.export' },
+  { id: 'data', titleKey: 'roles.permGroup.data' },
   { id: 'admin', titleKey: 'roles.permGroup.admin' },
 ];
 
 function groupOf(code: string): Group {
   if (code.startsWith('section:')) return 'sections';
   if (code.startsWith('export:')) return 'export';
+  if (code.startsWith('data:')) return 'data';
   return 'admin';
 }
 
@@ -33,6 +36,7 @@ export function RoleDialog({ role, permissions, onClose }: Props) {
   const formId = useId();
   const toast = useToast();
   const save = useSaveRole();
+  const stepUp = useStepUp();
   const [code, setCode] = useState(role?.code ?? '');
   const [name, setName] = useState(role?.name ?? '');
   const [scopeAll, setScopeAll] = useState(role?.scope_all ?? false);
@@ -53,14 +57,15 @@ export function RoleDialog({ role, permissions, onClose }: Props) {
     const permissionsSorted = [...selected].sort();
     const input =
       role === null
-        ? ({ id: null, body: { code: code.trim(), name: name.trim(), scope_all: scopeAll, permissions: permissionsSorted } } as const)
-        : ({ id: role.id, body: { name: name.trim(), scope_all: scopeAll, permissions: permissionsSorted } } as const);
+        ? ({ id: null, body: { code: code.trim(), name: name.trim(), scope_all: scopeAll, permissions: permissionsSorted, ...stepUp.body } } as const)
+        : ({ id: role.id, body: { name: name.trim(), scope_all: scopeAll, permissions: permissionsSorted, ...stepUp.body } } as const);
     save.mutate(input, {
       onSuccess: () => {
         toast.show(t('roles.saved'), 'success');
         onClose();
       },
       onError: (error) => {
+        if (stepUp.onError(error)) return;
         if (isApiError(error, 409, 'code_taken')) setErrors({ code: error.message });
         else if (isApiError(error, 422) && Array.isArray(error.params.fields)) {
           const mapped: typeof errors = {};
@@ -72,7 +77,7 @@ export function RoleDialog({ role, permissions, onClose }: Props) {
     });
   };
 
-  const handled = isApiError(save.error, 409, 'code_taken') || (isApiError(save.error, 422) && Object.keys(errors).length > 0);
+  const handled = stepUp.isStepUp(save.error) || isApiError(save.error, 409, 'code_taken') || (isApiError(save.error, 422) && Object.keys(errors).length > 0);
   const otherError = save.error && !handled ? save.error : null;
 
   return (
@@ -95,6 +100,7 @@ export function RoleDialog({ role, permissions, onClose }: Props) {
         <div className="span-2">
           <FormError error={otherError} />
         </div>
+        {stepUp.field}
         {role ? (
           role.is_system ? (
             <p className="span-2 note">{t('roles.systemNote')}</p>

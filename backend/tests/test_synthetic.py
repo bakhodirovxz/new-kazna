@@ -91,14 +91,16 @@ def test_extract_respects_window_and_reports_all_targets() -> None:
         "dim_branch", "dim_item", "dim_counterparty", "dim_bank", "dim_nomenclature",
         "dim_source", "dim_object", "dim_contract", "dim_loan", "dim_position", "fx_rate",
         "fact_cashflow", "fact_balance", "fact_payment_plan", "fact_payment_order", "fact_debt",
-        "fact_target_funds", "fact_loan_schedule", "fact_procurement",
+        "fact_target_funds", "fact_loan_schedule", "fact_procurement", "fact_investment",
+        "fact_object_stage", "fact_hr",
     }
     assert stats.by_target["dim_branch"] == 16 and stats.by_target["dim_bank"] == 80
     assert stats.rows == len(sink.rows)
     for target, row in sink.rows:
         if target == "fact_balance":
             assert date_id(date(2026, 7, 31)) <= row["date_id"] <= window.to_id
-        elif target == "fact_loan_schedule" or row.get("doc_type") == "payment_schedule":
+        elif (target in ("fact_loan_schedule", "fact_investment", "fact_object_stage")
+              or row.get("doc_type") == "payment_schedule"):
             assert row["date_id"] >= window.from_id, (target, row)  # forward: yuqori chegarasiz
         elif target.startswith("fact_") or target == "fx_rate":
             assert window.contains_id(row["date_id"]), (target, row)

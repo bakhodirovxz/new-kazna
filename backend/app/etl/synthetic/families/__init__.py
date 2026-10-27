@@ -12,6 +12,8 @@ from app.etl.synthetic.families import (
     dims,
     funds,
     fx,
+    hr,
+    investment,
     loans,
     payments,
     procurement,
@@ -31,4 +33,6 @@ FAMILIES: list[tuple[str, Family]] = [
     ("calendar", calendar.generate),
     ("loans", loans.generate),
     ("procurement", procurement.generate),
+    ("investment", investment.generate),
+    ("hr", hr.generate),
 ]

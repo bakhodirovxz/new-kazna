@@ -32,6 +32,7 @@ from app.etl.synthetic.rng import rnd
 HISTORY_START = date(2024, 1, 1)
 CONTRACT_EPOCH = date(2024, 1, 1)  # shartnoma sanalari as_of'ga bog'liq bo'lmasligi uchun
 FLOOR_HORIZON = date(2035, 12, 31)  # ochilish qoldig'i pasti hisoblanadigan qat'iy gorizont
+_ACCOUNT_FLOORS: dict[tuple[int, date, int], list[Decimal]] = {}  # (seed, history_start, filial)
 YEAR_FACTOR = {2024: 0.82, 2025: 0.91}  # 2026 = 1.0 (prototip "2025" ≈ 0,86–0,96)
 
 
@@ -221,7 +222,7 @@ class SynthModel:
         return money(-low + peak_out)
 
     def _split(self, branch: BranchRef, item: CashItem, month: date, amount: float,
-               payables: list[ContractRef]) -> list[Posting]:
+               payables: list[ContractRef], until: date | None = None) -> list[Posting]:
         ym = month_id(month)
         r = rnd(self.seed, "post", branch.id, item.code, ym)
         count = 1 if item.lumpy else r.randint(1, 4)
@@ -238,43 +239,71 @@ class SynthModel:
             eligible = [c.code for c in payables if c.contract_date <= day]
             contract = (r.choice(eligible)
                         if item.code in ("PKM54-O01", "PKM54-O02") and eligible else None)
-            if day > self.as_of or value <= 0:
+            if day > (until or self.as_of) or value <= 0:
                 continue
             out.append(Posting(branch.id, item.code, item.direction, day, value, bank, cp,
                                contract, _gl_account(item),
                                f"CF-{branch.id:02d}-{item.code}-{ym}-{n}"))
         return out
 
+    def _account_floor(self, branch: BranchRef) -> list[Decimal]:
+        """Har hisob qoldig'i manfiy bo'lmasligi uchun minimal ochilish: `FLOOR_HORIZON`gacha
+        hisobning eng chuqur kumulyativ kamayishi + bitta oy chiqimi (`_opening_floor` kabi,
+        as_of'ga bog'liq emas — o'tgan qoldiqlar siljimaydi). Faqat seed va history_start'ga
+        bog'liq — kesh modellar orasida umumiy (sinovlar bir seed'ni ko'p as_of bilan quradi)."""
+        key = (self.seed, self.history_start, branch.id)
+        if key not in _ACCOUNT_FLOORS:
+            _ACCOUNT_FLOORS[key] = self._account_floor_uncached(branch)
+        return _ACCOUNT_FLOORS[key]
+
+    def _account_floor_uncached(self, branch: BranchRef) -> list[Decimal]:
+        payables = [c for c in self.contracts if c.branch_id == branch.id and c.kind == "payable"]
+        n = len(BANKS)
+        running, low, peak_out = [0.0] * n, [0.0] * n, [0.0] * n
+        month = month_start(self.history_start)
+        while month <= FLOOR_HORIZON:
+            inflow, outflow = [0.0] * n, [0.0] * n
+            for item, amount in self._month_amounts(branch, month):
+                for p in self._split(branch, item, month, amount, payables, until=FLOOR_HORIZON):
+                    (inflow if p.direction == "in" else outflow)[p.bank] += float(p.amount)
+            for k in range(n):
+                running[k] += inflow[k] - outflow[k] - 0.004 * (inflow[k] + outflow[k])
+                low[k] = min(low[k], running[k])
+                peak_out[k] = max(peak_out[k], outflow[k])
+            month = add_months(month, 1)
+        return [money(-low[k] + peak_out[k]) for k in range(n)]
+
     def _balances(self, postings: list[Posting]) -> list[BalanceRow]:
-        """Filial jami qoldig'i oy sayin: ochilish + ЧДП + «Разница»; hisoblarga
-        `jami × bank_share` bo'linadi (prototip), shuning uchun hech bir hisob manfiy emas
-        va filial bo'yicha balans tengligi saqlanadi. Ochilish qatori har doim
-        `history_start - 1 kun`da (oyna 1-kundan boshlansa sifat tekshiruvi uni ko'radi)."""
-        net: dict[tuple[int, int], Decimal] = defaultdict(Decimal)
-        turnover: dict[tuple[int, int], Decimal] = defaultdict(Decimal)
+        """Har hisob qoldig'i oy sayin: ochilish + shu hisobning ЧДП + «Разница» (filial-oy
+        nisbati × hisob oboroti). Tenglik hisob darajasida ham saqlanadi — qo'lda kiritilgan
+        qoldiq faqat o'z hisobini sifat tekshiruvidan chiqaradi (A-ME.R1). Ochilish qatori har
+        doim `history_start - 1 kun`da (oyna 1-kundan boshlansa sifat tekshiruvi uni ko'radi)."""
+        net: dict[tuple[int, int, int], Decimal] = defaultdict(Decimal)
+        turnover: dict[tuple[int, int, int], Decimal] = defaultdict(Decimal)
         for p in postings:
-            ym = month_id(p.day)
-            net[(p.branch_id, ym)] += p.amount if p.direction == "in" else -p.amount
-            turnover[(p.branch_id, ym)] += p.amount
+            key = (p.branch_id, p.bank, month_id(p.day))
+            net[key] += p.amount if p.direction == "in" else -p.amount
+            turnover[key] += p.amount
         opening_day = self.history_start - timedelta(days=1)
         rows: list[BalanceRow] = []
         for branch in BRANCHES:
             r0 = rnd(self.seed, "open", branch.id)
             open0 = money(r0.uniform(820000, 900000) if branch.id == HQ_ID
                           else r0.uniform(18000, 32000) * branch.weight)
-            deltas: list[tuple[date, Decimal]] = []
+            total = max(open0, self._opening_floor(branch))
+            accounts = [max(part.balance, floor) for part, floor in zip(
+                self._split_balance(branch.id, opening_day, total),
+                self._account_floor(branch), strict=True)]
+            rows += [BalanceRow(branch.id, k, opening_day, v) for k, v in enumerate(accounts)]
             for month in self.months():
                 ym = month_id(month)
                 rd = rnd(self.seed, "diff", branch.id, ym)
                 ratio = -rd.uniform(0, 0.004) if rd.random() < 0.75 else rd.uniform(0, 0.0015)
-                delta = net.get((branch.id, ym), Decimal(0)) + money(
-                    float(turnover.get((branch.id, ym), Decimal(0))) * ratio)
-                deltas.append((self.period_end(month), delta))
-            total = max(open0, self._opening_floor(branch))
-            rows += self._split_balance(branch.id, opening_day, total)
-            for day, delta in deltas:
-                total += delta
-                rows += self._split_balance(branch.id, day, total)
+                for k in range(len(accounts)):
+                    accounts[k] += net.get((branch.id, k, ym), Decimal(0)) + money(
+                        float(turnover.get((branch.id, k, ym), Decimal(0))) * ratio)
+                day = self.period_end(month)
+                rows += [BalanceRow(branch.id, k, day, v) for k, v in enumerate(accounts)]
         return rows
 
     def _split_balance(self, branch_id: int, day: date, total: Decimal) -> list[BalanceRow]:

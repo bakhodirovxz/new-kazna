@@ -82,6 +82,26 @@ def test_balance_identity_holds_in_model() -> None:
             assert abs(diff) <= turnover[key] * Decimal("0.004") + Decimal("0.05"), (branch.id, cur)
 
 
+def test_balance_identity_holds_per_account() -> None:
+    """Hisob darajasida ham: qo'lda kiritilgan qoldiq faqat o'z hisobini istisno qiladi (A-ME.R1),
+    shuning uchun qolgan hisoblar o'z oqimiga mos bo'lishi kerak."""
+    model = SynthModel(7, TEST_AS_OF)
+    bal: dict[tuple[int, int], dict[date, Decimal]] = defaultdict(dict)
+    for row in model.cash.balances:
+        bal[(row.branch_id, row.bank)][row.day] = row.balance
+    net: dict[tuple[int, int, int], Decimal] = defaultdict(Decimal)
+    turnover: dict[tuple[int, int, int], Decimal] = defaultdict(Decimal)
+    for p in model.cash.postings:
+        key = (p.branch_id, p.bank, month_id(p.day))
+        net[key] += p.amount if p.direction == "in" else -p.amount
+        turnover[key] += p.amount
+    for (branch_id, bank), series in bal.items():
+        for prev, cur in pairwise(sorted(series)):
+            key = (branch_id, bank, month_id(cur))
+            diff = series[cur] - series[prev] - net[key]
+            assert abs(diff) <= turnover[key] * Decimal("0.004") + Decimal("0.05"), key
+
+
 def test_extract_respects_window_and_reports_all_targets() -> None:
     connector = SyntheticConnector(seed=7, as_of=TEST_AS_OF)
     window = Window(date(2026, 8, 1), TEST_AS_OF)

@@ -97,9 +97,9 @@ docker volume create "$VOLUME" >/dev/null
 
 # Izolyatsiya: sirlar $WORK ichida, repo hajmi sinov hajmi (prod sirlari/repo'ga tegmaydi).
 CONFIG="$("${P[@]}" config | tr -d '\r')"
-printf '%s\n' "$CONFIG" | grep -q "build.selftest.secrets" || die "sirlar papkasi $WORK/secrets emas"
-printf '%s\n' "$CONFIG" | grep -q "name: $VOLUME\$" || die "repo hajmi $VOLUME emas"
-! printf '%s\n' "$CONFIG" | grep -q "deploy.secrets" || die "prod sirlari ulangan"
+grep -q "build.selftest.secrets" <<<"$CONFIG" || die "sirlar papkasi $WORK/secrets emas"
+grep -q "name: $VOLUME\$" <<<"$CONFIG" || die "repo hajmi $VOLUME emas"
+! grep -q "deploy.secrets" <<<"$CONFIG" || die "prod sirlari ulangan"
 
 step "1. prod stack (read_only, cap_drop, non-root, ci profili)"
 "${P[@]}" up -d

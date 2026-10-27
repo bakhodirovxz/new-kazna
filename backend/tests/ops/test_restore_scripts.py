@@ -60,7 +60,7 @@ def test_services_have_timeout_hardening_and_alert() -> None:
     for unit in services:
         text = unit.read_text(encoding="utf-8")
         assert re.search(r"^TimeoutStartSec=", text, re.M), unit.name
-        for key in ("NoNewPrivileges=yes", "PrivateTmp=yes", "ProtectHome=yes",
+        for key in ("NoNewPrivileges=yes", "PrivateTmp=yes", "ProtectHome=read-only",
                     "ProtectSystem=full"):
             assert key in text, (unit.name, key)
     for name in ("monitor", "restore-test"):

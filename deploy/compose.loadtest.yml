@@ -14,6 +14,7 @@ services:
       BASE_URL: ${UGK_LOAD_BASE_URL:-https://caddy}
       SESSIONS_FILE: /work/sessions.json
       DURATION: ${UGK_LOAD_DURATION:-3m}
+      LOAD_LABEL: ${UGK_LOAD_LABEL:-}
       SSL_CERT_FILE: /work/caddy-root.crt
     volumes:
       - ../loadtest/k6:/scripts:ro

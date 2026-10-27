@@ -109,13 +109,17 @@ export function handleSummary(data) {
   const rows = ['vu20', 'vu50', 'vu100'].map((scenario) => {
     const page = p95(data, `page_load{scenario:${scenario}}`);
     const filter = p95(data, `filter_change{scenario:${scenario}}`);
-    const ok = page !== null && filter !== null && page <= 2000 && filter <= 1000;
+    const failedItem = data.metrics[`http_req_failed{scenario:${scenario}}`];
+    const checksItem = data.metrics[`checks{scenario:${scenario}}`];
+    // Итог = те же нормы, что и thresholds: p95 + ошибки < 1 % + checks > 99 % на ступени.
+    const ok = page !== null && filter !== null && page < 2000 && filter < 1000
+      && failedItem !== undefined && failedItem.values.rate < 0.01
+      && checksItem !== undefined && checksItem.values.rate > 0.99;
     let verdict = 'справочно';
     if (scenario !== 'vu100') {
       verdict = ok ? 'соответствует' : 'НЕ соответствует';
     }
     const show = (value) => (value === null ? '—' : String(value));
-    const failedItem = data.metrics[`http_req_failed{scenario:${scenario}}`];
     const reqs = data.metrics[`http_reqs{scenario:${scenario}}`];
     const errors = failedItem ? (failedItem.values.rate * 100).toFixed(2) : '—';
     const rps = reqs ? (reqs.values.count / seconds(DURATION)).toFixed(1) : '—';
@@ -128,6 +132,7 @@ export function handleSummary(data) {
     '# Протокол нагрузочного теста UGEKAZNA',
     '',
     `Дата (UTC): ${new Date().toISOString()}; стенд: ${BASE}; длительность ступени: ${DURATION}.`,
+    `Стенд: ${__ENV.LOAD_LABEL || 'не указан (UGK_LOAD_LABEL)'}.`,
     'Норматив (ТЗ, раздел 9): открытие страницы ≤ 2000 мс, смена фильтра ≤ 1000 мс (p95) при 20 и 50 пользователях; 100 — расчётный пик (справочно).',
     '',
     '| Пользователей | Страница p95, мс | Фильтр p95, мс | Ошибки, % | RPS | Итог |',

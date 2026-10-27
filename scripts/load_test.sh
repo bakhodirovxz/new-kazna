@@ -3,6 +3,7 @@
 # (docker compose -f deploy/compose.yml up -d --build) va sintetik ma'lumot yuklangan (make seed-synthetic).
 # k6: 20 → 50 → 100 VU. Natija: build/loadtest/report.md (protokol), build/loadtest/summary.json.
 # Muhit: UGK_LOAD_DURATION — har bosqich davomiyligi (standart 3m; tez tekshiruv: 20s).
+#        UGK_LOAD_LABEL — protokoldagi stend yorlig'i (standart: dev stack + Docker CPU/RAM).
 set -euo pipefail
 cd "$(dirname "$0")/.."
 mkdir -p build/loadtest
@@ -10,6 +11,12 @@ UGK_UID="$(id -u)"
 UGK_GID="$(id -g)"
 export UGK_UID UGK_GID
 SESSIONS=build/loadtest/sessions.json
+if [ -z "${UGK_LOAD_LABEL:-}" ]; then
+  # Dev stack doim 1 uvicorn jarayoni (--reload); boshqa stend uchun UGK_LOAD_LABEL bering.
+  UGK_LOAD_LABEL="dev stack (deploy/compose.yml, 1 uvicorn process --reload); Docker: $(
+    docker info --format '{{.OperatingSystem}}, {{.NCPU}} CPU, {{.MemTotal}} B RAM' 2>/dev/null)"
+fi
+export UGK_LOAD_LABEL
 trap 'rm -f "$SESSIONS"' EXIT   # jonli sessiya tokenlari diskda qolmasin
 
 docker compose -f deploy/compose.yml exec -T caddy cat /data/caddy/pki/authorities/local/root.crt \

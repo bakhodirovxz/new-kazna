@@ -29,7 +29,8 @@ from app.devtools import LOAD_PREFIX
 from app.dwh.freshness import freshness
 
 RESTORE_KEY = "last_restore_test"
-RESTORE_MAX_AGE = timedelta(days=35)
+# Таймер — первая суббота месяца (интервал до 35 дней) плюс длительность запуска.
+RESTORE_MAX_AGE = timedelta(days=40)
 RTO_SECONDS = 7200
 RPO = timedelta(minutes=15)  # 04b: core.settings'ga ko'chirilishi mumkin
 ARCHIVER_GRACE = timedelta(minutes=5)  # archive_timeout + archive-push davomiyligi uchun zaxira

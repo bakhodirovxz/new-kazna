@@ -40,7 +40,13 @@ finish() {
   local code=$?
   local duration=$(( $(date +%s) - START ))
   if [ "$UGK_RESTORE_KEEP" != 1 ]; then
-    "${RESTORE[@]}" down -v --remove-orphans >/dev/null 2>&1 || true
+    # Vaqtinchalik nusxa prod ma'lumotining ochiq (shifrsiz) nusxasi: o'chmasa — ko'rinadigan xato (kod 1).
+    if ! "${RESTORE[@]}" down -v --remove-orphans >/dev/null 2>&1; then
+      echo "XATO: vaqtinchalik klaster o'chirilmadi — qo'lda o'chiring (docs/ops/backup-restore.md, 4-bo'lim)" >&2
+      DETAILS="vaqtinchalik klaster o'chirilmadi"
+      RESULT=fail
+      [ "$code" -ne 0 ] || code=1
+    fi
   fi
   # CLI faqat pgBackRest yorlig'i yoki `none` qabul qiladi — boshqa qiymat yozuvni yo'qotmasin.
   [[ $BACKUP_LABEL =~ ^[0-9]{8}-[0-9]{6}F(_[0-9]{8}-[0-9]{6}[DI])?$ ]] || BACKUP_LABEL=none

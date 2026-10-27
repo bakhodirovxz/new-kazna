@@ -131,11 +131,17 @@ def test_lock_keys_match_consumers() -> None:
 
 def test_release_builds_from_clean_export() -> None:
     text = repo_path("scripts/release.sh").read_text(encoding="utf-8")
-    assert "git archive HEAD | tar -x" in text
+    assert 'git archive "$REV" | tar -x' in text
     # scan/build faqat eksport ichida; ishchi daraxtdagi scripts/scan.sh chaqirilmaydi.
     assert '(cd "$SRC" && scripts/scan.sh "$VERSION")' in text
     assert not re.search(r"^scripts/scan\.sh", text, re.M)
-    assert "git ls-tree -r --name-only HEAD" in text  # eksport == HEAD o'z-o'zini tekshirish
+    assert 'git ls-tree -r --name-only "$REV"' in text  # eksport == HEAD o'z-o'zini tekshirish
     # Yetishmayotgan majburiy yo'l — xato (fail-closed), ogohlantirish emas.
     assert "! -e \"$SRC/$path\"" in text
     assert re.search(r"XATO: \$path[^\n]*\n\s+exit 1", text)
+    # HEAD bir marta o'qiladi; VERSION rm -rf dan oldin tekshiriladi; xatoda eksport tozalanadi.
+    assert text.count("git rev-parse HEAD") == 1
+    assert 'echo "$REV" > "$OUT/COMMIT"' in text
+    assert "trap 'rm -rf \"$SRC\"' EXIT" in text
+    assert text.index("=~ ^[0-9A-Za-z]") < text.index('rm -rf "$SRC"')
+    assert "docs/ops yaratilguncha" not in text

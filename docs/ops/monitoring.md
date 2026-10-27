@@ -33,7 +33,7 @@
 | `db` | `pg_isready` через сокет | СУБД принимает подключения |
 | `redis` | `redis-cli ping` | Redis отвечает |
 | `caddy` | `http://127.0.0.1:8081/health` внутри контейнера | Caddy работает |
-| `backup` | `ugk-backup health` | последняя копия успешна и не старше 7 часов |
+| `backup` | `ugk-backup health` | последняя копия успешна и не старше 8 часов |
 
 ## 3. Готовность (`/api/v1/readyz`) и деградация
 
@@ -64,7 +64,7 @@ $P exec -T api python -c "import urllib.request as u; print(u.urlopen('http://12
 | `stale_data` | предупреждение | данные не обновлялись дольше порога `freshness.max_age_hours` (по умолчанию 6 часов, ТЗ раздел 9) | «Состояние обменов», журнал worker |
 | `etl_request_stuck` | предупреждение | запрос загрузки в очереди дольше 30 минут (или в работе дольше 6 часов) | журнал worker (`$P logs worker`), перезапуск worker |
 | `load_users_present` | критично | в БД prod остались нагрузочные учётные записи `load_*` с известным паролем | удалить вручную от роли `ugk_migrator`; `seed-load --purge` в prod отказывает (только dev/test) |
-| `restore_test_missing`, `restore_test_overdue` | предупреждение | проверки восстановления нет или она старше 35 дней | `make restore-test` |
+| `restore_test_missing`, `restore_test_overdue` | предупреждение | проверки восстановления нет или она старше 40 дней | `make restore-test` |
 | `restore_test_failed` | критично | последняя проверка восстановления неуспешна | журнал в `/var/log/ugekazna`, [backup-restore.md](backup-restore.md) |
 | `restore_test_rto` | предупреждение | восстановление дольше 7200 с | анализ производительности хранилища копий |
 | `key_rotation_due` | предупреждение | активный ключ данных старше 12 месяцев | ротация ([../security/key-management.md](../security/key-management.md), П3) |

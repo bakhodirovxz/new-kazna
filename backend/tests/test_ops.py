@@ -96,8 +96,10 @@ def test_restore_setting_not_editable_via_api(
         (None, {"restore_test_missing"}),
         ({"at": NOW.isoformat(), "result": "ok", "rto_ok": True}, set()),
         ({"at": NOW.isoformat(), "result": "fail", "rto_ok": True}, {"restore_test_failed"}),
-        ({"at": (NOW - timedelta(days=36)).isoformat(), "result": "ok", "rto_ok": True},
+        ({"at": (NOW - timedelta(days=41)).isoformat(), "result": "ok", "rto_ok": True},
          {"restore_test_overdue"}),
+        # 35-дневный интервал между таймерами не даёт ложного предупреждения
+        ({"at": (NOW - timedelta(days=36)).isoformat(), "result": "ok", "rto_ok": True}, set()),
         ({"at": NOW.isoformat(), "result": "ok", "rto_ok": False}, {"restore_test_rto"}),
     ],
 )

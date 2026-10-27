@@ -1,11 +1,11 @@
 import type { StationOut } from '../../../api/types';
+import { ProductionBlock } from '../../../dash/map/ProductionBlock';
 import { formatMoney } from '../../../dash/money';
 import { Rank } from '../../../dash/Rank';
 import { t } from '../../../i18n';
-import { formatNumber } from '../../../i18n/format';
 import type { FilterState } from '../../../shell/useFilters';
 import { Button } from '../../../ui/Button';
-import './map.css';
+import '../../../dash/map/map.css';
 
 export interface StationPanelProps {
   stations: readonly StationOut[];
@@ -53,24 +53,7 @@ export function StationPanel({ stations, selected, onSelect, filters, onBranch }
       {hq ? (
         <p className="note">{t('obzor.station.hqNote')}</p>
       ) : (
-        <>
-          <div className="gp-grid">
-            <div>
-              <span>{t('obzor.station.capacity')}</span>
-              <b>
-                {station.capacity_mw == null ? (
-                  '—'
-                ) : (
-                  <>
-                    {formatNumber(station.capacity_mw)}
-                    <small>{t('obzor.station.mw')}</small>
-                  </>
-                )}
-              </b>
-            </div>
-          </div>
-          <p className="note">{t('obzor.station.noProduction')}</p>
-        </>
+        <ProductionBlock capacity={station.capacity_mw} production={station.production ?? null} />
       )}
       <ul className="gp-rows">
         <Row label={t('obzor.station.inflow')} value={station.inflow} />

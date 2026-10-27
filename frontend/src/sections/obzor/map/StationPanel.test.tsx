@@ -21,7 +21,7 @@ describe('StationPanel', () => {
     expect(screen.getByRole('heading', { name: 'Чарвакская ГЭС' })).toBeInTheDocument();
     expect(screen.getByText('640,0 млн')).toBeInTheDocument();
     expect(screen.getByText('15,0 млн')).toHaveClass('neg');
-    expect(screen.getByText('Выработка, план и КИУМ появятся после подключения АСКУЭ (этап 3).')).toBeInTheDocument();
+    expect(screen.getByText('Нет данных о выработке за период.')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Открыть данные станции' }));
     expect(onBranch).toHaveBeenCalledWith(2);
   });

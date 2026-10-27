@@ -7,7 +7,9 @@ export type IndicatorKey =
   | 'portfolio' | 'loanRate' | 'fxShare' | 'debtService' | 'loanPaid' | 'nextPayment' | 'peakYear' | 'dscr'
   | 'contracted' | 'savings' | 'planExec' | 'lotsInWork' | 'lotsOverdue' | 'directShare' | 'avgProcDays'
   | 'program' | 'invYtd' | 'schedule' | 'finExec' | 'physExec' | 'finGap' | 'advances' | 'objStatus'
-  | 'headcount' | 'vacancies' | 'payroll' | 'avgSalary' | 'staffTurnover' | 'overtime';
+  | 'headcount' | 'vacancies' | 'payroll' | 'avgSalary' | 'staffTurnover' | 'overtime'
+  | 'generation' | 'genPlan' | 'capacity' | 'kium' | 'ownNeeds' | 'supply' | 'paymentLevel' | 'currentPower'
+  | 'stockValue' | 'turnover' | 'belowMin' | 'illiquid' | 'stockAge' | 'stockFlow';
 
 export function formula(key: IndicatorKey): string {
   return t(`formula.${key}` as MessageKey);

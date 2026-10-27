@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import type { ObzorSvodOut } from '../../api/types';
 import { NoData } from '../../dash/DataState';
+import { GesMap, productionTip } from '../../dash/map/GesMap';
+import { formatMoney } from '../../dash/money';
 import { Rank } from '../../dash/Rank';
 import { t } from '../../i18n';
 import { buildHash } from '../../router/hash';
@@ -8,7 +10,6 @@ import { Card } from '../../ui/Card';
 import type { SectionPageProps } from '../registry';
 import { SectionData } from '../SectionData';
 import { toggleBranch, useSection } from '../useSection';
-import { GesMap } from './map/GesMap';
 import { StationPanel } from './map/StationPanel';
 import { ActivityCard } from './parts/ActivityCard';
 import { CashKpis } from './parts/CashKpis';
@@ -36,7 +37,12 @@ export default function ObzorSvod({ section, page, filters, onBranch }: SectionP
             </div>
             <div className="grid">
               <Card className="c8 wide" title={t('obzor.map.title')} sub={t('obzor.map.sub')}>
-                <GesMap stations={data.stations} selected={mapSel ?? filters.br} onSelect={setMapSel} />
+                <GesMap
+                  stations={data.stations}
+                  selected={mapSel ?? filters.br}
+                  onSelect={setMapSel}
+                  tip={(s) => (s.kind === 'head' ? t('obzor.map.tipHq', { name: s.name, balance: formatMoney(s.closing) }) : productionTip(s))}
+                />
               </Card>
               <Card className="c4 wide">
                 <StationPanel stations={data.stations} selected={mapSel ?? filters.br} onSelect={setMapSel} filters={filters} onBranch={onBranch} />

@@ -119,9 +119,11 @@ class FileConnector:
             counts[name] = 0
             for line, raw in self._rows(path):
                 row = self._convert(target, raw, f"{path.name}:{line}")
-                if target.kind == "fact" and row.get("date_id") is not None \
-                        and not window.contains_id(int(row["date_id"])):
-                    continue
+                if target.kind == "fact" and row.get("date_id") is not None:
+                    day = int(row["date_id"])
+                    # forward maqsadlar (reja, АИП, bosqichlar) kelajak sanalarni ham oladi
+                    if day < window.from_id or (day > window.to_id and not target.forward):
+                        continue
                 sink.add(name, row)
                 counts[name] += 1
         return ExtractStats(sum(counts.values()), counts)

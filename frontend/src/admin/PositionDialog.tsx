@@ -8,6 +8,7 @@ import { Modal } from '../ui/Modal';
 import { Select } from '../ui/Select';
 import { useToast } from '../ui/Toast';
 import { useSavePosition } from './api';
+import { useStepUp } from './StepUp';
 import { useFocusFirstInvalid } from './useFocusFirstInvalid';
 
 export const CODE_RE = /^[a-z][a-z0-9_]{1,63}$/;
@@ -23,6 +24,7 @@ export function PositionDialog({ position, roles, branches, onClose }: Props) {
   const formId = useId();
   const toast = useToast();
   const save = useSavePosition();
+  const stepUp = useStepUp();
   const [code, setCode] = useState(position?.code ?? '');
   const [name, setName] = useState(position?.name ?? '');
   const [roleId, setRoleId] = useState(position ? String(position.role_id) : '');
@@ -46,14 +48,15 @@ export function PositionDialog({ position, roles, branches, onClose }: Props) {
     if (found.code || found.name || found.role) return;
     const input =
       position === null
-        ? ({ id: null, body: { code: code.trim(), name: name.trim(), role_id: Number(roleId), branch_ids: branchIds } } as const)
-        : ({ id: position.id, body: { name: name.trim(), role_id: Number(roleId), branch_ids: branchIds, is_active: active } } as const);
+        ? ({ id: null, body: { code: code.trim(), name: name.trim(), role_id: Number(roleId), branch_ids: branchIds, ...stepUp.body } } as const)
+        : ({ id: position.id, body: { name: name.trim(), role_id: Number(roleId), branch_ids: branchIds, is_active: active, ...stepUp.body } } as const);
     save.mutate(input, {
       onSuccess: () => {
         toast.show(t('roles.saved'), 'success');
         onClose();
       },
       onError: (error) => {
+        if (stepUp.onError(error)) return;
         if (isApiError(error, 409, 'code_taken')) setErrors({ code: error.message });
         else if (isApiError(error, 422) && Array.isArray(error.params.fields)) {
           const mapped: typeof errors = {};
@@ -66,7 +69,7 @@ export function PositionDialog({ position, roles, branches, onClose }: Props) {
     });
   };
 
-  const handled = isApiError(save.error, 409, 'code_taken') || (isApiError(save.error, 422) && Object.keys(errors).length > 0);
+  const handled = stepUp.isStepUp(save.error) || isApiError(save.error, 409, 'code_taken') || (isApiError(save.error, 422) && Object.keys(errors).length > 0);
   const otherError = save.error && !handled ? save.error : null;
 
   return (
@@ -89,6 +92,7 @@ export function PositionDialog({ position, roles, branches, onClose }: Props) {
         <div className="span-2">
           <FormError error={otherError} />
         </div>
+        {stepUp.field}
         {position ? null : (
           <TextInput
             label={t('roles.code')}

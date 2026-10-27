@@ -23,7 +23,7 @@ facts AS (
   SELECT g.branch_id, d.month_id, sum(g.generation) AS gen,
          coalesce(sum(g.generation) FILTER (WHERE d.day <= :cmp_day), 0) AS gen_cmp,
          sum(g.own_needs) AS own, coalesce(sum(g.plan), 0) AS plan_full
-  FROM dwh.fact_generation g
+  FROM dwh.generation_effective g
   JOIN dwh.dim_date d ON d.date_id = g.date_id
   JOIN months m ON m.month_id = d.month_id
   WHERE g.date_id BETWEEN :from_id AND :as_of_id
@@ -57,7 +57,7 @@ INSERT INTO mart.agg_energy_sales_month (build_id, branch_id, month_id, accrued,
 WITH {_MONTHS}
 SELECT :build_id, coalesce(s.branch_id, 0), d.month_id, sum(s.accrued), sum(s.paid),
        sum(s.volume)
-FROM dwh.fact_energy_sales s
+FROM dwh.energy_sales_effective s
 JOIN dwh.dim_date d ON d.date_id = s.date_id
 JOIN months m ON m.month_id = d.month_id
 WHERE s.date_id BETWEEN :from_id AND :as_of_id

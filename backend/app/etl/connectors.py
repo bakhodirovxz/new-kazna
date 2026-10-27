@@ -24,6 +24,7 @@ from app.etl.hr.client import HrApiClient, ca_context
 from app.etl.hr.connector import HrConnector
 from app.etl.hr.registry import HrOrg
 from app.etl.hr.source import HrApiSource, MehnatSource
+from app.etl.manual_connector import ManualConnector
 from app.etl.onec.client import OneCClient, OneCConfig
 from app.etl.onec.connector import OneCConnector, OrgMap
 from app.etl.onec.sklad import OneCSkladConnector, sklad_config
@@ -33,7 +34,7 @@ from app.etl.zakupki.connector import ProcurementConnector
 from app.etl.zakupki.portal import XaridPortal
 
 KNOWN_SOURCES = ("synthetic", "file", "onec", "banks", "cbu", "directbank", "xarid", "hr",
-                 "mehnat", "askue", "onec_sklad")
+                 "mehnat", "askue", "onec_sklad", "manual")
 
 
 def _xarid(settings: Settings) -> ProcurementConnector:
@@ -154,4 +155,6 @@ def make_connector(source: str, settings: Settings | None = None) -> SourceConne
     if source == "mehnat":
         MehnatSource()  # TZ 8: 3-bosqich — har doim MehnatNotConfigured (ConfigError)
         raise ConfigError("mehnat.uz")  # pragma: no cover — erishib bo'lmaydi
+    if source == "manual":
+        return ManualConnector()
     raise ValueError(f"noma'lum manba: {source}")

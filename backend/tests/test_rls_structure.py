@@ -135,8 +135,13 @@ def test_ugk_app_denied_select_on_dim_counterparty() -> None:
 
 
 def test_ugk_app_denied_select_on_dim_bank() -> None:
+    # 0022: tanlov ro'yxati uchun faqat sezgir bo'lmagan ustunlar; shifrlangan hisob -- yo'q.
     with new_session() as s, pytest.raises(ProgrammingError, match="permission denied"):
-        s.execute(text("SELECT bank_name FROM dwh.dim_bank"))
+        s.execute(text("SELECT account_enc FROM dwh.dim_bank"))
+    with new_session() as s, pytest.raises(ProgrammingError, match="permission denied"):
+        s.execute(text("SELECT account_bidx FROM dwh.dim_bank"))
+    with new_session() as s:
+        s.execute(text("SELECT code, bank_name, currency, account_last4 FROM dwh.dim_bank"))
 
 
 def test_ugk_app_denied_select_on_dim_contract() -> None:

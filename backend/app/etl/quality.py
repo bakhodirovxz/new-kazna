@@ -106,7 +106,7 @@ def _control_totals(conn: Connection, source: str, window: Window,
 # ko'rinsa (oy boshidan OLDIN unga tegishli hech qanday qoldiq yozuvi yo'q), o'sha
 # filial-oy uchun "nachalniy qoldiq" TO'LIQ emas (yangi hisob ulushi tushib qoladi) — bunday
 # filial-oylar tekshirib bo'lmaydi (`unverifiable`) va `violations`dan chiqarib tashlanadi.
-# Bu Task-6 agregatlarini o'zgartirmaydi — bevosita `dwh.fact_balance`ga so'rov beriladi.
+# Bu Task-6 agregatlarini o'zgartirmaydi — bevosita `dwh.balance_effective`ga so'rov beriladi.
 #
 # R2-1: oy chegaralari `date_trunc('month', :date_from)`dan (HAQIQIY TAKVIM oyi, 1-kundan)
 # hisoblanadi, xom `:date_from`dan emas — aks holda `:date_from` oy o'rtasida bo'lganda
@@ -127,7 +127,7 @@ _UNVERIFIABLE_SQL = text(
     "  GROUP BY month_id),\n"
     "first_ever AS (\n"
     "  SELECT branch_id, bank_id, min(date_id) AS first_date_id\n"
-    "  FROM dwh.fact_balance GROUP BY branch_id, bank_id)\n"
+    "  FROM dwh.balance_effective GROUP BY branch_id, bank_id)\n"
     "SELECT DISTINCT fe.branch_id, m.month_id\n"
     "FROM first_ever fe\n"
     "JOIN months m ON fe.first_date_id BETWEEN m.first_id AND m.end_id\n"
@@ -135,35 +135,92 @@ _UNVERIFIABLE_SQL = text(
 )
 
 
+# «Ввод данных» (ruling A-ME.R1, spec §3.5 ni bekor qiladi): qo'lda kiritilgan qoldiq «Разница»
+# tekshiruvini O'CHIRMAYDI. Faqat QO'LDA qoldiq yozuvi tushgan oy (M) va FAQAT shu hisob uchun
+# hisobning hissasi (qoldiq o'zgarishi - shu hisobdagi oborot) identifikatordan chiqariladi;
+# filialning boshqa (tizim) hisoblari bu oyda ham tekshiriladi, keyingi oylarda (M+1...) hisob
+# to'liq qatnashadi. Istisno qo'llanganda `manual_excluded` yozuvi sifat qaydida qoladi.
+_MANUAL_ACCOUNT_SQL = text(
+    "WITH months AS (\n"
+    "  SELECT month_id, min(date_id) AS first_id, max(date_id) AS end_id\n"
+    "  FROM dwh.dim_date\n"
+    "  WHERE date BETWEEN date_trunc('month', CAST(:date_from AS date))::date\n"
+    "    AND CAST(:date_to AS date)\n"
+    "  GROUP BY month_id),\n"
+    "flagged AS (\n"
+    "  SELECT DISTINCT fb.branch_id, fb.bank_id, m.month_id, m.first_id, m.end_id\n"
+    "  FROM dwh.balance_effective fb JOIN months m ON fb.date_id BETWEEN m.first_id AND m.end_id\n"
+    "  WHERE fb.src_system = 'manual')\n"
+    "SELECT f.branch_id, f.month_id,\n"
+    "  coalesce(cl.balance, 0) - coalesce(op.balance, 0) AS delta_balance,\n"
+    "  coalesce(fl.inflow, 0) AS inflow, coalesce(fl.outflow, 0) AS outflow\n"
+    "FROM flagged f\n"
+    "LEFT JOIN LATERAL (SELECT fb.balance FROM dwh.balance_effective fb\n"
+    "  WHERE fb.branch_id = f.branch_id AND fb.bank_id = f.bank_id AND fb.date_id <= f.end_id\n"
+    "  ORDER BY fb.date_id DESC LIMIT 1) cl ON true\n"
+    "LEFT JOIN LATERAL (SELECT fb.balance FROM dwh.balance_effective fb\n"
+    "  WHERE fb.branch_id = f.branch_id AND fb.bank_id = f.bank_id AND fb.date_id < f.first_id\n"
+    "  ORDER BY fb.date_id DESC LIMIT 1) op ON true\n"
+    "LEFT JOIN LATERAL (SELECT\n"
+    "    sum(c.amount) FILTER (WHERE c.direction = 'in') AS inflow,\n"
+    "    sum(c.amount) FILTER (WHERE c.direction = 'out') AS outflow\n"
+    "  FROM dwh.fact_cashflow c\n"
+    "  WHERE c.branch_id = f.branch_id AND c.bank_id = f.bank_id\n"
+    "    AND c.date_id BETWEEN f.first_id AND f.end_id) fl ON true"
+)
+
+
+def _unverifiable(conn: Connection, window: Window) -> list[dict[str, Any]]:
+    params = {"date_from": window.date_from, "date_to": window.date_to}
+    return [{"branch_id": r.branch_id, "month_id": r.month_id}
+            for r in conn.execute(_UNVERIFIABLE_SQL, params).all()]
+
+
+def _manual_adjustments(conn: Connection, window: Window) -> dict[tuple[int, int], list[Any]]:
+    """(filial, oy) -> [qo'lda hisoblar hissasi, ularning oboroti, hisoblar soni]."""
+    out: dict[tuple[int, int], list[Any]] = {}
+    params = {"date_from": window.date_from, "date_to": window.date_to}
+    for r in conn.execute(_MANUAL_ACCOUNT_SQL, params).all():
+        entry = out.setdefault((r.branch_id, r.month_id), [Decimal(0), Decimal(0), 0])
+        entry[0] += r.delta_balance - (r.inflow - r.outflow)
+        entry[1] += r.inflow + r.outflow
+        entry[2] += 1
+    return out
+
+
 def _balance_identity(conn: Connection, build_id: int, window: Window,
                       tolerance: Decimal) -> CheckResult:
     months = window.month_ids()
-    unverifiable = [
-        {"branch_id": r.branch_id, "month_id": r.month_id}
-        for r in conn.execute(_UNVERIFIABLE_SQL,
-                              {"date_from": window.date_from, "date_to": window.date_to}).all()
-    ]
+    unverifiable = _unverifiable(conn, window)
     skip = {(u["branch_id"], u["month_id"]) for u in unverifiable}
+    manual = _manual_adjustments(conn, window)
     rows = conn.execute(
         text("SELECT branch_id, month_id, diff, inflow + outflow AS turnover "
              "FROM mart.agg_cash_month WHERE build_id = :b AND item_id = 0 AND branch_id <> 0 "
              "AND month_id BETWEEN :mf AND :mt AND opening_balance IS NOT NULL "
              "AND closing_balance IS NOT NULL "
-             "AND abs(diff) > greatest(:tol * (inflow + outflow), 0.01) "
              # S2 spec 3.4: bank qoldig'i bor, lekin oqimi 1C'dan (ko'chirma rejimida emas)
              # filialda «Разница» manbalararo ko'rsatkich, yuklash nuqsoni emas: tekshirilmaydi.
              "AND (branch_id IN (SELECT sb.branch_id FROM dwh.statement_branches sb) "
-             "     OR NOT EXISTS (SELECT 1 FROM dwh.fact_balance fb "
+             "     OR NOT EXISTS (SELECT 1 FROM dwh.balance_effective fb "
              "                    WHERE fb.branch_id = mart.agg_cash_month.branch_id "
              "                    AND fb.doc_type = 'bank_balance')) "
              "ORDER BY month_id, branch_id"),
-        {"b": build_id, "mf": months[0], "mt": months[-1], "tol": tolerance},
+        {"b": build_id, "mf": months[0], "mt": months[-1]},
     ).all()
-    violations = [{"branch_id": r.branch_id, "month_id": r.month_id, "diff": str(r.diff),
-                   "turnover": str(r.turnover)} for r in rows
-                  if (r.branch_id, r.month_id) not in skip]
+    violations: list[dict[str, Any]] = []
+    for r in rows:
+        key = (r.branch_id, r.month_id)
+        contribution, flows, _ = manual.get(key, (Decimal(0), Decimal(0), 0))
+        diff, turnover = r.diff - contribution, r.turnover - flows
+        if key not in skip and abs(diff) > max(tolerance * turnover, Decimal("0.01")):
+            violations.append({"branch_id": r.branch_id, "month_id": r.month_id,
+                               "diff": str(diff), "turnover": str(turnover)})
+    excluded = [{"branch_id": b, "month_id": m, "accounts": v[2], "reason": "manual_balance"}
+                for (b, m), v in sorted(manual.items(), key=lambda kv: (kv[0][1], kv[0][0]))]
     return CheckResult("balance_identity", not violations,
-                       {"violations": violations[:SAMPLE], "unverifiable": unverifiable[:SAMPLE]})
+                       {"violations": violations[:SAMPLE], "unverifiable": unverifiable[:SAMPLE],
+                        "manual_excluded": excluded[:SAMPLE]})
 
 
 def _error_counts(conn: Connection, run_id: int) -> dict[str, int]:
@@ -213,7 +270,7 @@ def _capacity(conn: Connection, window: Window) -> CheckResult:
     rows = conn.execute(
         text("WITH daily AS (\n"
              "  SELECT g.branch_id, g.date_id, g.src_system, sum(g.generation) AS generation\n"
-             "  FROM dwh.fact_generation g\n"
+             "  FROM dwh.fact_generation g\n"  # manual-ok: faqat fakt qatorlari (reja emas)
              "  WHERE g.date_id BETWEEN :f AND :t\n"
              "  GROUP BY g.branch_id, g.date_id, g.src_system)\n"
              "SELECT d.branch_id, d.date_id, d.generation, v.capacity_mw\n"

@@ -6,7 +6,7 @@ retire-keys    — ishlatilmayotgan eski DEK'larni yo'q qilish
 rewrap-keys    — KEK rotatsiyasi (keyin master_kek sirini almashtirib, qayta ishga tushiring)
 audit-verify   — audit zanjirini tekshirish (buzilgan bo'lsa chiqish kodi 2)
 cleanup        — eskirgan sessiya, 2FA challenge va staging qatorlarini o'chirish
-etl-run        — ETL yuklash: --source synthetic|file --mode full|incremental [--no-retry]
+etl-run        — ETL yuklash: --source synthetic|file|manual --mode full|incremental [--no-retry]
                [--allow-full-replace] (file + full uchun majburiy)
 onec-orgs      — 1C tashkilotlari ↔ filiallar moslashtirishi (JSON fayldan; faylsiz — ko'rsatish)
 onec-check     — 1C ulanishini tekshirish (0 — OK, 1 — ulanish yo'q, 2 — konfiguratsiya)

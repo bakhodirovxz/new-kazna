@@ -17,7 +17,7 @@ INSERT INTO mart.agg_loan_schedule (build_id, branch_id, loan_id, month_id, date
                                     interest_cur, balance_cur)
 SELECT :build_id, s.branch_id, s.loan_id, d.month_id, s.date_id, sum(s.principal),
        sum(s.interest), min(s.balance)
-FROM dwh.fact_loan_schedule s
+FROM dwh.loan_schedule_effective s
 JOIN dwh.dim_date d ON d.date_id = s.date_id
 WHERE s.date_id >= :from_id
 GROUP BY s.branch_id, s.loan_id, d.month_id, s.date_id
@@ -36,7 +36,7 @@ WITH {_MONTHS},
 sched AS (
   SELECT s.loan_id, s.branch_id, s.date_id, sum(s.principal) AS principal,
          min(s.balance) AS balance
-  FROM dwh.fact_loan_schedule s
+  FROM dwh.loan_schedule_effective s
   GROUP BY s.loan_id, s.branch_id, s.date_id),
 first_row AS (
   SELECT DISTINCT ON (loan_id) loan_id, branch_id, balance + principal AS original

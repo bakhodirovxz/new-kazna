@@ -56,6 +56,10 @@ class EncryptedColumn:
 REGISTRY: tuple[EncryptedColumn, ...] = (
     EncryptedColumn("core.users", "id", "totp_secret_enc", Purpose.MFA, "app"),
     EncryptedColumn("core.sessions", "id", "ip_enc", Purpose.PII, "app"),
+    # «Ввод данных»: AAD id bo'yicha ("core.manual_entry.bank_enc:{id}"); FORCE RLS tufayli
+    # reencrypt/versions_in_use scope_all o'rnatadi (_all_branches).
+    EncryptedColumn("core.manual_entry", "id", "bank_enc", Purpose.BANK, "app"),
+    EncryptedColumn("core.manual_entry", "id", "pii_enc", Purpose.PII, "app"),
     # Витрина: AAD tabiiy kalit (code) bo'yicha — ETL shifrlaganda surrogat id hali noma'lum.
     # role="migrator": ugk_app'ning bu ustunlarga hech qanday huquqi yo'q (I1 fix r1) —
     # qayta shifrlash faqat `python -m app.cli rotate-key` (migrator ulanishi, `migrate`
@@ -97,6 +101,13 @@ def _columns(
     return [c for c in REGISTRY if c.purpose == purpose and (role is None or c.role == role)]
 
 
+def _all_branches(conn: Connection) -> None:
+    """FORCE RLS jadvallari (core.manual_*) egasini ham filtrlaydi: kalit aylantirish va
+    versiyani ishlatilishini skanerlash BARCHA filial qatorlarini ko'rishi shart, aks holda
+    `retire_unused` hali ishlatilayotgan kalitni yo'q qilib yuborardi. Tranzaksiya doirasida."""
+    conn.execute(text("SELECT set_config('app.scope_all', 'on', true)"))
+
+
 def reencrypt(
     conn: Connection,
     ring: Keyring,
@@ -115,6 +126,7 @@ def reencrypt(
     """
     active = ring.active[purpose]
     total = 0
+    _all_branches(conn)
     for col in _columns(purpose, role):
         version = _VERSION_SQL.format(col=col.column)
         # Identifikatorlar faqat REGISTRY'dan olinadi — foydalanuvchi kiritmaydi.
@@ -138,6 +150,7 @@ def reencrypt(
 
 def versions_in_use(conn: Connection, purpose: Purpose) -> set[int]:
     used: set[int] = set()
+    _all_branches(conn)
     for col in _columns(purpose):
         version = _VERSION_SQL.format(col=col.column)
         used |= set(

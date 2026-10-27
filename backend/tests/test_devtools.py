@@ -58,6 +58,8 @@ def test_seed_is_idempotent_and_resets_state() -> None:
         assert new.must_change_password and not new.totp_enabled and new.totp_secret_enc is None
         skip = users["e2e_skip"]
         assert not skip.must_change_password and not skip.totp_enabled
+        manual = {f"e2e_{k}_{w}" for k in ("maker", "checker") for w in ("390", "1024", "1440")}
+        assert manual <= set(users)
         branch_position = users["e2e_branch"].position_id
         stmt = select(PositionBranch.branch_id).where(PositionBranch.position_id == branch_position)
         branches = db.execute(stmt).scalars().all()

@@ -33,6 +33,7 @@ WEAKEST: dict[str, tuple[str, int]] = {
     "ratelimit.mfa_per_min": ("hi", 20),
     "ratelimit.api_per_min": ("hi", 300),
     "ratelimit.password_change_per_15min": ("hi", 5),
+    "ratelimit.data_write_per_min": ("hi", 60),
     "retention.audit_months": ("lo", 12),
     "retention.fact_years": ("lo", 5),
 }

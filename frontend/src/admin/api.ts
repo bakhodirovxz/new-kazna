@@ -102,6 +102,7 @@ export function useUpdateUser() {
   const invalidate = useInvalidate(adminKeys.users);
   const onError = useRefetchOnConflict(adminKeys.users);
   return useMutation({
+    gcTime: 0, // otp (TOTP) variables keshda qolmasin
     mutationFn: ({ id, body }: { id: number; body: UserUpdate }) =>
       api<UserOut>(`/admin/users/${id}`, { method: 'PATCH', body }),
     onSuccess: invalidate,
@@ -167,6 +168,7 @@ export function useSaveRole() {
   const client = useQueryClient();
   const onError = useRefetchOnConflict(adminKeys.roles);
   return useMutation({
+    gcTime: 0, // otp (TOTP) variables keshda qolmasin
     mutationFn: (input: SaveRoleInput) =>
       input.id === null
         ? api<RoleOut>('/admin/roles', { method: 'POST', body: input.body })
@@ -187,6 +189,7 @@ export function useSavePosition() {
   const invalidate = useInvalidate(adminKeys.positions);
   const onError = useRefetchOnConflict(adminKeys.positions);
   return useMutation({
+    gcTime: 0, // otp (TOTP) variables keshda qolmasin
     mutationFn: (input: SavePositionInput) =>
       input.id === null
         ? api<PositionOut>('/admin/positions', { method: 'POST', body: input.body })

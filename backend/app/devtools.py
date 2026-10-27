@@ -57,6 +57,15 @@ E2E_USERS: tuple[E2eUser, ...] = (
     E2eUser("e2e_new", "Новиков Сотрудник", "spec_kazna", totp=False, must_change=True),
     # 2FA majburiy emas: TOTP'siz, parol vaqtinchalik emas — "Позже" oqimi uchun
     E2eUser("e2e_skip", "Пропускин Сотрудник", "spec_kazna", totp=False, must_change=False),
+    # «Ввод данных» E2E: kirituvchi (spec_kazna), tasdiqlovchi (nach_otdela); har kenglik o'ziniki
+    *(
+        E2eUser(f"e2e_{kind}_{width}", f"{title} {width}", role, totp=True, must_change=False)
+        for width in ("390", "1024", "1440")
+        for kind, title, role in (
+            ("maker", "Вводов", "spec_kazna"),
+            ("checker", "Согласов", "nach_otdela"),
+        )
+    ),
     E2eUser(
         "e2e_branch",
         "Филиалов Экономист",

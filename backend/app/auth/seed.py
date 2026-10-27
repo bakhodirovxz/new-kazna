@@ -7,7 +7,13 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
 from app.auth.models import Permission, Position, Role, RolePermission
-from app.auth.permissions import ADMIN_GUARANTEED, ADMIN_ROLE, PERMISSIONS, ROLE_SEEDS
+from app.auth.permissions import (
+    ADMIN_GUARANTEED,
+    ADMIN_ROLE,
+    PERMISSIONS,
+    ROLE_SEEDS,
+    sod_conflict,
+)
 
 
 def sync_reference(db: Session) -> None:
@@ -23,8 +29,23 @@ def sync_reference(db: Session) -> None:
         )
     db.execute(delete(Permission).where(Permission.code.not_in(list(PERMISSIONS))))
 
+    fresh = set(PERMISSIONS) - existing if existing else set()
     for seed in ROLE_SEEDS:
         role = db.execute(select(Role).where(Role.code == seed.code)).scalar_one_or_none()
+        if role is not None and role.is_system:
+            # Kodga yangi qo'shilgan ruxsat tizim roliga BIR MARTA beriladi; keyin olib
+            # tashlansa qayta qo'shilmaydi (admin qoidasining umumlashmasi).
+            held = set(db.execute(
+                select(RolePermission.permission_code).where(RolePermission.role_id == role.id)
+            ).scalars())
+            for perm in sorted(fresh & seed.permissions):
+                if sod_conflict(held | {perm}):  # admin:* va data:* aralashmaydi
+                    continue
+                db.execute(
+                    pg_insert(RolePermission)
+                    .values(role_id=role.id, permission_code=perm)
+                    .on_conflict_do_nothing()
+                )
         if role is None:
             role = Role(code=seed.code, name=seed.name, scope_all=seed.scope_all, is_system=True)
             db.add(role)
@@ -35,11 +56,7 @@ def sync_reference(db: Session) -> None:
             db.add(Position(code=seed.code, name=seed.name, role_id=role.id))
 
     admin_id = db.execute(select(Role.id).where(Role.code == ADMIN_ROLE)).scalar_one()
-    admin_seed = next(s for s in ROLE_SEEDS if s.code == ADMIN_ROLE).permissions
-    # Kodga yangi qo'shilgan admin ruxsati mavjud admin roliga BIR MARTA beriladi; keyin
-    # olib tashlansa qayta qo'shilmaydi. Bo'sh bazada rol seed'i o'zi hammasini beradi.
-    fresh = (set(PERMISSIONS) - existing) & admin_seed if existing else set()
-    for perm in sorted(ADMIN_GUARANTEED | fresh):
+    for perm in sorted(ADMIN_GUARANTEED):
         db.execute(
             pg_insert(RolePermission)
             .values(role_id=admin_id, permission_code=perm)

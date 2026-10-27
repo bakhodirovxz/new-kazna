@@ -3,6 +3,7 @@ import type { MeOut, MenuOut } from '../api/types';
 import { useDocumentTitle } from '../app/useDocumentTitle';
 import { t } from '../i18n';
 import type { SectionRoute } from '../router/hash';
+import { useInboxCount } from '../entry/useInboxCount';
 import { navigate } from '../router/store';
 import { resolveSectionPage, type SectionPageProps } from '../sections/registry';
 import { SectionPlaceholder } from '../sections/SectionPlaceholder';
@@ -39,6 +40,7 @@ export function SectionScreen({ me, menu, route, tools }: SectionScreenProps) {
   const page = section ? (section.pages.find((p) => p.id === route.page) ?? section.pages[0]) : undefined;
   const filters = useFilters(route, me);
   const attention = useAttentionCount(route.section === 'obzor' && filters.ready, filters.state);
+  const inbox = useInboxCount(route.section === 'vvod' && Boolean(section?.pages.some((p) => p.id === 'inbox')));
 
   useEffect(() => {
     if (section && page && route.page !== page.id) navigate({ ...route, page: page.id }, { replace: true });
@@ -57,7 +59,7 @@ export function SectionScreen({ me, menu, route, tools }: SectionScreenProps) {
     icon: sectionIcon(section.id),
     activeId: page.id,
     items: section.pages.map((p) => ({ id: p.id, label: p.title, icon: pageIcon(p.id), href: filters.hrefFor(section.id, p.id),
-      count: section.id === 'obzor' && p.id === ATTENTION_PAGE ? attention : undefined,
+      count: section.id === 'obzor' && p.id === ATTENTION_PAGE ? attention : section.id === 'vvod' && p.id === 'inbox' ? inbox : undefined,
     })),
   };
   const hasPage = resolveSectionPage(section.id, page.id) !== null;

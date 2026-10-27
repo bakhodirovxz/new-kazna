@@ -33,7 +33,7 @@ f AS (
             FILTER (WHERE i.physical_pct IS NOT NULL))[1] AS phys,
          sum(i.advance) AS adv,
          min(i.advance_date_id) FILTER (WHERE i.advance > 0) AS adv_date
-  FROM dwh.fact_investment i
+  FROM dwh.investment_effective i
   JOIN dwh.dim_date d ON d.date_id = i.date_id
   JOIN months m ON m.month_id = d.month_id
   GROUP BY i.branch_id, i.object_id, d.month_id),
@@ -78,7 +78,7 @@ INSERT INTO mart.agg_object_stages (build_id, branch_id, month_id, object_id, st
 SELECT :build_id, s.branch_id, {_AS_MONTH}, s.object_id, s.stage_no, max(s.stage_name),
        max(s.date_id), max(s.fact_date_id), max(s.fact_date_id) IS NOT NULL,
        coalesce(max(s.fact_date_id) > max(s.date_id), max(s.date_id) < :as_of_id)
-FROM dwh.fact_object_stage s
+FROM dwh.fact_object_stage s  /* # manual-ok: object_stage_effective yo'q */
 GROUP BY s.branch_id, s.object_id, s.stage_no
 """
 

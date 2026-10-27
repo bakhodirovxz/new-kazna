@@ -51,6 +51,12 @@ def password_change_per_user() -> Limit:
     return _per("ratelimit.password_change_per_15min", 900)
 
 
+def data_write_per_user() -> Limit:
+    return _per("ratelimit.data_write_per_min", 60)
+
+
+DATA_IMPORT_PER_USER = Limit(events=10, window=600)
+
 # Task 12 fix r1: POST /audit/verify to'liq jadval bo'yicha HMAC skanerlash — arzon amal
 # emas, shuning uchun boshqa endpointlarga qaraganda ancha qattiqroq cheklanadi: har
 # foydalanuvchi UCHUN va, DoS'dan himoya sifatida, BUTUN tizim uchun ham (identity "global").

@@ -25,7 +25,7 @@ flows AS (
   LEFT JOIN dwh.dim_bank b ON b.bank_id = f.bank_id
   WHERE f.date_id BETWEEN :from_id AND :as_of_id
   GROUP BY f.branch_id, d.month_id, coalesce(b.bank_name, '{NO_BANK}')),
-accounts AS (SELECT DISTINCT branch_id, bank_id FROM dwh.fact_balance),
+accounts AS (SELECT DISTINCT branch_id, bank_id FROM dwh.balance_effective),
 bal AS (
   SELECT a.branch_id, m.month_id, bk.bank_name, sum(c.balance) AS closing,
          sum(p.balance) AS closing_cmp
@@ -33,11 +33,11 @@ bal AS (
   CROSS JOIN months m
   JOIN dwh.dim_bank bk ON bk.bank_id = a.bank_id
   LEFT JOIN LATERAL (
-    SELECT fb.balance FROM dwh.fact_balance fb
+    SELECT fb.balance FROM dwh.balance_effective fb
     WHERE fb.bank_id = a.bank_id AND fb.branch_id = a.branch_id AND fb.date_id <= m.end_id
     ORDER BY fb.date_id DESC LIMIT 1) c ON true
   LEFT JOIN LATERAL (
-    SELECT fb.balance FROM dwh.fact_balance fb
+    SELECT fb.balance FROM dwh.balance_effective fb
     WHERE fb.bank_id = a.bank_id AND fb.branch_id = a.branch_id
       AND fb.date_id <= LEAST(m.end_id, m.first_id + :cmp_day - 1)
     ORDER BY fb.date_id DESC LIMIT 1) p ON true
@@ -75,7 +75,7 @@ INSERT INTO mart.agg_target_funds_month (build_id, branch_id, month_id, source_i
 WITH {_MONTHS}
 SELECT :build_id, coalesce(t.branch_id, 0), d.month_id, t.source_id, s.name, sum(t.allocated),
        sum(t.used)
-FROM dwh.fact_target_funds t
+FROM dwh.target_funds_effective t
 JOIN dwh.dim_date d ON d.date_id = t.date_id
 JOIN months m ON m.month_id = d.month_id
 JOIN dwh.dim_source s ON s.source_id = t.source_id
@@ -99,7 +99,7 @@ WITH {_MONTHS}
 SELECT DISTINCT ON (f.contract_id, m.month_id)
        :build_id, f.branch_id, m.month_id, f.contract_id, c.number, cp.name, c.kind, c.end_date,
        f.receivable, f.payable, f.overdue, f.overdue_days
-FROM dwh.fact_debt f
+FROM dwh.debt_effective f
 JOIN months m ON f.date_id BETWEEN m.first_id AND m.end_id
 JOIN dwh.dim_contract c ON c.contract_id = f.contract_id
 JOIN dwh.dim_counterparty cp ON cp.cp_id = c.cp_id
@@ -141,7 +141,7 @@ item_kind AS (
   FROM dwh.dim_item i WHERE i.direction = 'out'),
 plan AS (
   SELECT p.branch_id, p.date_id, ik.kind, sum(p.amount) AS amount
-  FROM dwh.fact_payment_plan p
+  FROM dwh.payment_plan_effective p
   JOIN item_kind ik ON ik.item_id = p.item_id
   JOIN days d ON d.date_id = p.date_id
   WHERE p.doc_type = :schedule_doc_type
@@ -150,7 +150,7 @@ loan AS (
   SELECT s.branch_id, s.date_id,
          sum((s.principal + s.interest)
              * CASE WHEN l.currency = 'UZS' THEN 1 ELSE fx.rate END) AS amount
-  FROM dwh.fact_loan_schedule s
+  FROM dwh.loan_schedule_effective s
   JOIN days d ON d.date_id = s.date_id
   JOIN dwh.dim_loan l ON l.loan_id = s.loan_id
   LEFT JOIN LATERAL (

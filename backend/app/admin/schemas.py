@@ -53,6 +53,8 @@ class _In(BaseModel):
 
 
 class UserCreate(_In):
+    # 2FA bor admin data:*:approve bergsa -- joriy TOTP kodi (step-up)
+    otp: str | None = Field(default=None, max_length=16)
     username: str = Field(min_length=3, max_length=80)
     full_name: str = Field(min_length=1, max_length=200)
     position_id: int = Field(gt=0)
@@ -72,6 +74,8 @@ class UserCreate(_In):
 
 
 class UserUpdate(_In):
+    # 2FA bor admin data:*:approve bergsa -- joriy TOTP kodi (step-up)
+    otp: str | None = Field(default=None, max_length=16)
     full_name: str | None = Field(default=None, min_length=1, max_length=200)
     position_id: int | None = Field(default=None, gt=0)
 
@@ -110,6 +114,8 @@ class TemporaryPassword(BaseModel):
 
 
 class RoleIn(_In):
+    # 2FA bor admin data:*:approve bergsa -- joriy TOTP kodi (step-up)
+    otp: str | None = Field(default=None, max_length=16)
     code: str = Field(pattern=CODE_PATTERN)
     name: str = Field(min_length=1, max_length=200)
     scope_all: bool
@@ -122,6 +128,8 @@ class RoleIn(_In):
 
 
 class RoleUpdate(_In):
+    # 2FA bor admin data:*:approve bergsa -- joriy TOTP kodi (step-up)
+    otp: str | None = Field(default=None, max_length=16)
     name: str | None = Field(default=None, min_length=1, max_length=200)
     scope_all: bool | None = None
     permissions: list[PermCode] | None = Field(default=None, max_length=100)
@@ -142,6 +150,8 @@ class RoleOut(BaseModel):
 
 
 class PositionIn(_In):
+    # 2FA bor admin data:*:approve bergsa -- joriy TOTP kodi (step-up)
+    otp: str | None = Field(default=None, max_length=16)
     code: str = Field(pattern=CODE_PATTERN)
     name: str = Field(min_length=1, max_length=200)
     role_id: int = Field(gt=0)
@@ -154,6 +164,8 @@ class PositionIn(_In):
 
 
 class PositionUpdate(_In):
+    # 2FA bor admin data:*:approve bergsa -- joriy TOTP kodi (step-up)
+    otp: str | None = Field(default=None, max_length=16)
     name: str | None = Field(default=None, min_length=1, max_length=200)
     role_id: int | None = Field(default=None, gt=0)
     branch_ids: list[BranchId] | None = Field(default=None, max_length=100)

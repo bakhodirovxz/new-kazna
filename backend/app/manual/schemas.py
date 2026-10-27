@@ -89,3 +89,62 @@ class Page[T](BaseModel):
     items: list[T]
     total: int
     page: int
+
+
+class OptionOut(BaseModel):
+    code: str
+    title: str
+
+
+class FieldOut(BaseModel):
+    name: str
+    kind: str
+    title: str
+    required: bool
+    lo: str | None = None
+    hi: str | None = None
+    options: list[OptionOut] = Field(default_factory=list)
+    ref: str | None = None
+    unit: str = ""
+
+
+class EntityOut(BaseModel):
+    id: str
+    section: str
+    section_title: str
+    title: str
+    kind: Literal["dim", "fact"]
+    layout: Literal["form", "grid"]
+    grid: tuple[str, str, str] | None = None
+    fields: list[FieldOut]
+    can_write: bool
+    can_approve: bool
+
+
+class RecordOut(BaseModel):
+    entry_id: int
+    version: int
+    branch_id: int
+    values: dict[str, Any]
+    masks: dict[str, str]
+    status: Literal["active", "pending", "deleted"]
+    pending_batch_id: int | None = None
+    shadowed_by: str | None = None
+
+
+class HistoryVersionOut(BaseModel):
+    version: int
+    batch_id: int
+    batch_status: str
+    created_by_name: str | None
+    created_at: datetime
+    decided_by_name: str | None = None
+    decided_at: datetime | None = None
+    reason: str | None = None
+    deleted: bool
+    values: dict[str, Any]
+    masks: dict[str, str]
+
+
+class HistoryOut(BaseModel):
+    versions: list[HistoryVersionOut]

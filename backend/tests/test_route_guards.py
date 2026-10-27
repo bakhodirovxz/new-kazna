@@ -56,6 +56,18 @@ NON_STANDARD_ROUTE_ALLOWLIST: set[str] = set()
 # R2-1: joriy ilova uchun aniq kutilgan (HTTP metod, to'liq yo'l) to'plami — yangi yoki
 # yo'qolgan marshrut shu ro'yxatni ONGLI ravishda yangilashni talab qiladi.
 EXPECTED_ROUTES = frozenset({
+    ("GET", "/api/v1/data/entities"),
+    ("GET", "/api/v1/data/entities/{entity_id}/records"),
+    ("GET", "/api/v1/data/entities/{entity_id}/options/{field}"),
+    ("GET", "/api/v1/data/records/{entry_id}/history"),
+    ("POST", "/api/v1/data/batches"),
+    ("PUT", "/api/v1/data/batches/{batch_id}"),
+    ("POST", "/api/v1/data/batches/{batch_id}/submit"),
+    ("POST", "/api/v1/data/batches/{batch_id}/withdraw"),
+    ("POST", "/api/v1/data/batches/{batch_id}/approve"),
+    ("POST", "/api/v1/data/batches/{batch_id}/reject"),
+    ("GET", "/api/v1/data/batches"),
+    ("GET", "/api/v1/data/batches/{batch_id}"),
     ("DELETE", "/api/v1/auth/sessions/{session_id}"),
     ("GET", "/api/v1/admin/keys"),
     ("POST", "/api/v1/admin/keys/{purpose}/rotate"),
@@ -269,7 +281,9 @@ def test_all_protected_routes_return_401_without_session() -> None:
                 .replace("{purpose}", "mfa").replace("{run_id}", "1")
                 .replace("{code}", "turnover").replace("{key}", "builds.keep")
                 .replace("{name}", "smtp").replace("{check_id}", "1")
-                .replace("{item_id}", "1")
+                .replace("{item_id}", "1").replace("{batch_id}", "1")
+                .replace("{entry_id}", "1").replace("{entity_id}", "kazna.balance")
+                .replace("{field}", "bank_code")
             )
             response = client.request(method, req_path, json={})
             assert response.status_code == 401, f"{method} {req_path}: {response.status_code}"

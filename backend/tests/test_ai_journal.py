@@ -5,7 +5,15 @@ import pytest
 from sqlalchemy import text
 
 from app.ai.admin import set_ai_enabled
-from app.ai.journal import NewRequest, finish, purge, reserve, retry_after, used_last_hour
+from app.ai.journal import (
+    NewRequest,
+    finish,
+    precheck,
+    purge,
+    reserve,
+    retry_after,
+    used_last_hour,
+)
 from app.cli import main as cli_main
 from app.core.db import get_engine
 from app.core.errors import AiLimitError
@@ -137,3 +145,14 @@ def test_ai_enable_cli_is_versioned_and_audited() -> None:
 def test_ai_enable_cli_requires_reason() -> None:
     with pytest.raises(SystemExit):
         cli_main(["ai-enable", "on", "--reason", "x"])
+
+
+def test_precheck_blocks_before_reserve() -> None:
+    put_setting("ai.user_per_hour", 1)
+    user = create_user("rukovodstvo")
+    now = datetime.now(UTC)
+    precheck(user.id, now)
+    _insert(user.id, now - timedelta(minutes=5))
+    with pytest.raises(AiLimitError) as exc:
+        precheck(user.id, now)
+    assert exc.value.params["scope"] == "user"

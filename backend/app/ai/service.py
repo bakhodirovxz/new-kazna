@@ -65,12 +65,27 @@ def prepare(db: Session, ctx: AuthContext, body: AiAnalyzeIn, provider: AiProvid
     if provider is None or feature_state(db.connection(), provider) is not None:
         raise AiDisabledError()
     check_question(body.question)
+    base = {"section": body.section, "page": body.page,
+            "filters": {"br": body.br, "per": body.per}}
+    try:
+        journal.precheck(ctx.user_id, now)  # M2: limit oshgan so'rov kontekst qurmaydi
+    except AiLimitError as exc:
+        log_event(meta, AuditAction.AI_REQUEST, user_id=ctx.user_id, result="denied",
+                  object_type="ai_request",
+                  details={**base, "reason": "limit", "scope": exc.params["scope"]})
+        raise
     context = assemble_context(db, ctx, body, today=today, now=now)
     db.commit()  # RLS tranzaksiyasi tugaydi — ulanish oqim davomida ushlab turilmaydi
     filters: dict[str, Any] = {"br": body.br, "per": body.per}
     if body.section == "finmodel":
         filters["scen"] = body.scen
     base = {"section": body.section, "page": body.page, "filters": filters}
+    warm = getattr(provider, "warm", None)
+    if warm is not None:
+        try:
+            warm()  # kalit/mijoz threadpool'da tayyorlanadi
+        except AiProviderError:
+            raise AiDisabledError() from None  # kalit yo'qolgan — «не настроен»
     try:
         request_id = journal.reserve(journal.NewRequest(
             ctx.user_id, body.section, body.page, filters, body.preset, body.question,

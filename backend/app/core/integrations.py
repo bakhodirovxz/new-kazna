@@ -78,7 +78,7 @@ _ALL: tuple[IntegrationDef, ...] = (
                  SecretDef("hr.password", "Пароль HR"))),
     IntegrationDef(
         "ai", "AI-анализ (провайдер)",
-        fields=("ai.model", "ai.effort", "ai.max_tokens", "ai.fallbacks"), endpoint=(),
+        fields=("ai.model", "ai.effort", "ai.max_tokens"), endpoint=(),
         secrets=(SecretDef("ai.api_key", "Ключ API", max_length=512),), check_in="api"),
     IntegrationDef("askue_live", "Текущая мощность (treplex)", fields=("askue.live_url",),
                    endpoint=("askue.live_url",), secrets=()),

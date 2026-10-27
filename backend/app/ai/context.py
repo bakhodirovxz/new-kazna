@@ -24,7 +24,11 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.ai.schemas import AiAnalyzeIn
-from app.ai.sensitive import SENSITIVE_KEY_RE, find_sensitive_text
+from app.ai.sensitive import (
+    SENSITIVE_KEY_RE,
+    find_sensitive_question,
+    find_sensitive_text,
+)
 from app.auth.context import AuthContext
 from app.auth.permissions import SECTION_TITLES, Section, section_perm
 from app.core.errors import ForbiddenError, ValidationFailed
@@ -42,13 +46,22 @@ UNITS = ("суммы — млн сум (если не указано иное); 
 TEXT_KEYS = frozenset({
     "name", "short_name", "title", "label", "status", "method", "method_title", "category",
     "currency", "creditor", "project", "kind", "activity", "direction", "level", "work_type",
-    "source_name", "scenario", "section", "page", "item_name", "branch_name", "subject", "unit",
+    "source_name", "scenario", "section", "page", "item_name", "branch_name", "unit",
     "stage_name", "verdict",
 })
 KEEP_ID_KEYS = frozenset({"month_id"})
 DROP_KEYS = frozenset({"message", "code", "comment", "description", "lot_no", "number",
                        "object_code", "loan_code", "program_code", "src_id", "doc_id",
                        "request_id", "checked"})
+# Yozuv darajasidagi ro'yxatlar (S4: lot / bekor qilingan lot qatorlari) — AI faqat agregat oladi.
+# `subject` (lot predmeti) erkin matn: TEXT_KEYS da yo'q.
+RECORD_KEYS = frozenset({"lots", "cancelled"})
+# Kadry: kichik guruhda (headcount < min_group) o'rtacha ish haqi bitta odamni oshkor qiladi.
+HR_HEADCOUNT_KEYS = ("fact", "headcount")
+HR_PAY_KEYS = frozenset({"avg_salary", "avg", "payroll", "overtime_per_employee"})
+# shortcut: `kadry.min_group` S4 sozlamasi bu shoxda yo'q, 5 — S4 standarti; S4 qo'shilgach
+# `_min_group` uni sysconfig'dan o'qiydi (kalit reyestrda bo'lsa).
+HR_MIN_GROUP_DEFAULT = 5
 DATE_RE = re.compile(r"^\d{4}-\d{2}(-\d{2})?(T[\d:.]+(Z|[+-]\d{2}:\d{2})?)?$")
 # Faqat qurilgan bo'limlar import qilinadi; qolganlari (S2–S4, finmodel) qo'shilganda ishlaydi.
 SECTION_MODULES: dict[Section, str] = {
@@ -81,8 +94,24 @@ class AiContext:
     page_title: str
 
 
+def _min_group() -> int:
+    from app.core import sysconfig
+
+    if "kadry.min_group" in sysconfig.REGISTRY:
+        return int(sysconfig.value("kadry.min_group"))
+    return HR_MIN_GROUP_DEFAULT
+
+
+def _small_group(mapping: Mapping[str, Any]) -> bool:
+    for key in HR_HEADCOUNT_KEYS:
+        count = mapping.get(key)
+        if isinstance(count, (int, float)) and not isinstance(count, bool):
+            return count < _min_group()
+    return False
+
+
 def _allowed_key(key: str) -> bool:
-    if key in DROP_KEYS or SENSITIVE_KEY_RE.search(key):
+    if key in RECORD_KEYS or key in DROP_KEYS or SENSITIVE_KEY_RE.search(key):
         return False
     return not (key.endswith("_id") and key not in KEEP_ID_KEYS)
 
@@ -92,9 +121,10 @@ def _walk(value: Any, cap: int, key: str) -> Any:
         value = value.model_dump(mode="json")
     if isinstance(value, Mapping):
         out: dict[str, Any] = {}
+        small = _small_group(value)
         for k, v in value.items():
             name = str(k)
-            if not _allowed_key(name):
+            if not _allowed_key(name) or (small and name in HR_PAY_KEYS):
                 continue
             item = _walk(v, cap, name)
             if item is not _SKIP:
@@ -145,7 +175,7 @@ def page_title(section: Section, page: str) -> str:
 
 
 def check_question(question: str | None) -> None:
-    if question and find_sensitive_text(question):
+    if question and find_sensitive_question(question):
         raise ValidationFailed("ai_question_sensitive")
 
 

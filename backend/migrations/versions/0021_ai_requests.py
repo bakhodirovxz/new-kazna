@@ -40,7 +40,10 @@ STATEMENTS = [
     """,
     "CREATE INDEX ai_requests_user_created_idx ON core.ai_requests (user_id, created_at)",
     "CREATE INDEX ai_requests_created_idx ON core.ai_requests (created_at)",
-    "GRANT SELECT, INSERT, UPDATE ON core.ai_requests TO ugk_app",
+    "GRANT SELECT, INSERT ON core.ai_requests TO ugk_app",
+    # ugk_app faqat yakunlash ustunlarini yangilaydi (savol/user_id o'zgarmas)
+    "GRANT UPDATE (status, error_code, answer_chars, duration_ms, finished_at) "
+    "ON core.ai_requests TO ugk_app",
     "GRANT USAGE ON SEQUENCE core.ai_requests_id_seq TO ugk_app",
     "GRANT SELECT, UPDATE, DELETE ON core.ai_requests TO ugk_etl",
 ]

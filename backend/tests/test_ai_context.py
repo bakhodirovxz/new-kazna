@@ -21,7 +21,12 @@ from app.ai.context import (
 )
 from app.ai.prompt import PRESETS, SYSTEM_PROMPT, build_prompt
 from app.ai.schemas import AiAnalyzeIn
-from app.ai.sensitive import SENSITIVE_KEY_RE, find_sensitive_keys, find_sensitive_text
+from app.ai.sensitive import (
+    SENSITIVE_KEY_RE,
+    find_sensitive_keys,
+    find_sensitive_question,
+    find_sensitive_text,
+)
 from app.auth.context import AuthContext, build_context
 from app.auth.models import User
 from app.core.db import apply_rls, new_session
@@ -184,3 +189,59 @@ def test_permissions_scope_and_unknown_page() -> None:
             assemble_context(db, auth, _req("kazna", "svod", br=5), today=TEST_AS_OF, now=NOW)
         with pytest.raises(ValidationFailed):
             assemble_context(db, auth, _req("kazna", "nope"), today=TEST_AS_OF, now=NOW)
+
+
+def test_s4_like_payload_drops_records_free_text_and_small_group_pay() -> None:
+    zakupki = {
+        "total": 1250.5,
+        "by_method": [{"method_title": "Электронный аукцион", "amount": 900.1}],
+        "lots": [{"subject": "Поставка для Иванов Иван Иванович", "status": "Объявлен",
+                  "price": 10.0, "branch_name": "Чарвак"}],
+        "cancelled": [{"subject": "Лот 7", "price": 1.0}],
+    }
+    out = digest(zakupki)
+    assert out == {"total": 1250.5,
+                   "by_method": [{"method_title": "Электронный аукцион", "amount": 900.1}]}
+    assert "subject" not in json.dumps(digest({"subject": "Свободный текст", "amount": 1.0}))
+    kadry = {
+        "kpis": {"fact": 120, "avg_salary": 6.1, "payroll": 700.0},
+        "branches": [
+            {"name": "Большой", "fact": 40, "avg_salary": 5.9, "payroll": 236.0},
+            {"name": "Малый", "fact": 2, "avg_salary": 9.4, "payroll": 18.8,
+             "overtime_per_employee": 0.3},
+        ],
+        "months": [{"month_id": 202609, "fact": 3, "avg": 8.8, "payroll": 26.4}],
+    }
+    out = digest(kadry)
+    assert out["kpis"] == {"fact": 120, "avg_salary": 6.1, "payroll": 700.0}
+    assert out["branches"][0]["avg_salary"] == 5.9
+    assert out["branches"][1] == {"name": "Малый", "fact": 2}  # 2 < 5: ish haqi yashirin
+    assert out["months"] == [{"month_id": 202609, "fact": 3}]
+
+
+def test_min_group_follows_registry_setting_when_present(
+        monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.core import sysconfig
+
+    class _Def:  # S4 qo'shgan `kadry.min_group` kaliti shaklida
+        pass
+
+    monkeypatch.setitem(sysconfig.REGISTRY, "kadry.min_group", _Def())  # type: ignore[arg-type]
+    monkeypatch.setattr(sysconfig, "value", lambda key: 10)
+    out = digest({"fact": 8, "avg_salary": 5.0, "name": "Филиал"})
+    assert out == {"fact": 8, "name": "Филиал"}
+
+
+def test_question_scanner_extended() -> None:
+    for text_, kind in [
+        ("ИНН 301 234 567 проверь", "inn"), ("счёт 2020 8000 9001 0000 0001", "account"),
+        ("паспорт aa 1234567", "passport"), ("позвони +998 90 123 45 67", "phone"),
+        ("тел (90) 123-45-67", "phone"), ("Иванов Иван Иванович просил", "fio"),
+        ("исполнитель Петров А. Б.", "fio"),
+    ]:
+        assert kind in find_sensitive_question(text_), text_
+    for clean in ("Почему вырос долг в 2026 году на 12 345 млн?", "Сравни 2025-09-24 и 2026-09-24",
+                  "Какие риски по кредитам в сентябре?"):
+        assert find_sensitive_question(clean) == [], clean
+    with pytest.raises(ValidationFailed):
+        check_question("Позвони Иванов Иван Иванович")

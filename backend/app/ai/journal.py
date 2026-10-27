@@ -70,6 +70,18 @@ def _times(conn: Connection, since: datetime, user_id: int | None = None) -> lis
     return list(rows.scalars())
 
 
+def precheck(user_id: int, now: datetime) -> None:
+    """Qimmat kontekst qurishdan OLDIN arzon tekshiruv (qulfsiz); yakuniy tekshiruv `reserve` da."""
+    with get_engine("app").connect() as conn:
+        per_user, per_org = limits(conn)
+        wait = retry_after(_times(conn, now - USER_WINDOW, user_id), per_user, USER_WINDOW, now)
+        if wait is not None:
+            raise AiLimitError(wait, "user")
+        wait = retry_after(_times(conn, now - ORG_WINDOW), per_org, ORG_WINDOW, now)
+        if wait is not None:
+            raise AiLimitError(wait, "org")
+
+
 def reserve(req: NewRequest, *, now: datetime) -> int:
     with get_engine("app").begin() as conn:
         conn.execute(text("SELECT pg_advisory_xact_lock(hashtext(:k))"), {"k": QUOTA_LOCK})

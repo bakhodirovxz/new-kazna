@@ -30,10 +30,19 @@ async def _ping(provider: ClaudeProvider) -> str:
 
 
 def ai_probe() -> str:
-    provider = ClaudeProvider.from_config(get_settings())
+    provider = ClaudeProvider.from_config(get_settings(), shared=False)
     if provider is None:
         return "not_configured"
-    return asyncio.run(_ping(provider))
+
+    async def run() -> str:
+        try:
+            return await _ping(provider)
+        finally:  # probe mijozi umumiy emas — yopiladi
+            close = getattr(provider.client, "close", None)
+            if close is not None:
+                await close()
+
+    return asyncio.run(run())
 
 
 API_PROBES: dict[str, Callable[[], str]] = {"ai": ai_probe}

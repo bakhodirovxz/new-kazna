@@ -45,6 +45,7 @@ class FieldDef:
     hi: Decimal | None = None
     options: tuple[tuple[str, str], ...] = ()
     ref: str | None = None
+    ref_where: str | None = None  # faqat koddan: dim qatorlarini toraytiruvchi SQL sharti
     purpose: Purpose | None = None
     pattern: str | None = None
     unit: str = ""
@@ -112,12 +113,12 @@ _ALL: tuple[ManualEntity, ...] = (
         "manual_plan",
         (
             _BRANCH,
-            FieldDef("item_code", "ref", "Статья", ref="dim_item"),
+            FieldDef("item_code", "ref", "Статья", ref="dim_item", ref_where="direction = 'out'"),
             FieldDef("date", "month", "Месяц"),
             FieldDef("amount", "money", "Сумма", lo=Decimal(0), hi=MONEY_LIMIT, unit="млн сум"),
         ),
         ("branch_code", "item_code", "date:month"),
-        layout="grid", grid=("item_code", "date", "amount"),
+        layout="grid", grid=("item_code", "date", "amount"), future_days=366,
     ),
 )
 

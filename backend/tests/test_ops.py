@@ -293,6 +293,28 @@ def test_ops_check_tls_cert_through_cli(
     assert "tls_cert_expiring" in capsys.readouterr().out
 
 
+def test_ops_check_unreadable_tls_cert_keeps_other_findings(tmp_path: Path) -> None:
+    bad = tmp_path / "bad.pem"
+    bad.write_text("not a certificate")
+    codes = {p.code for p in ops.ops_check(tls_cert=bad)}
+    assert "tls_cert_unreadable" in codes
+
+
+def test_cli_ops_check_keeps_collected_problems_when_later_step_raises(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr(cli, "build_notifier", lambda settings: RecordingNotifier())
+
+    def boom(**kwargs: Any) -> list[ops.Problem]:
+        kwargs["collected"].append(ops.Problem("audit_partition_missing", "critical", "x"))
+        raise RuntimeError("later step failed")
+
+    monkeypatch.setattr(ops, "ops_check", boom)
+    assert cli.main(["ops-check"]) == 1
+    out = capsys.readouterr().out
+    assert "audit_partition_missing" in out and "ops_check_error" in out
+
+
 def test_cli_ops_check_reports_when_db_is_down(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:

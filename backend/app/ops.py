@@ -227,12 +227,14 @@ def ops_check(
     app_clock: Callable[[], datetime] = _utcnow,
     notes: list[str] | None = None,
     env: str | None = None,
+    collected: list[Problem] | None = None,
 ) -> list[Problem]:
     """`notes` (ixtiyoriy) — muammo bo'lmagan ma'lumot qatorlari (masalan, `skipped` qoidalar).
-    `env` — standart `Settings.env` (test uchun almashtiriladi)."""
+    `env` — standart `Settings.env` (test uchun almashtiriladi). `collected` — chaqiruvchining
+    ro'yxati: keyingi qadam xato bersa ham topilgan muammolar yo'qolmasin."""
     now = now or _utcnow()
     env = env or get_settings().env
-    problems: list[Problem] = []
+    problems: list[Problem] = collected if collected is not None else []
     with get_engine("app").connect() as conn:
         default_rows = int(conn.execute(text(
             "SELECT count(*) FROM core.audit_log "
@@ -311,7 +313,11 @@ def ops_check(
             f"Часы приложения и СУБД расходятся на {int(skew.total_seconds())} с — "
             "проверьте chrony/NTP"))
     if tls_cert is not None:
-        problems.extend(check_tls(tls_cert, now))
+        try:
+            problems.extend(check_tls(tls_cert, now))
+        except Exception as exc:  # нечитаемый сертификат не должен скрыть найденные замечания
+            problems.append(Problem("tls_cert_unreadable", "critical",
+                                    f"Не удалось проверить сертификат: {type(exc).__name__}"))
     return problems
 
 

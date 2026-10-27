@@ -353,9 +353,11 @@ def _restore_status() -> int:
 def _ops_check(as_json: bool, notify: bool, tls_cert: Path | None, extra: list[str]) -> int:
     problems = [ops.Problem("host", "critical", item) for item in extra]
     notes: list[str] = []
+    found: list[ops.Problem] = []
     try:
-        problems.extend(ops.ops_check(tls_cert=tls_cert, notes=notes))
+        problems.extend(ops.ops_check(tls_cert=tls_cert, notes=notes, collected=found))
     except Exception as exc:  # DB o'chiq bo'lsa ham xabar ketishi shart; xom matn yo'q (DSN)
+        problems.extend(found)  # xatogacha topilgan muammolar yo'qolmasin
         problems.append(ops.Problem("ops_check_error", "critical", safe_error(exc)))
     if as_json:
         _out(json.dumps({"problems": [asdict(p) for p in problems], "notes": notes},

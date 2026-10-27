@@ -12,8 +12,9 @@ import { PageSkeleton } from '../ui/Skeleton';
 import { Table, type Column } from '../ui/Table';
 import { useToast } from '../ui/Toast';
 import { useCreateBatch, useRecords, type EntryEntity, type EntryRecord } from './api';
-import { toInput } from './fields';
+import { displayValue } from './fields';
 import { HistoryDrawer } from './HistoryDrawer';
+import { ImportDialog } from './ImportDialog';
 import { RecordDrawer } from './RecordDrawer';
 import './entry.css';
 
@@ -23,7 +24,7 @@ function cellText(entity: EntryEntity, record: EntryRecord, name: string): strin
   const mask = record.masks[name];
   if (mask) return mask;
   const field = entity.fields.find((f) => f.name === name);
-  return field ? toInput(field, record.values[name]) : '';
+  return field ? displayValue(field, record.values[name]) : '';
 }
 
 interface Props {
@@ -37,11 +38,17 @@ export function EntityPage({ entity, filters }: Props) {
   const remove = useCreateBatch();
   const [drawer, setDrawer] = useState<{ record: EntryRecord | null } | null>(null);
   const [history, setHistory] = useState<number | null>(null);
+  const [importing, setImporting] = useState(false);
+  const [notice, setNotice] = useState<{ batchId: number; sent: boolean } | null>(null);
   const [deleting, setDeleting] = useState<EntryRecord | null>(null);
   const [reason, setReason] = useState('');
   const [reasonError, setReasonError] = useState<string | null>(null);
 
   const rows = records.data?.items ?? [];
+  // Yuborilgan paket yozuvi ro'yxatda yo'q -- davr (yoki filial) filtri yashirgan.
+  const hidden =
+    notice?.sent === true && entity.kind === 'fact' && !records.isFetching && records.isSuccess &&
+    !rows.some((r) => r.pending_batch_id === notice.batchId);
   const openExisting = (entryId: number) => {
     const found = rows.find((r) => r.entry_id === entryId) ?? null;
     setDrawer(found ? { record: found } : null);
@@ -100,8 +107,9 @@ export function EntityPage({ entity, filters }: Props) {
         items: [{ entry_id: deleting.entry_id, expected_version: deleting.version, delete: true, values: {} }],
       },
       {
-        onSuccess: () => {
+        onSuccess: (batch) => {
           toast.show(t('entry.submitted'), 'success');
+          setNotice({ batchId: batch.batch_id, sent: true });
           setDeleting(null);
         },
       },
@@ -115,10 +123,20 @@ export function EntityPage({ entity, filters }: Props) {
       </p>
       {entity.can_write ? (
         <div className="entry-toolbar">
-          <Button icon="plus" onClick={() => setDrawer({ record: null })}>
+          <Button icon="plus" onClick={() => { setNotice(null); setDrawer({ record: null }); }}>
             {t('entry.add')}
           </Button>
+          <Button variant="secondary" onClick={() => setImporting(true)}>
+            {t('entry.import')}
+          </Button>
         </div>
+      ) : null}
+      {notice ? (
+        <p className="entry-banner" role="status">
+          <span>{t(notice.sent ? 'entry.notice.sent' : 'entry.notice.saved', { id: notice.batchId })}</span>
+          <a href="#vvod/batches">{t('entry.notice.open')}</a>
+          {hidden ? <span>{t('entry.notice.hidden')}</span> : null}
+        </p>
       ) : null}
       {records.isPending ? (
         <PageSkeleton />
@@ -140,9 +158,11 @@ export function EntityPage({ entity, filters }: Props) {
           record={drawer.record}
           branch={filters.br}
           onClose={() => setDrawer(null)}
+          onSaved={(batch, sent) => setNotice({ batchId: batch.batch_id, sent })}
           onOpenExisting={openExisting}
         />
       ) : null}
+      {importing ? <ImportDialog entity={entity} branch={filters.br} onClose={() => setImporting(false)} /> : null}
       {history !== null ? <HistoryDrawer entity={entity} entryId={history} onClose={() => setHistory(null)} /> : null}
       <ConfirmDialog
         open={deleting !== null}

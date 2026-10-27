@@ -28,6 +28,10 @@ export interface RequestOptions {
   signal?: AbortSignal;
   /** Fon (polling) so'rovi: server idle muddatini surmaydi — ochiq qolgan tab sessiyani cho'zmasin. */
   background?: boolean;
+  /** Xom tana (fayl yuklash): JSON emas, `rawType` Content-Type bilan. */
+  raw?: Blob;
+  rawType?: string;
+  headers?: Record<string, string>;
 }
 
 /** Backend `{"error": {code, message, request_id, params?}}` formatidagi xato. */
@@ -105,6 +109,8 @@ export async function api<T>(path: string, options: RequestOptions = {}): Promis
   const method = options.method ?? 'GET';
   const headers: Record<string, string> = { Accept: 'application/json', ...backgroundHeaders() };
   if (options.body !== undefined) headers['Content-Type'] = 'application/json';
+  if (options.raw !== undefined) headers['Content-Type'] = options.rawType ?? 'application/octet-stream';
+  Object.assign(headers, options.headers);
   if (options.background) headers[BACKGROUND_HEADER] = '1';
   if (!SAFE_METHODS.has(method)) {
     const token = readCookie(CSRF_COOKIE);
@@ -116,7 +122,7 @@ export async function api<T>(path: string, options: RequestOptions = {}): Promis
       method,
       headers,
       credentials: 'same-origin',
-      body: options.body === undefined ? undefined : JSON.stringify(options.body),
+      body: options.raw ?? (options.body === undefined ? undefined : JSON.stringify(options.body)),
       signal: options.signal,
     });
   } catch (error) {
@@ -127,4 +133,21 @@ export async function api<T>(path: string, options: RequestOptions = {}): Promis
   const payload: unknown = await response.json().catch(() => null);
   if (response.ok) return payload as T;
   throw toApiError(response, payload);
+}
+
+/** Xom fayl tanasi bilan POST (CSRF `api()` ichida qo'shiladi). */
+export function postRaw<T>(path: string, body: Blob, contentType: string, options: RequestOptions = {}): Promise<T> {
+  return api<T>(path, { ...options, method: 'POST', raw: body, rawType: contentType });
+}
+
+/** Fayl yuklab olish (shablon): xato bo'lsa `ApiError`, aks holda Blob. */
+export async function apiBlob(path: string): Promise<Blob> {
+  let response: Response;
+  try {
+    response = await fetch(apiUrl(path), { credentials: 'same-origin', headers: backgroundHeaders() });
+  } catch {
+    throw new ApiError(0, 'network', t('error.network'));
+  }
+  if (response.ok) return response.blob();
+  throw toApiError(response, await response.json().catch(() => null));
 }

@@ -52,7 +52,9 @@ describe('EntityPage', () => {
     const table = await screen.findByRole('table', { name: 'Остатки на счетах' });
     expect(within(table).getByText('Действует')).toBeInTheDocument();
     expect(within(table).getByText('На согласовании')).toBeInTheDocument();
-    expect(within(table).getByText('1500,00')).toBeInTheDocument();
+    expect(within(table).getByText('1 500,00')).toBeInTheDocument();
+    expect(within(table).getAllByText('30.09.2026')).toHaveLength(2);
+    expect(within(table).queryByText('2026-09-30')).toBeNull();
     expect(screen.getByText(/Сведения, которые 1С не передаёт/)).toBeInTheDocument();
   });
 
@@ -84,6 +86,40 @@ describe('EntityPage', () => {
       items: [{ entry_id: null, expected_version: null, delete: false,
         values: { branch_code: 'CHIRCHIK', date: '2026-09-30', balance: '12345.67' } }],
     });
+  });
+
+  it('confirms a submit with a link and warns when the period filter hides the record', async () => {
+    // yozuv ro'yxatda yo'q (davr filtri): server pending_batch_id=1 yozuvni qaytarmaydi
+    server(BALANCE, [], { 'POST /data/batches': json({ batch_id: 41, version: 2 }, 201) });
+    const { user } = renderWithProviders(<EntityPage entity={BALANCE} filters={{ br: 3, per: 'ytd' }} />);
+    await user.click(await screen.findByRole('button', { name: 'Добавить' }));
+    const dialog = await screen.findByRole('dialog');
+    await user.type(within(dialog).getByLabelText(/Дата/), '2026-12-31');
+    await user.type(within(dialog).getByLabelText(/Остаток/), '5');
+    await user.click(within(dialog).getByRole('button', { name: 'Отправить на согласование' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    const notice = (await screen.findAllByRole('status')).find((n) => n.textContent?.includes('пакет №41'));
+    expect(notice).toHaveTextContent('Отправлено на согласование: пакет №41');
+    expect(within(notice as HTMLElement).getByRole('link', { name: 'Мои пакеты' })).toHaveAttribute('href', '#vvod/batches');
+    expect(notice).toHaveTextContent('вне выбранного периода');
+  });
+
+  it('does not warn when the submitted record is in the list', async () => {
+    let posted = false;
+    mockApi({
+      'GET /data/entities/kazna.balance/records': () => json({ items: posted ? [{ ...PENDING, pending_batch_id: 42 }] : [], total: 1, page: 1 }),
+      'GET /meta/branches': json(BRANCHES),
+      'POST /data/batches': () => { posted = true; return json({ batch_id: 42, version: 2 }, 201); },
+    });
+    const { user } = renderWithProviders(<EntityPage entity={BALANCE} filters={{ br: 3, per: 'ytd' }} />);
+    await user.click(await screen.findByRole('button', { name: 'Добавить' }));
+    const dialog = await screen.findByRole('dialog');
+    await user.type(within(dialog).getByLabelText(/Дата/), '2026-09-30');
+    await user.type(within(dialog).getByLabelText(/Остаток/), '9');
+    await user.click(within(dialog).getByRole('button', { name: 'Отправить на согласование' }));
+    const notice = (await screen.findAllByRole('status')).find((n) => n.textContent?.includes('пакет №42'));
+    expect(notice).toBeDefined();
+    expect(notice).not.toHaveTextContent('вне выбранного периода');
   });
 
   it('requires a reason and sends it when editing an approved record', async () => {

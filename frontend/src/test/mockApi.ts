@@ -5,6 +5,8 @@ export interface MockRequest {
   path: string;
   url: URL;
   body: unknown;
+  /** Xom tana (Blob/File) -- JSON bo'lmagan so'rovlar uchun. */
+  rawBody?: BodyInit | null;
   headers: Headers;
 }
 
@@ -45,7 +47,7 @@ export function mockApi(routes: Record<string, MockHandler>) {
     const method = (init.method ?? 'GET').toUpperCase();
     const path = url.pathname.replace(/^\/api\/v1/, '');
     const body = typeof init.body === 'string' ? (JSON.parse(init.body) as unknown) : undefined;
-    const request: MockRequest = { method, path, url, body, headers: new Headers(init.headers) };
+    const request: MockRequest = { method, path, url, body, headers: new Headers(init.headers), rawBody: typeof init.body === 'string' ? undefined : init.body };
     calls.push(request);
     const handler = routes[`${method} ${path}`];
     const res =

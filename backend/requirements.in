@@ -14,3 +14,4 @@ redis>=5.2,<7
 structlog>=24.4
 apscheduler>=3.10,<4
 openpyxl>=3.1,<4
+httpx>=0.28,<1  # CBU/Telegram mijozlari (worker); API ham app.etl.connectors orqali import qiladi

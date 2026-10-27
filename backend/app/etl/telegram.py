@@ -99,6 +99,8 @@ class TelegramClient:
 class TelegramConfig:
     token: str
     chats: list[int]
+    forward_alerts: bool = False
+    summary_scope: str = "off"
 
 
 def telegram_config() -> TelegramConfig | None:
@@ -106,11 +108,13 @@ def telegram_config() -> TelegramConfig | None:
     try:
         with get_engine("app").connect() as conn:
             chats = [int(c) for c in sysconfig.current(conn, "telegram.chat_ids")]
+            forward = bool(sysconfig.current(conn, "telegram.forward_alerts"))
+            scope = str(sysconfig.current(conn, "telegram.summary_scope"))
             token = integrations.secret(conn, "telegram.bot_token")
     except SQLAlchemyError as exc:
         log.warning("telegram_config_db_unavailable", error=type(exc).__name__)
         return None
-    return TelegramConfig(token, chats) if token and chats else None
+    return TelegramConfig(token, chats, forward, scope) if token and chats else None
 
 
 def make_client(cfg: TelegramConfig) -> TelegramClient:
@@ -145,9 +149,10 @@ class TelegramNotifier:
 
     def notify(self, notification: Notification) -> None:
         cfg = self._loader()
-        if cfg is None:
-            return
-        text = f"UGEKAZNA: {notification.subject}\n\n{notification.body}"
+        if cfg is None or not cfg.forward_alerts:
+            return  # A-S2.R1: sukut bo'yicha o'chiq
+        # Faqat sarlavha: tafsilot (summa, filial/kontragent nomi) tashqi xizmatga chiqmaydi.
+        text = f"UGEKAZNA: {notification.subject}"
         try:
             client = self._factory(cfg)
         except ConfigError as exc:

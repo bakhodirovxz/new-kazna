@@ -57,6 +57,21 @@ def clear_load(conn: Connection, load_id: int) -> None:
     conn.execute(text("DELETE FROM stg.batch WHERE load_id = :l"), {"l": load_id})
 
 
+class BufferingSink:
+    """Xotirada yig'adi (DB tranzaksiyasiz); `replay` qatorlarni haqiqiy sink'ka o'tkazadi.
+    Tarmoq konnektorlari uchun (`buffered = True`): HTTP paytida tranzaksiya ochiq turmaydi."""
+
+    def __init__(self) -> None:
+        self._rows: list[tuple[str, dict[str, Any]]] = []
+
+    def add(self, target: str, row: Mapping[str, Any]) -> None:
+        self._rows.append((target, dict(row)))
+
+    def replay(self, sink: Any) -> None:
+        for target, row in self._rows:
+            sink.add(target, row)
+
+
 class DbStagingSink:
     def __init__(self, conn: Connection, load_id: int, source: str, *,
                  batch_size: int = 2000) -> None:

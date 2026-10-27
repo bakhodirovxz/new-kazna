@@ -1,0 +1,11 @@
+# Ixtiyoriy: bank inbox/arxivini host kataloglariga bog'lash (SFTP banki yozadi).
+# Kataloglar OLDINDAN mavjud bo'lishi shart (docs/integration/banks-connector.md, 1-qadam),
+# aks holda worker ishga tushmaydi. Ishlatish:
+#   docker compose -f deploy/compose.prod.yml -f deploy/compose.banks-bind.yml ...
+volumes:
+  bank_inbox:
+    driver: local
+    driver_opts: {type: none, o: bind, device: "${UGK_BANK_INBOX:?UGK_BANK_INBOX kerak}"}
+  bank_archive:
+    driver: local
+    driver_opts: {type: none, o: bind, device: "${UGK_BANK_ARCHIVE:?UGK_BANK_ARCHIVE kerak}"}

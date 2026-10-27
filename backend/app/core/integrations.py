@@ -59,7 +59,9 @@ _ALL: tuple[IntegrationDef, ...] = (
         endpoint=("smtp.host", "smtp.port"),
         secrets=(SecretDef("smtp.password", "Пароль SMTP", env="smtp_password"),)),
     IntegrationDef(
-        "telegram", "Telegram-бот", fields=("telegram.chat_ids",), endpoint=(),
+        "telegram", "Telegram-бот", fields=("telegram.chat_ids", "telegram.summary_scope",
+                "telegram.forward_alerts"),
+        endpoint=(),
         secrets=(SecretDef("telegram.bot_token", "Токен бота",
                            pattern=TELEGRAM_TOKEN_RE.pattern),)),
     IntegrationDef("cbu", "ЦБ РУз: курсы валют", fields=("cbu.enabled",), endpoint=(),

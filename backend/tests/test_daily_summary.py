@@ -26,8 +26,8 @@ class FakeClient:
         self.sent.append((chat_id, text))
 
 
-def _cfg(chats: tuple[int, ...] = (1, 2)) -> object:
-    return lambda: TelegramConfig(TOKEN, list(chats))
+def _cfg(chats: tuple[int, ...] = (1, 2), scope: str = "org_totals") -> object:
+    return lambda: TelegramConfig(TOKEN, list(chats), False, scope)
 
 
 def test_fmt_bln() -> None:
@@ -52,7 +52,8 @@ def test_summary_text_has_aggregates_and_no_personal_data(published_synthetic: i
     assert not re.search(r"\d{10,}", body)  # hisob raqamlari / INN yo'q
     assert "ООО" not in body and "«" not in body  # kontragent nomlari yo'q
     tail = body.split("Требует внимания:", 1)[1]
-    assert summary.critical == sum(1 for line in tail.splitlines() if line.startswith("• "))
+    # A-S2.R1: faqat sonlar, qoida sarlavhalari/xabarlari yuborilmaydi
+    assert not any(line.startswith("• ") for line in tail.splitlines()[1:])
 
 
 def test_send_daily_summary_audits(published_synthetic: int) -> None:
@@ -79,3 +80,9 @@ def test_skipped_without_config_and_job_registered(capsys: pytest.CaptureFixture
     assert "telegram_summary" in jobs  # shartsiz; sozlanmagan bo'lsa tanasi o'tkazib yuboradi
     assert cli.main(["telegram-test"]) == 2
     assert "Telegram" in capsys.readouterr().out
+
+
+def test_scope_off_sends_nothing() -> None:
+    fake = FakeClient()
+    assert send_daily_summary(client=fake, now=NOW, loader=_cfg(scope="off")) == 0
+    assert fake.sent == []

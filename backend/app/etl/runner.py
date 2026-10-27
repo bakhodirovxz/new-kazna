@@ -62,7 +62,7 @@ from app.etl.merge import MergeStats, merge_dims, merge_facts
 from app.etl.notify import LogNotifier, Notification, Notifier
 from app.etl.quality import CheckResult, failed, run_checks
 from app.etl.retry import RETRY_DELAYS, call_with_retries
-from app.etl.staging import DbStagingSink, clear_load
+from app.etl.staging import BufferingSink, DbStagingSink, clear_load
 from app.etl.types import (
     ConnectorUnavailableError,
     ExtractStats,
@@ -323,6 +323,17 @@ class Runner:
             if not health.ok:
                 raise ConnectorUnavailableError(health.detail or "источник недоступен")
             captured.append(self.connector.watermark())
+            if getattr(self.connector, "buffered", False):
+                # M9: tarmoqdan olish DB tranzaksiyasi tashqarisida (idle_in_transaction
+                # timeout); olingan qatorlar keyin qisqa tranzaksiyada staging'ga yoziladi.
+                buffer = BufferingSink()
+                stats = self.connector.extract(window, buffer)
+                with etl_transaction() as conn:
+                    clear_load(conn, run_id)
+                    sink = DbStagingSink(conn, run_id, self.connector.source)
+                    buffer.replay(sink)
+                    sink.close()
+                return stats
             with etl_transaction() as conn:
                 clear_load(conn, run_id)
                 sink = DbStagingSink(conn, run_id, self.connector.source)

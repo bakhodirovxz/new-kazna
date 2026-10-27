@@ -305,3 +305,39 @@ def test_directbank_stub_is_not_configured() -> None:
     with pytest.raises(DirectBankNotConfiguredError, match="DirectBank") as exc:
         OneCDirectBankClient()
     assert isinstance(exc.value, ConfigError)
+
+
+def test_symlinks_are_refused_and_never_archived(env: Env, tmp_path: Path) -> None:
+    secret = tmp_path / "outside_secret.txt"
+    secret.write_text("TOP-SECRET-KEK\n", encoding="utf-8")
+    (env.inbox / "sqb" / "evil.csv").symlink_to(secret)
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    (elsewhere / "x.csv").write_text("\n".join(statement(env.fx)) + "\n", encoding="utf-8")
+    (env.inbox / "asaka").symlink_to(elsewhere, target_is_directory=True)  # papka-symlink
+    sink = CollectSink(open_run(env.source))
+    env.connector().extract(FULL_WINDOW, sink)
+    assert sink.rows == []
+    assert [e["code"] for e in sink.errors] == ["unsafe_file"]  # papka-symlink jimgina o'tkazildi
+    assert not list(env.archive.rglob("*.csv")) and not list(env.archive.rglob("*.part"))
+    assert "TOP-SECRET" not in " ".join(str(p) for p in env.archive.rglob("*"))
+
+
+def test_read_is_capped_and_oversized_is_ledgered_once(env: Env) -> None:
+    big = env.inbox / "sqb" / "big.csv"
+    big.write_bytes(uuid.uuid4().hex.encode() + b"x" * 600)  # noyob: jurnal testlar orasida qoladi
+    small = BankFileConnector(env.inbox, env.archive, env.accounts, source=env.source,
+                              min_age=0, max_bytes=500)
+    assert len(small._read(big)) == 501  # hech qachon max_bytes+1 dan ortiq o'qilmaydi
+    first = CollectSink(open_run(env.source))
+    small.extract(FULL_WINDOW, first)
+    assert [e["code"] for e in first.errors] == ["too_large"]
+    with etl_transaction() as conn:
+        conn.execute(text("UPDATE core.etl_run SET status = 'success' WHERE id = :r"),
+                     {"r": first.load_id})
+        rows = conn.execute(text("SELECT status FROM core.bank_files WHERE run_id = :r"),
+                            {"r": first.load_id}).scalars().all()
+    assert rows == ["rejected"]
+    second = CollectSink(open_run(env.source))
+    small.extract(FULL_WINDOW, second)
+    assert second.errors == []  # M6: har yugurishda takrorlanmaydi

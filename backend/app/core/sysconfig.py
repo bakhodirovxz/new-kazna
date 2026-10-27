@@ -171,11 +171,12 @@ _DEFS: tuple[SettingDef, ...] = (
     # S2: banklar, kurslar, Telegram
     SettingDef("banks.accounts", [],
                TypeAdapter(Annotated[list[BankAccount], AfterValidator(bank_accounts)]), "json",
-               category="banks", title="Банковские счета", apply="next_run"),
+               category="banks", title="Банковские счета", apply="next_run",
+               perm=Perm.ADMIN_INTEGRATIONS, guarded=True),
     SettingDef("banks.statement_branches", [],
                TypeAdapter(Annotated[list[str], AfterValidator(branch_codes)]), "list",
                category="banks", title="Филиалы с проводками из банковских выписок",
-               apply="next_run"),
+               apply="next_run", perm=Perm.ADMIN_INTEGRATIONS, guarded=True),
     SettingDef("banks.formats", dict.fromkeys(BANKS, "canonical"),
                TypeAdapter(Annotated[dict[str, str], AfterValidator(bank_formats)]), "json",
                category="banks", title="Форматы выписок банков", apply="next_run"),
@@ -251,6 +252,13 @@ _DEFS: tuple[SettingDef, ...] = (
     bool_def("smtp.starttls", True, title="STARTTLS", env="smtp_starttls", **_SMTP),
     bool_def("cbu.enabled", False, title="Загружать курсы ЦБ РУз", **_SMTP),
     SettingDef("telegram.chat_ids", [], _CHAT_IDS, "list", title="Чаты Telegram", **_SMTP),
+    # A-S2.R1: Telegram - tashqi bulut xizmati; sukut bo'yicha hech narsa yuborilmaydi (mijoz/CSC
+    # yozma roziligigacha). org_totals - faqat tashkilot jami (filial/kontragent yo'q).
+    SettingDef("telegram.summary_scope", "off",
+               TypeAdapter(Literal["off", "org_totals"]), "str",
+               title="Дневная сводка в Telegram (off — не отправлять)", **_SMTP),
+    bool_def("telegram.forward_alerts", False,
+             title="Пересылать в Telegram оповещения о сбоях (без сумм и названий)", **_SMTP),
     bool_def("smtp.ssl", False, title="SSL/TLS (SMTPS)", env="smtp_ssl", **_SMTP),
 )
 REGISTRY: dict[str, SettingDef] = {d.key: d for d in _DEFS}

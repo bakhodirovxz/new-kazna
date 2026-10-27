@@ -21,6 +21,7 @@ from app.audit.service import (
     verify_chain_snapshot,
 )
 from app.core import keystore
+from app.core.config import get_settings
 from app.core.crypto import Purpose
 from app.core.db import get_engine, new_session
 
@@ -124,6 +125,43 @@ def test_concurrent_records_keep_chain_valid() -> None:
         t.join()
     assert errors == []
     assert verify_chain_snapshot().ok
+
+
+def test_chain_verifies_across_audit_chain_key_rotation() -> None:
+    # KEK buzilganda audit_chain ham rotatsiya qilinadi (key-management.md, П12): eski va yangi
+    # versiyali qatorlar aralash zanjirda verify ok, buzilish esa baribir topilishi kerak.
+    before = record(AuditEvent(action=AuditAction.LOGOUT, user_id=1))
+    old_version = _chain_version(before)
+    with get_engine("app").begin() as conn:
+        keystore.rotate(conn, get_settings().key_bytes("master_kek"), Purpose.AUDIT_CHAIN)
+    keystore.invalidate_keyring()
+    after = record(AuditEvent(action=AuditAction.USER_CREATED, details={"n": 1}))
+    assert _chain_version(after) > old_version
+    report = verify_chain_snapshot()
+    assert report.ok and report.bad_ids == []
+    with get_engine("migrator").begin() as conn:
+        original = conn.execute(
+            text("SELECT details FROM core.audit_log WHERE id = :i"), {"i": after}
+        ).scalar_one()
+        conn.execute(
+            text("""UPDATE core.audit_log SET details = '{"n": 2}' WHERE id = :i"""), {"i": after}
+        )
+    try:
+        assert verify_chain_snapshot().bad_ids == [after]
+    finally:
+        with get_engine("migrator").begin() as conn:
+            conn.execute(
+                text("UPDATE core.audit_log SET details = CAST(:d AS jsonb) WHERE id = :i"),
+                {"d": json.dumps(original), "i": after},
+            )
+    assert verify_chain_snapshot().ok
+
+
+def _chain_version(audit_id: int) -> int:
+    with get_engine("migrator").connect() as conn:
+        return int(conn.execute(
+            text("SELECT chain_key_version FROM core.audit_log WHERE id = :i"), {"i": audit_id}
+        ).scalar_one())
 
 
 def test_tampering_is_detected_and_then_repaired() -> None:

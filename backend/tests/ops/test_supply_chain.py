@@ -145,3 +145,18 @@ def test_release_builds_from_clean_export() -> None:
     assert "trap 'rm -rf \"$SRC\"' EXIT" in text
     assert text.index("=~ ^[0-9A-Za-z]") < text.index('rm -rf "$SRC"')
     assert "docs/ops yaratilguncha" not in text
+
+
+def test_runtime_images_never_trust_corporate_ca() -> None:
+    backend = repo_path("backend/Dockerfile").read_text(encoding="utf-8")
+    assert "ARG RUNTIME_EXTRA_CA=false" in backend
+    # runtime bosqichida CA o'chiriladi (RUNTIME_EXTRA_CA=true bo'lmasa) va to'plam qayta yig'iladi.
+    assert "find /usr/local/share/ca-certificates/ -name '*.crt' -delete" in backend
+    assert 'if [ "$RUNTIME_EXTRA_CA" != "true" ]' in backend
+    assert "update-ca-certificates --fresh" in backend
+    web = repo_path("frontend/Dockerfile").read_text(encoding="utf-8")
+    assert "cp /tmp/ca-bundle.orig /etc/ssl/certs/ca-certificates.crt" in web
+    db = repo_path("deploy/postgres/Dockerfile").read_text(encoding="utf-8")
+    assert "cp /tmp/ca-bundle.orig /etc/ssl/certs/ca-certificates.crt" in db
+    scan = repo_path("scripts/scan.sh").read_text(encoding="utf-8")
+    assert "ugekazna-backend ugekazna-web" in scan and "grep" in scan

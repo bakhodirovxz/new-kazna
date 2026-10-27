@@ -25,6 +25,9 @@ ignore = ["S101", "B008", "RUF001", "RUF002", "RUF003"]
 # SQL identifikatorlari faqat kod ichidagi reyestrlardan (whitelist) olinadi.
 "app/etl/merge.py" = ["S608"]
 "app/dwh/*" = ["S608"]
+# SQL shartlari faqat kod ichidagi konstantalardan (BranchSel, ustun whitelist'i).
+"app/sections/*" = ["S608"]
+"app/alerts/*" = ["S608"]
 "app/admin/config_service.py" = ["S608"]
 "app/admin/etl_router.py" = ["S608"]
 
@@ -44,6 +47,10 @@ disallow_untyped_defs = false
 
 [[tool.mypy.overrides]]
 module = ["pyotp", "pyotp.*", "segno"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["openpyxl", "openpyxl.*"]
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]

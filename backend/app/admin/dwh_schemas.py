@@ -139,8 +139,30 @@ class SettingOut(BaseModel):
     version: int
     updated_by: int | None
     updated_at: datetime | None
+    default: Any
+    source: Literal["panel", "env", "default"]
+    category: str
+    title: str
+    kind: str
+    perm: str
+    guarded: bool
+    step_up: bool
+    apply: Literal["live", "next_run"]
+    unit: str
+    lo: float | None
+    hi: float | None
 
 
 class SettingUpdate(_In):
     value: Any
+    expected_version: int | None = Field(default=None, ge=0)
+    reason: str | None = Field(default=None, max_length=500)
+    otp: str | None = Field(default=None, max_length=8)
+
+
+class SettingVersionOut(BaseModel):
+    version: int
+    value: Any
+    updated_by: int | None
+    updated_at: datetime
 

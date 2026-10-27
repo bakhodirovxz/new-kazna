@@ -10,6 +10,7 @@ UI faqat shu agregatlarni (pub view orqali) o'qiydi — faktlarga so'rov yuborma
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from datetime import date
 from typing import Any
@@ -17,7 +18,9 @@ from typing import Any
 from sqlalchemy import text
 from sqlalchemy.engine import Connection
 
+from app.core import sysconfig
 from app.dwh.dates import date_id, month_id, month_start
+from app.dwh.targets import SCHEDULE_DOC_TYPE
 
 
 @dataclass(frozen=True, slots=True)
@@ -70,6 +73,9 @@ _CARRY_FORWARD = (
 
 def build_all(conn: Connection, build_id: int, params: BuildParams) -> dict[str, int]:
     bound = params.bind(build_id)
+    # Kalendar turlari: panel > standart (reyestr); SQL jsonb parametr sifatida oladi.
+    bound["schedule_doc_type"] = SCHEDULE_DOC_TYPE
+    bound["calendar_kinds"] = json.dumps(sysconfig.current(conn, "kazna.calendar_kinds"))
     out: dict[str, int] = {}
     for aggregate in AGGREGATES:
         # nosemgrep: avoid-sqlalchemy-text
@@ -160,6 +166,7 @@ plan AS (
   FROM dwh.fact_payment_plan p
   JOIN dwh.dim_date d ON d.date_id = p.date_id
   JOIN months m ON m.month_id = d.month_id
+  WHERE p.doc_type <> :schedule_doc_type
   GROUP BY p.branch_id, d.month_id, p.item_id),
 fact AS (
   SELECT f.branch_id, d.month_id, f.item_id, sum(f.amount) AS amount,
@@ -185,3 +192,6 @@ GROUP BY GROUPING SETS ((j.branch_id, j.month_id, j.item_id), (j.month_id, j.ite
 
 CASH_MONTH = register(Aggregate("agg_cash_month", (_CASH_ITEMS, _CASH_TOTALS, _CASH_ALL)))
 PAYMENTS_MONTH = register(Aggregate("agg_payments_month", (_PAYMENTS,)))
+
+# S1 agregatlari (spec 5): shu modul yuklanganda ro'yxatga qo'shiladi (register allaqachon tayyor).
+from app.dwh import treasury_aggregates  # noqa: E402, F401

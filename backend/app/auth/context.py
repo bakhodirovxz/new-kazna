@@ -145,7 +145,8 @@ Ctx = Annotated[AuthContext, Depends(get_ctx)]
 
 
 def require_perm(*perms: str, any_of: bool = False) -> Callable[..., AuthContext]:
-    """Endpoint ruxsati (`any_of=True` — berilganlardan BITTASI yetarli; faqat o'qish uchun).
+    """Endpoint ruxsati (`any_of=True` — berilganlardan BITTASI yetarli; faqat o'qish uchun yoki
+    servis obyekt ruxsatini o'zi tekshirsa: `PUT /admin/settings/{key}`).
     Deny-by-default: tests/test_route_guards.py har route'ni tekshiradi."""
     if not perms:
         raise ValueError("require_perm() kamida bitta ruxsat talab qiladi")

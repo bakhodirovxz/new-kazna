@@ -14,6 +14,7 @@ from app.admin.dwh_schemas import (
     FinAssumptionsUpdate,
     SettingOut,
     SettingUpdate,
+    SettingVersionOut,
 )
 from app.auth.context import AuthContext, require_perm
 from app.auth.permissions import Perm
@@ -55,12 +56,24 @@ def update_fin_assumptions(body: FinAssumptionsUpdate, ctx: SettingsAdmin, db: D
     return service.update_fin_assumptions(db, ctx, body, meta)
 
 
+SettingsReader = Annotated[AuthContext, Depends(require_perm(
+    Perm.ADMIN_SETTINGS, Perm.ADMIN_SECURITY, Perm.ADMIN_INTEGRATIONS, any_of=True))]
+
+
 @router.get("/settings")
-def list_settings(ctx: SettingsAdmin, db: DB) -> list[SettingOut]:
-    return service.list_settings(db)
+def list_settings(ctx: SettingsReader, db: DB) -> list[SettingOut]:
+    return service.list_settings(db, ctx)
+
+
+@router.get("/settings/{key}/history")
+def setting_history(key: str, ctx: SettingsReader, db: DB) -> list[SettingVersionOut]:
+    return service.setting_history(db, ctx, key)
 
 
 @router.put("/settings/{key}")
-def update_setting(key: str, body: SettingUpdate, ctx: SettingsAdmin, db: DB,
+def update_setting(key: str, body: SettingUpdate, ctx: SettingsReader, db: DB,
                    meta: Meta) -> SettingOut:
-    return service.update_setting(db, ctx, key, body.value, meta)
+    # Kalit ruxsati (d.perm) servisda tekshiriladi va rad etish auditga yoziladi.
+    return service.update_setting(db, ctx, key, body.value, meta,
+                                  expected_version=body.expected_version, reason=body.reason,
+                                  otp=body.otp)

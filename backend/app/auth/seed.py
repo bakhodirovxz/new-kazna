@@ -12,6 +12,7 @@ from app.auth.permissions import ADMIN_GUARANTEED, ADMIN_ROLE, PERMISSIONS, ROLE
 
 def sync_reference(db: Session) -> None:
     db.execute(text("SELECT pg_advisory_xact_lock(hashtext('ugk_sync_reference'))"))
+    existing = set(db.execute(select(Permission.code)).scalars())
     for code, description in PERMISSIONS.items():
         db.execute(
             pg_insert(Permission)
@@ -34,7 +35,11 @@ def sync_reference(db: Session) -> None:
             db.add(Position(code=seed.code, name=seed.name, role_id=role.id))
 
     admin_id = db.execute(select(Role.id).where(Role.code == ADMIN_ROLE)).scalar_one()
-    for perm in sorted(ADMIN_GUARANTEED):
+    admin_seed = next(s for s in ROLE_SEEDS if s.code == ADMIN_ROLE).permissions
+    # Kodga yangi qo'shilgan admin ruxsati mavjud admin roliga BIR MARTA beriladi; keyin
+    # olib tashlansa qayta qo'shilmaydi. Bo'sh bazada rol seed'i o'zi hammasini beradi.
+    fresh = (set(PERMISSIONS) - existing) & admin_seed if existing else set()
+    for perm in sorted(ADMIN_GUARANTEED | fresh):
         db.execute(
             pg_insert(RolePermission)
             .values(role_id=admin_id, permission_code=perm)

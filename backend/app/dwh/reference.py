@@ -1,73 +1,37 @@
-"""Tizim sozlamalari, «Требует внимания» qoidalari va финмодель допущения (spec 4.8, TZ 4).
+"""Sozlama taxalluslari, «Требует внимания» qoidalari va финмодель допущения (spec 4.8, TZ 4).
 
-Seed idempotent: faqat yo'q kalitlar qo'shiladi, administrator o'zgartirgan qiymatlarga
-tegilmaydi. Chegaralar va допущения — TZ ochiq savoli: mijoz tasdiqlagach admin panelda
-yangilanadi (har o'zgarish yangi versiya + audit).
+Seed idempotent: faqat yo'q alert qoidalari va допущения qo'shiladi (sozlamalar seed qilinmaydi).
+Chegaralar va допущения — TZ ochiq savoli: mijoz tasdiqlagach admin panelda yangilanadi
+(har o'zgarish yangi versiya + audit).
 """
 
 from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from datetime import date
 from decimal import Decimal
-from typing import Annotated, Any
+from typing import Any
 
-from apscheduler.triggers.cron import CronTrigger
-from pydantic import AfterValidator, Field, TypeAdapter
-from pydantic import ValidationError as PydanticValidationError
+from pydantic import TypeAdapter
 from sqlalchemy import text
 from sqlalchemy.engine import Connection
 
-from app.dwh.dates import today_tashkent
+from app.core import sysconfig
+from app.core.setting_types import CALENDAR_KINDS, OneCOrg  # noqa: F401  (S1 importlari)
+from app.core.sysconfig import REGISTRY
+
+# Taxalluslar: yagona manba — app/core/sysconfig.py reyestri (04b).
+DEFAULT_SETTINGS: dict[str, Any] = {k: d.default for k, d in REGISTRY.items()}
+SETTING_TYPES: dict[str, TypeAdapter[Any]] = {k: d.adapter for k, d in REGISTRY.items()}
 
 
-def _cron(value: str) -> str:
-    # A4.2: aniq timezone="UTC" — tzlocal qidiruvisiz (filterwarnings = error::DeprecationWarning
-    # ostida import/validate vaqtida DeprecationWarning'dan qochish uchun). Worker aniq TASHKENT
-    # timezone bilan rejalashtiradi — bu yerda faqat sintaksis tekshiriladi.
-    CronTrigger.from_crontab(value, timezone="UTC")  # noto'g'ri bo'lsa ValueError
-    return value
-
-
-def _iso_date(value: str) -> str:
-    return date.fromisoformat(value).isoformat()
-
-
-def _history_start(value: str) -> str:
-    # M1: kelajak sanasi bo'sh oyna / IndexError beradi; 2015 dan oldin ma'lumot yo'q.
-    if not date(2015, 1, 1) <= date.fromisoformat(value) <= today_tashkent():
-        raise ValueError("etl.history_start: 2015-01-01 va bugun oralig'ida bo'lishi kerak")
-    return _iso_date(value)
-
-
-DEFAULT_SETTINGS: dict[str, Any] = {
-    "freshness.max_age_hours": 6,
-    "etl.history_start": "2024-01-01",
-    "etl.synthetic_cron": "0 2 * * *",
-    "builds.keep": 3,
-    "retention.fact_years": 5,
-    "retention.audit_months": 12,
-    "partitions.months_ahead": 3,
-}
-
-SETTING_TYPES: dict[str, TypeAdapter[Any]] = {
-    "freshness.max_age_hours": TypeAdapter(Annotated[int, Field(strict=True, ge=1, le=168)]),
-    "etl.history_start": TypeAdapter(Annotated[str, AfterValidator(_history_start)]),
-    "etl.synthetic_cron": TypeAdapter(Annotated[str, AfterValidator(_cron)]),
-    "builds.keep": TypeAdapter(Annotated[int, Field(strict=True, ge=2, le=10)]),
-    "retention.fact_years": TypeAdapter(Annotated[int, Field(strict=True, ge=5, le=10)]),
-    "retention.audit_months": TypeAdapter(Annotated[int, Field(strict=True, ge=12, le=120)]),
-    "partitions.months_ahead": TypeAdapter(Annotated[int, Field(strict=True, ge=1, le=12)]),
-}
+# S1–S5 rejalari `_cron` va `current_setting` nomlarini shu moduldan import qiladi.
+_cron = sysconfig.check_cron
+current_setting = sysconfig.current
 
 
 def validate_setting(key: str, value: Any) -> Any:
-    adapter = SETTING_TYPES[key]  # noma'lum kalit → KeyError
-    try:
-        return adapter.validate_python(value)
-    except PydanticValidationError as exc:
-        raise ValueError(f"{key}: noto'g'ri qiymat") from exc
+    return REGISTRY[key].validate(value)  # noma'lum kalit → KeyError
 
 
 @dataclass(frozen=True, slots=True)
@@ -175,20 +139,6 @@ def ensure_reference(conn: Connection) -> None:
     `ugk_migrator` ulanishi bilan qayta seed qilinadi (`tests/conftest.py`).
     """
     conn.execute(text("SELECT pg_advisory_xact_lock(hashtext('ugk_reference'))"))
-    for key, value in DEFAULT_SETTINGS.items():
-        conn.execute(
-            text(
-                # Fix (brief demonstrably broken under psycopg3): :k reused untyped in the
-                # SELECT target-list AND compared to a varchar column in WHERE makes the
-                # planner deduce conflicting types (text vs character varying) for the same
-                # placeholder — psycopg raises AmbiguousParameter. An explicit CAST on the
-                # first occurrence fixes type resolution for all occurrences of :k.
-                "INSERT INTO core.settings (key, version, value) "
-                "SELECT CAST(:k AS varchar(64)), 1, CAST(:v AS jsonb) "
-                "WHERE NOT EXISTS (SELECT 1 FROM core.settings WHERE key = :k)"
-            ),
-            {"k": key, "v": json.dumps(value)},
-        )
     for rule in ALERT_RULES:
         conn.execute(
             text(
@@ -208,12 +158,3 @@ def ensure_reference(conn: Connection) -> None:
         ),
         [{"s": s, "y": y, "k": k, "v": v} for s, y, k, v in fin_assumption_seeds()],
     )
-
-
-def current_setting(conn: Connection, key: str) -> Any:
-    if key not in DEFAULT_SETTINGS:
-        raise KeyError(key)
-    value = conn.execute(
-        text("SELECT value FROM core.settings WHERE key = :k AND is_current"), {"k": key}
-    ).scalar_one_or_none()
-    return DEFAULT_SETTINGS[key] if value is None else value

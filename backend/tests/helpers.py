@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import itertools
+import json
 import time
 import uuid
 from dataclasses import dataclass, field
@@ -10,15 +11,15 @@ from datetime import UTC, datetime
 
 import pyotp
 from fastapi.testclient import TestClient
-from sqlalchemy import select
+from sqlalchemy import select, text
 
 from app.auth import sessions
 from app.auth.context import CSRF_COOKIE, CSRF_HEADER, SESSION_COOKIE
 from app.auth.models import Position, PositionBranch, Role, User
 from app.auth.passwords import hash_password
-from app.core import keystore
+from app.core import keystore, sysconfig
 from app.core.crypto import Purpose
-from app.core.db import new_session
+from app.core.db import get_engine, new_session
 
 DEFAULT_PASSWORD = "Sinov-Kalit-2026!"
 _counter = itertools.count()
@@ -112,3 +113,25 @@ def login(client: TestClient, user: SeedUser) -> TestClient:
     assert r.status_code == 200, r.text
     client.headers[CSRF_HEADER] = client.cookies[CSRF_COOKIE]
     return client
+
+
+def put_setting(key: str, value: object, *, invalidate: bool = True) -> None:
+    """Panel qiymati API'siz va TEKSHIRUVSIZ (yaroqsiz qiymat testlari ham shu bilan)."""
+    with get_engine("app").begin() as conn:
+        version = conn.execute(
+            text("SELECT coalesce(max(version), 0) + 1 FROM core.settings WHERE key = :k"),
+            {"k": key}).scalar_one()
+        conn.execute(text("UPDATE core.settings SET is_current = false "
+                          "WHERE key = :k AND is_current"), {"k": key})
+        conn.execute(text("INSERT INTO core.settings (key, version, value) "
+                          "VALUES (:k, :v, CAST(:val AS jsonb))"),
+                     {"k": key, "v": version, "val": json.dumps(value)})
+    if invalidate:
+        sysconfig.invalidate()
+
+
+def clear_setting(key: str) -> None:
+    """Kalitning barcha versiyalari o'chadi — qiymat env/standartga qaytadi."""
+    with get_engine("migrator").begin() as conn:
+        conn.execute(text("DELETE FROM core.settings WHERE key = :k"), {"k": key})
+    sysconfig.invalidate()

@@ -159,6 +159,8 @@ services:
               session_pepper, smtp_password, tls_cert]
     volumes:
       - etl_inbox:/data/inbox:ro
+      # АСКУЭ kunlik eksporti: faqat o'qish (yetkazuvchi/SFTP tomoni yozadi, host cron tozalaydi).
+      - askue_inbox:/data/import/askue:ro
     tmpfs: ["/tmp:uid=10001,gid=10001,mode=0700"]
     command: ["python", "-m", "app.worker"]
     mem_limit: 1g
@@ -247,6 +249,9 @@ volumes:
   db_data: {}
   pg_run: {}
   etl_inbox: {}
+  askue_inbox:
+    driver: local
+    driver_opts: {type: none, o: bind, device: "${UGK_ASKUE_INBOX:-/srv/ugekazna/askue/inbox}"}
   pgbackrest_repo:
     external: true
     name: ${UGK_BACKUP_VOLUME:-ugk_pgbackrest_repo}

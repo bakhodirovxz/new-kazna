@@ -38,8 +38,8 @@ curl -skf https://localhost:8443/api/v1/openapi.json -o frontend/openapi.json &&
 
 ```bash
 docker compose -f deploy/compose.test.yml run --rm test pytest
-docker compose -f deploy/compose.test.yml run --rm test ruff check app tests
-docker compose -f deploy/compose.test.yml run --rm test mypy app
+docker compose -f deploy/compose.test.yml run --rm test ruff check app tests tools
+docker compose -f deploy/compose.test.yml run --rm test mypy app tools
 docker compose -f deploy/compose.test.yml down
 ```
 
@@ -49,6 +49,7 @@ docker compose -f deploy/compose.yml up -d --build
 ./scripts/e2e.sh                       # seed-e2e (faqat dev/test) + Playwright
 ```
 Hisobot: `frontend/e2e/playwright-report/index.html`.
+`make e2e-ci` — CI'dagi E2E (toza checkout).
 
 Darvozalar: `make check` (repo + backend + frontend). `make hooks` ulaydigan pre-commit hook — qulaylik uchun (faqat staged o'zgarishlar); hakamlik qiluvchi darvoza — `make check-repo` (butun git tarixi).
 Limit: to'liq yugurish 6 login (10/min) va ~7 MFA (20/min) ishlatadi — ~60 s ichida qayta yugurtirsangiz 429 chiqishi mumkin; bir daqiqa kuting.
@@ -109,3 +110,36 @@ ocha olmay yiqiladi).
 - Parollar Argon2id; hamma uchun majburiy TOTP 2FA.
 - Sezgir ustunlar AES-256-GCM (envelope, KEK → DEK), kalit rotatsiyasi: `python -m app.cli rotate-key --purpose mfa`.
 - Audit jurnali faqat qo'shishga ochiq, hash-chain: `python -m app.cli audit-verify`.
+
+## Sifat darvozalari (CI)
+
+Hammasi Docker'da (host'ga faqat Docker Desktop va Git for Windows kerak). Linux/CI — `make`,
+Windows — `powershell -ExecutionPolicy Bypass -File scripts\dev.ps1 <target>`:
+
+| Target | Nima qiladi |
+|---|---|
+| `check` | gitleaks (butun tarix), semgrep, hadolint, ruff, mypy, bandit, pip-audit, pytest (qamrov ≥ 85 %, `app/core`, `app/auth`, `app/dwh` ≥ 95 %), tsc, eslint, vitest, npm audit |
+| `scan` | prod image'lar (digest bilan qotirilgan base) + Trivy HIGH/CRITICAL + CycloneDX SBOM (`build/sbom/`) |
+| `hooks` | pre-commit hook: staged o'zgarishlarda gitleaks + ruff |
+| `test-caddy`, `db-smoke`, `prod-config` | prod konfiguratsiyasi testlari |
+| `backup-selftest` | zaxira/tiklash avtotesti (sekin) |
+| `load-test` | k6 yuklama testi (dev stack + sintetik ma'lumot) |
+
+CI: `.github/workflows/ci.yml` va `.gitlab-ci.yml` — ikkalasi ham `make check` va `make scan`.
+Istisnolar reyestri: `docs/security/sast-exceptions.md`.
+
+## Prod
+
+O'rnatish, yangilash va orqaga qaytarish: `docs/ops/install-upgrade.md`. Reliz paketi: `make release VERSION=1.0.0`
+(image'lar, SBOM, `deploy/`, `scripts/`, hujjatlar, `SHA256SUMS`). Prod stack: `deploy/compose.prod.yml`.
+
+## Hujjatlar
+
+- Xavfsizlik (ekspertiza uchun, rus tilida): `docs/security/README.md`
+- Ekspluatatsiya (rus tilida): `docs/ops/README.md`
+
+## Bog'liqliklar
+
+`backend/requirements*.txt` — `make lock` (pip-compile `--generate-hashes`) natijasi, image `--require-hashes`
+bilan o'rnatadi. Lock-fayl sarlavhasidagi `--no-index` — pip-tools 7.6.1 sarlavha xususiyati, o'rnatishga ta'sir
+qilmaydi; kanonik buyruq — `make lock`.

@@ -434,3 +434,27 @@ TZ'dagi mijozga savollar: filiallar kodlari va koordinatalari, ПКМ №54 klas
 (replika yoki OData yoki mavjud `hs/aiassistant` HTTP-servislari), banklar formati, финмодель допущения,
 chegaralarni tasdiqlash, foydalanuvchilar va rollar ro'yxati, rasmiy logotip. Shuningdek: eski repodagi
 1C paroli (`apache-proxy.conf`) almashtirilishi kerak.
+
+## 14. 4-reja (Ops) bo'yicha ongli chetlanishlar
+
+1. **SBOM** — Trivy'ning CycloneDX chiqishi (`make scan`: har prod image + frontend npm), alohida
+   cyclonedx-py/cyclonedx-npm emas.
+2. **Pre-commit** — `.githooks/pre-commit` (`git config core.hooksPath .githooks`): gitleaks (staged) + ruff.
+   pre-commit freymvorki host'ga o'rnatishni talab qilardi.
+3. **Semgrep** qoidalariga `p/react` qo'shildi; qamrov darvozasi: umumiy ≥ 85 %, `app/core`, `app/auth`,
+   `app/dwh` ≥ 95 % (`backend/tools/coverage_gate.py`).
+4. **Yuklama testi** har VU uchun login qilmaydi: `python -m app.devtools seed-load` (faqat dev/test) tayyor
+   sessiyalar beradi — login IP limiti (10/daq), TOTP qadamini qayta ishlatish taqiqi va Argon2id narxi
+   sahifa o'lchovini buzardi. Login yo'li — Playwright E2E.
+5. **PostgreSQL `ssl = off`** ichki (`internal: true`) Docker tarmog'ida; asoslash — `docs/security/cryptography.md`.
+6. **`anonymize-copy`** bu rejada yo'q: audit zanjirini anonimlashtirib bo'lmaydi, prod KEK test muhitiga
+   chiqmasligi kerak — alohida mini-reja (prod host'da tiklash → anonimlashtirish → test KEK bilan qayta o'rash).
+7. **`last_restore_test`** — `core.settings` dagi tizim yozuvi, `DEFAULT_SETTINGS` da yo'q: admin API uni
+   tahrirlay olmaydi; `python -m app.cli restore-test-record/status`.
+8. **Prod image'lar** — `ugekazna-{db,redis,backend,web}:<versiya>`; base image'lar `deploy/images.lock.env` da
+   digest bilan. Redis ham qayta teglanadi — `docker save/load` digest havolasini saqlamaydi (air-gapped o'rnatish).
+9. **Zaxira jadvali**: to'liq — 01:00, differensial — 07:00, 13:00, 19:00 (Toshkent), WAL `archive_timeout = 15min`;
+   tiklash testi — har oyning birinchi shanbasi 21:00 (systemd timer).
+10. **Caddy** konteynerda non-root, 8443/8080 portlarda (host 443/80 ga ulanadi); `no-new-privileges` ostida
+    fayl capability'lari ishlamagani uchun; `frontend/Dockerfile` `web` bosqichida caddy binarining
+    capability'siz nusxasi (`/usr/local/bin/caddy`) ishlatiladi.

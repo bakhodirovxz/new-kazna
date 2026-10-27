@@ -131,3 +131,12 @@ def make_role_user(
             s.add(RolePermission(role_id=role.id, permission_code=perm))
         s.commit()
     return create_user(code, branch_ids=branch_ids)
+
+
+def force_head_approved(code: str) -> None:
+    """Faqat test tayyorgarligi: head-guard trigger'i vaqtincha o'chiriladi."""
+    migrator_sql("ALTER TABLE core.manual_head DISABLE TRIGGER manual_head_guard")
+    try:
+        migrator_sql("UPDATE core.manual_head SET approved_version = 1 WHERE code = :c", c=code)
+    finally:
+        migrator_sql("ALTER TABLE core.manual_head ENABLE TRIGGER manual_head_guard")

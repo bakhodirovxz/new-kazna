@@ -41,12 +41,25 @@ class ManualConnector:
     def extract(self, window: Window, sink: StagingSink) -> ExtractStats:
         by_target = dict.fromkeys(sorted(MANUAL_TARGETS), 0)
         with etl_transaction() as conn:  # scope_all: barcha filiallar
+            # Faqat HAQIQATAN tasdiqlangan paket versiyalari (trigger'dan mustaqil 2-qatlam):
+            # status='approved', tasdiqlovchi != kiritgan; mos kelmasa yugurish yiqiladi.
             rows = conn.execute(text(
-                "SELECT h.entity, h.code, e.id, e.payload, e.bank_enc, e.pii_enc, h.entry_id "
+                "SELECT h.entity, h.code, e.id, e.payload, e.bank_enc, e.pii_enc, h.entry_id, "
+                "(b.status = 'approved' AND b.decided_by IS NOT NULL "
+                " AND b.decided_by <> b.created_by) AS trusted, h.approved_deleted "
                 "FROM core.manual_head h JOIN core.manual_entry e "
                 "ON e.entry_id = h.entry_id AND e.version = h.approved_version "
-                "WHERE h.approved_version IS NOT NULL AND NOT h.approved_deleted "
-                "ORDER BY h.entry_id")).mappings().all()
+                "JOIN core.manual_batch b ON b.batch_id = e.batch_id "
+                "WHERE h.approved_version IS NOT NULL ORDER BY h.entry_id")).mappings().all()
+            orphans = conn.execute(text(
+                "SELECT count(*) FROM core.manual_head h WHERE h.approved_version IS NOT NULL "
+                "AND NOT EXISTS (SELECT 1 FROM core.manual_entry e "
+                "WHERE e.entry_id = h.entry_id AND e.version = h.approved_version)")).scalar_one()
+        bad = int(orphans) + sum(1 for r in rows if not r["trusted"])
+        if bad:
+            # xabar -- faqat son (qiymatlarsiz)
+            raise RuntimeError(f"manual: {bad} unapproved version(s) referenced")
+        rows = [r for r in rows if not r["approved_deleted"]]
         # o'lchovlar faktlardan oldin (merge ham shunday tartibda, bu faqat o'qilishi uchun)
         rows = sorted(rows, key=lambda r: _ORDER.get(ENTITIES[r["entity"]].target, 99)
                       if r["entity"] in ENTITIES else 99)

@@ -11,6 +11,7 @@ from __future__ import annotations
 import functools
 import hashlib
 import json
+import re
 from collections.abc import Callable, Mapping, Sequence
 from datetime import date
 from decimal import Decimal
@@ -193,8 +194,19 @@ def changes(db: Session, entity: ManualEntity, batch_id: int) -> list[ChangeOut]
     return out
 
 
+_BAD_TEXT = re.compile("[\x00-\x1f\x7f\u202a-\u202e\u2066-\u2069]")
+
+
+def sane_text(value: str | None, field: str) -> str:
+    """Erkin matn (sabab/izoh): boshqaruv va bidi belgilarisiz (audit/tarixda ko'rsatiladi)."""
+    cleaned = (value or "").strip()
+    if _BAD_TEXT.search(cleaned):
+        raise ValidationFailed("invalid_value", fields=[field])
+    return cleaned
+
+
 def clean_reason(reason: str | None) -> str:
-    cleaned = (reason or "").strip()
+    cleaned = sane_text(reason, "reason")
     if not REASON_MIN <= len(cleaned) <= REASON_MAX:
         raise ValidationFailed("reason_required", fields=["reason"])
     return cleaned
@@ -467,7 +479,7 @@ def _submit(db: Session, ctx: AuthContext, meta: ClientMeta, entity: ManualEntit
         raise ValidationFailed("invalid_value", fields=["items"])
     assert_period_open(db, entity, [r["payload"] for r in rows])  # tombstone ham
     corrections = any(r["approved_version"] is not None for r in rows)
-    cleaned = clean_reason(reason) if corrections else (reason or "").strip() or None
+    cleaned = clean_reason(reason) if corrections else sane_text(reason, "reason") or None
     digest = canonical_hash(rows)
     diff = changes(db, entity, batch["batch_id"])
     db.execute(text(

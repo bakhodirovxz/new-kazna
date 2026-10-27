@@ -44,7 +44,7 @@ def _to_decimal(value: Any) -> Any:
         raise ValueError("number")
     if isinstance(value, int):
         return Decimal(value)
-    if isinstance(value, str) and _NUMBER.match(value):
+    if isinstance(value, str) and _NUMBER.fullmatch(value):
         try:
             return Decimal(value)
         except InvalidOperation:
@@ -72,7 +72,7 @@ def _to_month(value: Any) -> Any:
 
 
 def _no_control(value: str) -> str:
-    if not _NO_CONTROL.match(value):
+    if not _NO_CONTROL.fullmatch(value):
         raise ValueError("control")
     return value
 
@@ -120,7 +120,7 @@ def _annotation(f: FieldDef) -> Any:
             pattern = re.compile(f.pattern or r"^.{1,64}$")
 
             def _check(v: SecretStr, _p: re.Pattern[str] = pattern) -> SecretStr:
-                if not _p.match(v.get_secret_value()):
+                if not _p.fullmatch(v.get_secret_value()):
                     raise ValueError("pattern")
                 return v
 

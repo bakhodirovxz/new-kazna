@@ -149,6 +149,11 @@ def process_requests(
                 "WHERE status = 'pending' ORDER BY id LIMIT 1 FOR UPDATE SKIP LOCKED")).first()
             if row is None:
                 return done
+            if row.source == "manual":
+                # Tasdiq bilan poyga: tasdiqlovchi shu qulf ostida "pending" so'rovga qo'shiladi.
+                # Biz qulfni olguncha uning tranzaksiyasi tugaydi (bog'lanish ko'rinadi); keyin
+                # tasdiqlash "running" ni ko'radi va YANGI so'rov yaratadi (_queue_publication).
+                conn.execute(text("SELECT pg_advisory_xact_lock(hashtext('ugk_manual_publish'))"))
             conn.execute(text("UPDATE core.etl_requests SET status = 'running' WHERE id = :i"),
                          {"i": row.id})
         if row.source == "file" and row.mode == "full":  # I2: CSV to'liq bo'lmasa qatorlar o'chadi

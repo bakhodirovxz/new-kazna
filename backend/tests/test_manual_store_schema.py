@@ -108,7 +108,7 @@ def test_decision_requires_decider_and_legal_transition() -> None:
                   {"i": bid})
         s.execute(text("UPDATE core.manual_batch SET status = 'approved', decided_by = 2, "
                        "decided_at = now() WHERE batch_id = :i"), {"i": bid})
-        with pytest.raises(DBAPIError, match="illegal transition"):  # yakuniy holatdan chiqish yo'q
+        with pytest.raises(DBAPIError, match="frozen"):  # yakuniy holatdan chiqish yo'q
             s.execute(text("UPDATE core.manual_batch SET status = 'draft' WHERE batch_id = :i"),
                       {"i": bid})
         s.rollback()

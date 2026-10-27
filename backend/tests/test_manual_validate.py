@@ -13,6 +13,7 @@ from tests.manual_helpers import (
     balance_item,
     bank_account_item,
     branch_code,
+    force_head_approved,
     migrator_sql,
     plan_item,
     seed_dwh_bank,
@@ -83,7 +84,7 @@ def test_reference_must_exist_or_be_approved(app_db: Session) -> None:
         "VALUES ('kazna.bank_account', 1, :c, :c)", c=code)
     _, errors = check_items(app_db, BAL, 1, [balance_item(code, "2026-09-30", "1")])
     assert _codes(errors) == {(1, "bank_code", "reference_not_found")}
-    migrator_sql("UPDATE core.manual_head SET approved_version = 1 WHERE code = :c", c=code)
+    force_head_approved(code)
     _, errors = check_items(app_db, BAL, 1, [balance_item(code, "2026-09-30", "1")])
     assert not errors
 

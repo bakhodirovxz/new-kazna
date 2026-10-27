@@ -27,6 +27,7 @@ from app.manual.store import (
     entity_or_404,
     load_batch,
     need,
+    sane_text,
 )
 from app.manual.validate import assert_period_open
 
@@ -85,6 +86,12 @@ def approve_batch(db: Session, ctx: AuthContext, meta: ClientMeta, batch_id: int
     for r in rows:
         if r["deleted"] and entity.kind == "dim" and _referenced(db, entity, r["code"]):
             raise ValidationFailed("reference_in_use", fields=["entry_id"], entry_id=r["entry_id"])
+    request_id = _queue_publication(db, ctx.user_id)
+    db.execute(text(
+        "UPDATE core.manual_batch SET status = 'approved', decided_by = :u, decided_at = now(), "
+        "decision_comment = :c, etl_request_id = :r, version = version + 1 WHERE batch_id = :b"),
+        {"u": ctx.user_id, "c": sane_text(comment, "comment") or None, "r": request_id,
+         "b": batch_id})
     for r in rows:
         done = db.execute(text(
             "UPDATE core.manual_head SET approved_version = :v, approved_deleted = :d, "
@@ -93,11 +100,6 @@ def approve_batch(db: Session, ctx: AuthContext, meta: ClientMeta, batch_id: int
             {"v": r["version"], "d": r["deleted"], "e": r["entry_id"], "b": batch_id})
         if done.first() is None:
             raise ConflictError("conflict_modified")
-    request_id = _queue_publication(db, ctx.user_id)
-    db.execute(text(
-        "UPDATE core.manual_batch SET status = 'approved', decided_by = :u, decided_at = now(), "
-        "decision_comment = :c, etl_request_id = :r, version = version + 1 WHERE batch_id = :b"),
-        {"u": ctx.user_id, "c": (comment or "").strip() or None, "r": request_id, "b": batch_id})
     out = batch_out(load_batch(db, batch_id))
     db.commit()
     log_event(meta, AuditAction.DATA_BATCH_APPROVED, user_id=ctx.user_id,
@@ -114,7 +116,7 @@ def reject_batch(db: Session, ctx: AuthContext, meta: ClientMeta, batch_id: int,
     batch = load_batch(db, batch_id, lock=True)
     entity = entity_or_404(batch["entity"])
     _decidable(ctx, batch, entity, expected_version)
-    cleaned = (comment or "").strip()
+    cleaned = sane_text(comment, "comment")
     if not REASON_MIN <= len(cleaned) <= REASON_MAX:
         raise ValidationFailed("reason_required", fields=["comment"])
     db.execute(text("UPDATE core.manual_head SET pending_batch_id = NULL, updated_at = now() "

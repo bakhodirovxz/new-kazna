@@ -62,6 +62,9 @@ REGISTRY: tuple[EncryptedColumn, ...] = (
     # konteyneri) orqali bajariladi.
     EncryptedColumn("dwh.dim_counterparty", "code", "inn_enc", Purpose.PII, "migrator"),
     EncryptedColumn("dwh.dim_bank", "code", "account_enc", Purpose.BANK, "migrator"),
+    # 04b: integratsiya sirlari — admin API (ugk_app) yozadi, AAD tabiiy kalit (name) bo'yicha.
+    EncryptedColumn("core.integration_credentials", "name", "value_enc", Purpose.INTEGRATION,
+                    "app"),
 )
 # I1: `REGISTRY`da YO'Q, lekin sxemada mavjud har bir `*_enc` ustun shu yerda ANIQ sababi
 # bilan ro'yxatga olinishi SHART (kalit `schema.table.column` formatida) — aks holda

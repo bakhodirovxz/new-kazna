@@ -102,6 +102,8 @@ services:
       ENV: dev
       BASE_URL: https://localhost:8443
       WATCHFILES_FORCE_POLLING: "true"
+      # S5: dev'da AI — soxta provayder (tarmoqqa chiqmaydi). Baribir `ai.enabled` yoqilmaguncha o'chiq.
+      AI_PROVIDER: fake
     secrets: [db_app_password, redis_password, master_kek, blind_index_key, session_pepper]
     volumes:
       - ../backend/app:/app/app:ro

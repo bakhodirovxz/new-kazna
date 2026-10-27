@@ -42,3 +42,10 @@ yangi KEK joriy KEK bilan bir xil bo'lsa rad etadi. Muvaffaqiyatli tugagach, hos
 KEK faylini SHRED qiling (`shred -u new_kek` yoki `rm -P new_kek` — oddiy `rm` diskda iz qoldirishi
 mumkin) va `deploy/secrets/master_kek`ni yangi qiymat bilan almashtirib, `api`/`migrate`
 xizmatlarini qayta ishga tushiring.
+
+## AI-анализ (S5)
+
+AI kaliti Docker secret EMAS: administrator uni panelda kiritadi (Администрирование -> Интеграции ->
+«AI-анализ» -> Изменить, sabab + TOTP) va u shifrlangan holda DB'da saqlanadi. Faqat ixtiyoriy CA:
+
+| ai_ca_bundle.pem | korporativ CA (TLS-inspeksiyali proksi uchun); `compose.ai.yml` bilan ishlatiladi; bo'sh fayl — tizim to'plami |

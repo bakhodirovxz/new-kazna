@@ -1,0 +1,20 @@
+# AI-анализ (S5, spec 4.3 va 6) — faqat axborot xavfsizligi xizmatining yozma roziligidan keyin:
+#   docker compose -f deploy/compose.prod.yml -f deploy/compose.ai.yml --env-file deploy/prod.env up -d
+# Standart compose.prod.yml da api internetga chiqmaydi. Bu overlay api ga egress tarmog'i va
+# ixtiyoriy CA to'plamini beradi. API kaliti, model va limitlar Docker secret/env emas, admin
+# panelda (Интеграции → «AI-анализ»; шифруется в БД). Funksiya shunda ham o'chiq qoladi, toki
+# administrator `ai.enabled` ni yoqmaguncha (Политика безопасности → AI-анализ yoki
+# python -m app.cli ai-enable on --reason "…").
+services:
+  api:
+    networks: [backend, web, egress]
+    environment:
+      AI_PROVIDER: anthropic
+      AI_BASE_URL: ${AI_BASE_URL:-}
+      HTTPS_PROXY: ${EGRESS_PROXY:-}
+      EGRESS_PROXY: ${EGRESS_PROXY:-}
+    secrets: [db_app_password, redis_password, master_kek, blind_index_key, session_pepper,
+              ai_ca_bundle]
+
+secrets:
+  ai_ca_bundle: {file: "${UGK_SECRETS_DIR:-./secrets}/ai_ca_bundle.pem"}

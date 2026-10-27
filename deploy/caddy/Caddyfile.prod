@@ -78,7 +78,9 @@ http://:8081 {
 		format json
 	}
 
-	encode zstd gzip
+	# S5: AI-анализ javobi — SSE oqimi; siqish uni buferlaydi, shuning uchun istisno.
+	@compress not path /api/v1/ai/analyze
+	encode @compress zstd gzip
 
 	request_body {
 		max_size 1MB
@@ -113,6 +115,13 @@ http://:8081 {
 	@probes expression {http.request.orig_uri.path}.matches('(?i)^/+api/+v1/+(healthz|readyz)([/;]|$)')
 	handle @probes {
 		error 404
+	}
+
+	handle /api/v1/ai/analyze {
+		reverse_proxy api:8000 {
+			header_up X-Forwarded-For {client_ip}
+			flush_interval -1
+		}
 	}
 
 	handle /api/* {

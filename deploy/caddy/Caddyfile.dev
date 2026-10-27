@@ -21,7 +21,9 @@
 # "caddy" — ichki tarmoqdagi E2E konteyneri uchun (https://caddy).
 localhost, caddy {
 	tls internal
-	encode zstd gzip
+	# S5: AI-анализ javobi — SSE oqimi; siqish uni buferlaydi, shuning uchun istisno.
+	@compress not path /api/v1/ai/analyze
+	encode @compress zstd gzip
 
 	request_body {
 		max_size 1MB
@@ -55,6 +57,12 @@ localhost, caddy {
 	@probes path /api/v1/healthz /api/v1/readyz
 	handle @probes {
 		respond 404
+	}
+
+	handle /api/v1/ai/analyze {
+		reverse_proxy api:8000 {
+			flush_interval -1
+		}
 	}
 
 	handle /api/* {

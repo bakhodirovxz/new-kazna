@@ -24,7 +24,8 @@ class LoginIn(_In):
 
 
 class MfaTokenIn(_In):
-    mfa_token: str = Field(min_length=20, max_length=128)
+    # secrets.token_urlsafe(32) shakli aynan shu: 43 belgi base64url
+    mfa_token: str = Field(pattern=r"^[A-Za-z0-9_-]{43}$")
 
 
 class MfaIn(MfaTokenIn):

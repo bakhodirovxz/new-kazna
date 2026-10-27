@@ -257,3 +257,52 @@ def test_admin_toggles_mfa_required_with_step_up(
     off = other.put(path, json={"value": False, "reason": REASON, "otp": second.next_code()})
     assert off.status_code == 200, off.text
     assert sysconfig.value(KEY) is False
+
+
+def _session_id(client: TestClient) -> str:
+    return str(next(s["id"] for s in client.get(f"{A}/sessions").json() if s["current"]))
+
+
+def _open_pending(user_id: int) -> tuple[int, bool]:
+    with get_engine("app").connect() as conn:
+        row = conn.execute(text(
+            "SELECT count(*), bool_or(pending_secret_enc IS NOT NULL) FROM core.mfa_challenges "
+            "WHERE user_id = :u AND used_at IS NULL"), {"u": user_id}).one()
+    return int(row[0]), bool(row[1])
+
+
+@pytest.mark.parametrize("forged", ["session:{sid}", "{sid}", "mfa-session:{sid}"])
+def test_forged_session_key_cannot_reach_session_challenge_via_token_endpoints(
+    client: TestClient, make_user: Callable[..., SeedUser], forged: str
+) -> None:
+    """r2 C1: cookie'siz hujumchi sessiya id'sidan token yasab, begin ochgan challenge'ni
+    eski enroll/start + confirm orqali ololmaydi."""
+    user = make_user("rukovodstvo", totp=False)
+    _as_user(client, user)
+    secret = _begin(client, user).json()["secret"]
+    token = forged.format(sid=_session_id(client))
+    attacker = TestClient(client.app, base_url="https://testserver")
+    for path, body in (("start", {}), ("confirm", {"code": pyotp.TOTP(secret).now()})):
+        r = attacker.post(f"{A}/2fa/enroll/{path}", json={"mfa_token": token, **body})
+        assert r.status_code in (401, 422), (path, r.text)
+    assert SESSION_COOKIE not in attacker.cookies
+    assert _open_pending(user.id) == (1, True)  # qurbonning challenge'i daxlsiz
+    done = client.post(f"{A}/2fa/enroll/finish", json={"code": pyotp.TOTP(secret).now()})
+    assert done.status_code == 200, done.text  # qurbonning o'z secret'i hamon ishlaydi
+
+
+def test_challenge_key_spaces_are_disjoint() -> None:
+    import uuid
+
+    from app.auth import service
+    sid = uuid.uuid4()
+    assert service._session_challenge_hmac(sid) != service._challenge_hmac(f"session:{sid}")
+    assert service._session_challenge_hmac(sid) != service._challenge_hmac(str(sid))
+
+
+def test_mfa_token_shape_is_strict(client: TestClient) -> None:
+    for bad in ("session:" + "a" * 36, "a" * 42, "a" * 44, "a" * 42 + "!", "a" * 20):
+        r = client.post(f"{A}/2fa/enroll/start", json={"mfa_token": bad})
+        assert r.status_code == 422, bad
+    r = client.post(f"{A}/2fa/enroll/start", json={"mfa_token": "a" * 43})
+    assert r.status_code == 401  # shakl to'g'ri, lekin noma'lum token

@@ -166,7 +166,9 @@ def _close_open_challenges(db: Session, user_id: int, now: datetime) -> None:
 def _session_challenge_hmac(session_id: uuid.UUID) -> bytes:
     """Kirgan foydalanuvchining enroll challenge'i SESSIYAGA bog'langan: token yo'q, kalit
     sessiya id'sidan chiqariladi — boshqa sessiya (yoki token) bu challenge'ni ocholmaydi."""
-    return keyed_hash(keystore.pepper(), "mfa", f"session:{session_id}")
+    # C1 (r2): ALOHIDA yorliq — "mfa|<token>" bilan kesishmaydi; mijoz yuborgan token orqali bu
+    # kalitni yasab bo'lmaydi (token endpointlari esa qat'iy ^[A-Za-z0-9_-]{43}$ ni qabul qiladi).
+    return keyed_hash(keystore.pepper(), "mfa-session", str(session_id))
 
 
 def _check_current_password(

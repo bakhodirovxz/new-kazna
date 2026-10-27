@@ -194,3 +194,4 @@
   .kpi__value { background: none; color: var(--brand); -webkit-text-fill-color: var(--brand); }
   .card__exp { display: none; }
 }
+.kpi__top .tip__bubble { left: auto; right: 0; transform: none; } /* подсказка не уходит за правый край экрана */

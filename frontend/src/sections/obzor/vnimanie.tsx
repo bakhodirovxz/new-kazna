@@ -29,15 +29,16 @@ export default function ObzorVnimanie({ filters }: SectionPageProps) {
                 <li key={a.code}>
                   <button
                     type="button"
-                    aria-label={`${a.level === 'critical' ? t('obzor.alerts.critical') : t('obzor.alerts.warning')}: ${a.title}. ${a.message}. ${t('obzor.alerts.open')}`}
                     onClick={() => navigate({ kind: 'section', section: a.section, page: a.page, br: filters.br, per: filters.per })}
                   >
                     <i className={a.level === 'critical' ? 'is-critical' : undefined} aria-hidden="true" />
                     <span>
+                      <span className="visually-hidden">{a.level === 'critical' ? t('obzor.alerts.critical') : t('obzor.alerts.warning')}: </span>
                       <span className="at">{a.title}</span>
+                      {' '}
                       <span className="am">{a.message}</span>
                     </span>
-                    <span className="ag" aria-hidden="true">
+                    <span className="ag">
                       {t('obzor.alerts.open')}
                     </span>
                   </button>

@@ -122,7 +122,11 @@ export function Table<T>({
   };
 
   return (
-    <div className={cx('tw', mobile === 'cards' && 'tw--cards', free && 'tw--free', bare && 'tw--bare', className)}>
+    // Прокручиваемая область без кликабельных строк должна получать фокус с клавиатуры (axe scrollable-region-focusable).
+    <div
+      className={cx('tw', mobile === 'cards' && 'tw--cards', free && 'tw--free', bare && 'tw--bare', className)}
+      {...(onRowClick ? {} : { role: 'group', tabIndex: 0, 'aria-label': caption })}
+    >
       {mobile === 'cards' && sortable.length > 0 ? (
         <Select
           className="tw__sort"

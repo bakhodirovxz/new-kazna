@@ -23,7 +23,9 @@ test('login → 2FA → navigatsiya → filtrlar → admin → sessiya tugashi',
   await signIn(page, username);
   await expect(page).toHaveURL(/#kazna\/svod$/);
   await expect(page.getByRole('heading', { level: 1, name: 'Казначейство: сводка' })).toBeVisible();
-  await expect(page.getByText('Раздел в разработке')).toBeVisible();
+  // S1: haqiqiy sahifa (sintetik ma'lumot) — zaglushka emas.
+  await expect(page.getByText('Остаток на счетах').first()).toBeVisible();
+  await expect(page.getByText('Раздел в разработке')).toHaveCount(0);
   await expectNoHorizontalScroll(page);
   await expectNoAxeViolations(page);
 

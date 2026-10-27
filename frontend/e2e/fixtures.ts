@@ -31,8 +31,23 @@ export async function signIn(page: Page, username: string): Promise<void> {
 }
 
 export async function expectNoHorizontalScroll(page: Page): Promise<void> {
-  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
-  expect(overflow).toBeLessThanOrEqual(0);
+  const { overflow, offenders } = await page.evaluate(() => {
+    const width = window.innerWidth;
+    const list = Array.from(document.querySelectorAll<HTMLElement>('body *'))
+      // Faqat haqiqiy sababchilar: overflow bilan kesilgan ota-onasi kenglik ichida bo'lsa — hisobga olinmaydi.
+      .filter((el) => {
+        if (el.getBoundingClientRect().right <= width + 1) return false;
+        for (let p = el.parentElement; p && p !== document.body; p = p.parentElement) {
+          if (getComputedStyle(p).overflowX !== 'visible' && p.getBoundingClientRect().right <= width + 1) return false;
+        }
+        return true;
+      })
+      .slice(0, 12)
+      .map((el) => `${el.tagName.toLowerCase()}.${String(el.className).slice(0, 40)}<${el.parentElement?.className.toString().slice(0, 30)}> right=${Math.round(el.getBoundingClientRect().right)}`);
+    return { overflow: document.documentElement.scrollWidth - width, offenders: list };
+  });
+  // Xabarda kenglikdan chiqib ketgan elementlar ro'yxati (diagnostika).
+  expect(overflow, offenders.join(' | ')).toBeLessThanOrEqual(0);
 }
 
 /** R-D1: yuqori paneldagi bo'limlar nechta qatorga tushgan (turli offsetTop soni). */
@@ -79,5 +94,8 @@ export async function expectNoAxeViolations(page: Page): Promise<void> {
         .map((a) => a.finished),
     ),
   );
-  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+  const { violations } = await new AxeBuilder({ page }).analyze();
+  expect(
+    violations.map((v) => `${v.id}: ${v.nodes.map((n) => `${n.target.join(' ')} [${n.any[0]?.message ?? n.failureSummary?.slice(0, 120) ?? ''}]`).slice(0, 4).join('; ')}`),
+  ).toEqual([]);
 }

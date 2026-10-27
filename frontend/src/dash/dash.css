@@ -14,7 +14,7 @@
 @media (max-width: 1599px) { .grid .wide { grid-column: span 12; } }
 @media (max-width: 1279.98px) { .c3, .c4, .c5, .c6, .c7, .c8 { grid-column: span 12; } }
 
-.cv { position: relative; height: clamp(17rem, 34vh, 28rem); flex: 1 0 auto; }
+.cv { position: relative; overflow: hidden; max-width: 100%; height: clamp(17rem, 34vh, 28rem); flex: 1 0 auto; }
 .cv--sm { height: clamp(13rem, 24vh, 19rem); }
 .cv canvas { display: block; }
 

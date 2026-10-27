@@ -20,7 +20,7 @@ it('resolves pages by file name and returns null for missing pages', async () =>
   if (!Page) return;
   render(
     <Suspense fallback="...">
-      <Page section="kazna" page="svod" filters={{ br: null, per: 'ytd' }} />
+      <Page section="kazna" page="svod" filters={{ br: null, per: 'ytd' }} onBranch={() => undefined} />
     </Suspense>,
   );
   expect(await screen.findByText('kazna/svod/ytd')).toBeInTheDocument();

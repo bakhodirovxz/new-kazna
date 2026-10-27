@@ -1,4 +1,4 @@
-import type { StationOut } from './types';
+import type { StationOut } from '../../../api/types';
 import { formatMoney } from '../../../dash/money';
 import { Rank } from '../../../dash/Rank';
 import { t } from '../../../i18n';

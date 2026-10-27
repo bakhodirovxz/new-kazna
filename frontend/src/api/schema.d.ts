@@ -547,6 +547,227 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/obzor/svod": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Svod */
+        get: operations["svod_api_v1_obzor_svod_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/obzor/postup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Postup */
+        get: operations["postup_api_v1_obzor_postup_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/obzor/rasxod": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Rasxod */
+        get: operations["rasxod_api_v1_obzor_rasxod_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/obzor/excel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Excel */
+        get: operations["excel_api_v1_obzor_excel_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/obzor/items/{item_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Item */
+        get: operations["item_api_v1_obzor_items__item_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/kazna/svod": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Svod */
+        get: operations["svod_api_v1_kazna_svod_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/kazna/platezhi": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Platezhi */
+        get: operations["platezhi_api_v1_kazna_platezhi_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/kazna/platezhi/items/{item_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Platezhi Item */
+        get: operations["platezhi_item_api_v1_kazna_platezhi_items__item_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/kazna/calendar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Calendar Page */
+        get: operations["calendar_page_api_v1_kazna_calendar_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/kazna/dogovory": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Dogovory */
+        get: operations["dogovory_api_v1_kazna_dogovory_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/kazna/celevye": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Celevye */
+        get: operations["celevye_api_v1_kazna_celevye_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/obzor/excel.xlsx": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Excel Xlsx */
+        get: operations["excel_xlsx_api_v1_obzor_excel_xlsx_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/exports/log": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Export Log */
+        post: operations["export_log_api_v1_exports_log_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/etl/runs": {
         parameters: {
             query?: never;
@@ -718,6 +939,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/settings/{key}/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Setting History */
+        get: operations["setting_history_api_v1_admin_settings__key__history_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/settings/{key}": {
         parameters: {
             query?: never;
@@ -739,6 +977,13 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** ActivityAmountOut */
+        ActivityAmountOut: {
+            /** Activity */
+            activity: string;
+            /** Amount */
+            amount: number;
+        };
         /** AlertRuleOut */
         AlertRuleOut: {
             /** Code */
@@ -808,6 +1053,52 @@ export interface components {
             /** Ip */
             ip: string | null;
         };
+        /** BankAmountOut */
+        BankAmountOut: {
+            /** Bank Name */
+            bank_name: string;
+            /** Amount */
+            amount: number;
+            /** Closing */
+            closing: number | null;
+        };
+        /** BankBalanceOut */
+        BankBalanceOut: {
+            /** Bank Name */
+            bank_name: string;
+            /** Balance */
+            balance: number;
+        };
+        /** BranchAmountOut */
+        BranchAmountOut: {
+            /** Branch Id */
+            branch_id: number;
+            /** Name */
+            name: string;
+            /** Amount */
+            amount: number;
+        };
+        /** BranchCashOut */
+        BranchCashOut: {
+            /** Branch Id */
+            branch_id: number;
+            /** Name */
+            name: string;
+            /** Short Name */
+            short_name: string;
+            /** Opening */
+            opening: number | null;
+            /** Inflow */
+            inflow: number;
+            /** Outflow */
+            outflow: number;
+            /** Net */
+            net: number;
+            /** Closing */
+            closing: number | null;
+            /** Diff */
+            diff: number | null;
+        };
         /** BranchOut */
         BranchOut: {
             /** Id */
@@ -846,6 +1137,121 @@ export interface components {
             published_at: string | null;
             /** Active */
             active: boolean;
+        };
+        /** CalendarDayOut */
+        CalendarDayOut: {
+            /**
+             * Date
+             * Format: date
+             */
+            date: string;
+            /** Taxes */
+            taxes: number;
+            /** Salary */
+            salary: number;
+            /** Loans */
+            loans: number;
+            /** Contracts */
+            contracts: number;
+            /** Total */
+            total: number;
+        };
+        /** CalendarOut */
+        CalendarOut: {
+            /** As Of */
+            as_of: string | null;
+            /** Start */
+            start: string | null;
+            /** Days */
+            days: components["schemas"]["CalendarDayOut"][];
+            /** Total */
+            total: number;
+            /** Balance */
+            balance: number | null;
+            /** Coverage */
+            coverage: number | null;
+        };
+        /** CashKpisOut */
+        CashKpisOut: {
+            /** Opening */
+            opening: number | null;
+            /** Inflow */
+            inflow: number;
+            /** Outflow */
+            outflow: number;
+            /** Net */
+            net: number;
+            /** Closing */
+            closing: number | null;
+            /** Diff */
+            diff: number | null;
+            /** Opening Prev */
+            opening_prev: number | null;
+            /** Inflow Prev */
+            inflow_prev: number;
+            /** Outflow Prev */
+            outflow_prev: number;
+            /** Net Prev */
+            net_prev: number;
+            /** Closing Prev */
+            closing_prev: number | null;
+            /** Diff Prev */
+            diff_prev: number | null;
+            /** Has Data */
+            has_data: boolean;
+        };
+        /** ContractRowOut */
+        ContractRowOut: {
+            /** Contract Id */
+            contract_id: number;
+            /** Number */
+            number: string;
+            /** Cp Name */
+            cp_name: string;
+            /** Branch Id */
+            branch_id: number;
+            /** Branch Name */
+            branch_name: string;
+            /** Kind */
+            kind: string;
+            /** Amount */
+            amount: number;
+            /** Overdue */
+            overdue: number;
+            /** Overdue Days */
+            overdue_days: number;
+            /** End Date */
+            end_date: string | null;
+        };
+        /** DebtBranchRowOut */
+        DebtBranchRowOut: {
+            /** Branch Id */
+            branch_id: number;
+            /** Name */
+            name: string;
+            /** Receivable */
+            receivable: number;
+            /** Payable */
+            payable: number;
+            /** Overdue Payable */
+            overdue_payable: number;
+        };
+        /** DetailRowOut */
+        DetailRowOut: {
+            /** Branch Id */
+            branch_id: number;
+            /** Branch Name */
+            branch_name: string;
+            /** Direction */
+            direction: string;
+            /** Item Id */
+            item_id: number;
+            /** Item Name */
+            item_name: string;
+            /** Activity */
+            activity: string;
+            /** Amount */
+            amount: number;
         };
         /** EnrollConfirmOut */
         EnrollConfirmOut: {
@@ -960,6 +1366,25 @@ export interface components {
                 [key: string]: unknown;
             };
         };
+        /** ExportLogIn */
+        ExportLogIn: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "csv" | "png";
+            section: components["schemas"]["Section"];
+            /** Page */
+            page: string;
+            /** Card */
+            card: string;
+            /** Br */
+            br?: number | null;
+            /** Per */
+            per?: string | null;
+            /** Rows */
+            rows?: number | null;
+        };
         /** FinAssumptionItem */
         FinAssumptionItem: {
             /**
@@ -1010,10 +1435,150 @@ export interface components {
             /** Active Build Id */
             active_build_id: number | null;
         };
+        /** FundRowOut */
+        FundRowOut: {
+            /** Key */
+            key: number;
+            /** Name */
+            name: string;
+            /** Allocated */
+            allocated: number;
+            /** Used */
+            used: number;
+            /** Share */
+            share: number | null;
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
+        };
+        /** ItemAmountOut */
+        ItemAmountOut: {
+            /** Item Id */
+            item_id: number;
+            /** Code */
+            code: string;
+            /** Name */
+            name: string;
+            /** Activity */
+            activity: string;
+            /** Amount */
+            amount: number;
+        };
+        /** ItemBranchRowOut */
+        ItemBranchRowOut: {
+            /** Branch Id */
+            branch_id: number;
+            /** Name */
+            name: string;
+            /** Fact */
+            fact: number;
+            /** Plan */
+            plan: number | null;
+        };
+        /** ItemBranchesOut */
+        ItemBranchesOut: {
+            period: components["schemas"]["ReportPeriodOut"];
+            item: components["schemas"]["ItemInfoOut"];
+            /** Total */
+            total: number;
+            /** Rows */
+            rows: components["schemas"]["ItemBranchRowOut"][];
+        };
+        /** ItemInfoOut */
+        ItemInfoOut: {
+            /** Item Id */
+            item_id: number;
+            /** Code */
+            code: string;
+            /** Name */
+            name: string;
+            /** Activity */
+            activity: string;
+            /** Direction */
+            direction: string;
+        };
+        /** KaznaCalendarOut */
+        KaznaCalendarOut: {
+            period: components["schemas"]["ReportPeriodOut"];
+            calendar: components["schemas"]["CalendarOut"];
+            /** Banks */
+            banks: components["schemas"]["BankBalanceOut"][];
+            /** Requests */
+            requests: components["schemas"]["RequestsRowOut"][];
+        };
+        /** KaznaCelevyeOut */
+        KaznaCelevyeOut: {
+            period: components["schemas"]["ReportPeriodOut"];
+            /** Sources */
+            sources: components["schemas"]["FundRowOut"][];
+            /** Branches */
+            branches: components["schemas"]["FundRowOut"][];
+        };
+        /** KaznaDogovoryOut */
+        KaznaDogovoryOut: {
+            period: components["schemas"]["ReportPeriodOut"];
+            kpis: components["schemas"]["KaznaKpisOut"];
+            /** Contracts */
+            contracts: components["schemas"]["ContractRowOut"][];
+            /** By Branch */
+            by_branch: components["schemas"]["DebtBranchRowOut"][];
+        };
+        /** KaznaKpisOut */
+        KaznaKpisOut: {
+            /** Balance */
+            balance: number | null;
+            /**
+             * Balance Date
+             * Format: date
+             */
+            balance_date: string;
+            /** Banks */
+            banks: number;
+            /** Plan */
+            plan: number;
+            /** Fact */
+            fact: number;
+            /** Execution */
+            execution: number | null;
+            /** Orders Count */
+            orders_count: number;
+            /** Orders Amount */
+            orders_amount: number;
+            /** Requests Count */
+            requests_count: number;
+            /** Requests Amount */
+            requests_amount: number;
+            /** Receivable */
+            receivable: number | null;
+            /** Payable */
+            payable: number | null;
+            /** Overdue Payable */
+            overdue_payable: number | null;
+        };
+        /** KaznaPlatezhiOut */
+        KaznaPlatezhiOut: {
+            period: components["schemas"]["ReportPeriodOut"];
+            kpis: components["schemas"]["KaznaKpisOut"];
+            /** Plan Fact */
+            plan_fact: components["schemas"]["PlanFactRowOut"][];
+            /** Orders */
+            orders: components["schemas"]["OrderStatusOut"][];
+        };
+        /** KaznaSvodOut */
+        KaznaSvodOut: {
+            period: components["schemas"]["ReportPeriodOut"];
+            kpis: components["schemas"]["KaznaKpisOut"];
+            /** Plan Fact */
+            plan_fact: components["schemas"]["PlanFactRowOut"][];
+            /** Orders */
+            orders: components["schemas"]["OrderStatusOut"][];
+            calendar: components["schemas"]["CalendarOut"];
+            /** Banks */
+            banks: components["schemas"]["BankBalanceOut"][];
+            /** Contracts */
+            contracts: components["schemas"]["ContractRowOut"][];
         };
         /** KeyOut */
         KeyOut: {
@@ -1105,6 +1670,76 @@ export interface components {
             /** Mfa Token */
             mfa_token: string;
         };
+        /** MonthPointOut */
+        MonthPointOut: {
+            /** Month Id */
+            month_id: number;
+            /** Inflow */
+            inflow: number;
+            /** Outflow */
+            outflow: number;
+            /** Closing */
+            closing: number | null;
+            /** Inflow Prev */
+            inflow_prev: number;
+            /** Outflow Prev */
+            outflow_prev: number;
+        };
+        /** ObzorExcelOut */
+        ObzorExcelOut: {
+            period: components["schemas"]["ReportPeriodOut"];
+            kpis: components["schemas"]["CashKpisOut"];
+            /** Branches */
+            branches: components["schemas"]["BranchCashOut"][];
+            total: components["schemas"]["BranchCashOut"];
+            /** Detail */
+            detail: components["schemas"]["DetailRowOut"][];
+        };
+        /** ObzorFlowOut */
+        ObzorFlowOut: {
+            period: components["schemas"]["ReportPeriodOut"];
+            kpis: components["schemas"]["CashKpisOut"];
+            /** Direction */
+            direction: string;
+            /** Months */
+            months: number[];
+            /** Series */
+            series: components["schemas"]["SeriesOut"][];
+            /** Items */
+            items: components["schemas"]["ItemAmountOut"][];
+            /** Activity */
+            activity: components["schemas"]["ActivityAmountOut"][];
+            /** Banks */
+            banks: components["schemas"]["BankAmountOut"][];
+            /** Branches */
+            branches: components["schemas"]["BranchAmountOut"][];
+        };
+        /** ObzorSvodOut */
+        ObzorSvodOut: {
+            period: components["schemas"]["ReportPeriodOut"];
+            kpis: components["schemas"]["CashKpisOut"];
+            /** Months */
+            months: components["schemas"]["MonthPointOut"][];
+            /** Activity */
+            activity: components["schemas"]["ActivityAmountOut"][];
+            /** Branches */
+            branches: components["schemas"]["BranchCashOut"][];
+            /** Items In */
+            items_in: components["schemas"]["ItemAmountOut"][];
+            /** Items Out */
+            items_out: components["schemas"]["ItemAmountOut"][];
+            /** Stations */
+            stations: components["schemas"]["StationOut"][];
+        };
+        /** OrderStatusOut */
+        OrderStatusOut: {
+            /** Status */
+            status: string;
+            /** Count */
+            count: number;
+            /** Amount */
+            amount: number;
+        };
         /** Page[AuditOut] */
         Page_AuditOut_: {
             /** Items */
@@ -1183,6 +1818,23 @@ export interface components {
             /** Description */
             description: string;
         };
+        /** PlanFactRowOut */
+        PlanFactRowOut: {
+            /** Item Id */
+            item_id: number;
+            /** Name */
+            name: string;
+            /** Activity */
+            activity: string;
+            /** Plan */
+            plan: number;
+            /** Fact */
+            fact: number;
+            /** Execution */
+            execution: number | null;
+            /** Deviation */
+            deviation: number;
+        };
         /** PositionIn */
         PositionIn: {
             /** Code */
@@ -1236,6 +1888,36 @@ export interface components {
          * @enum {string}
          */
         Purpose: "pii" | "bank" | "mfa" | "integration_creds" | "audit_meta" | "audit_chain";
+        /** ReportPeriodOut */
+        ReportPeriodOut: {
+            /** Code */
+            code: string;
+            /** Label */
+            label: string;
+            /**
+             * Date From
+             * Format: date
+             */
+            date_from: string;
+            /**
+             * Date To
+             * Format: date
+             */
+            date_to: string;
+            /** Open Last */
+            open_last: boolean;
+        };
+        /** RequestsRowOut */
+        RequestsRowOut: {
+            /** Branch Id */
+            branch_id: number;
+            /** Name */
+            name: string;
+            /** Count */
+            count: number;
+            /** Amount */
+            amount: number;
+        };
         /** RoleIn */
         RoleIn: {
             /** Code */
@@ -1285,6 +1967,20 @@ export interface components {
             /** Reencrypted */
             reencrypted: number;
         };
+        /**
+         * Section
+         * @enum {string}
+         */
+        Section: "obzor" | "kazna" | "kredity" | "finmodel" | "zakupki" | "sklad" | "proizvodstvo" | "investicii" | "kadry";
+        /** SeriesOut */
+        SeriesOut: {
+            /** Key */
+            key: string;
+            /** Name */
+            name: string;
+            /** Values */
+            values: number[];
+        };
         /** SessionOut */
         SessionOut: {
             /**
@@ -1321,11 +2017,96 @@ export interface components {
             updated_by: number | null;
             /** Updated At */
             updated_at: string | null;
+            /** Default */
+            default: unknown;
+            /**
+             * Source
+             * @enum {string}
+             */
+            source: "panel" | "env" | "default";
+            /** Category */
+            category: string;
+            /** Title */
+            title: string;
+            /** Kind */
+            kind: string;
+            /** Perm */
+            perm: string;
+            /** Guarded */
+            guarded: boolean;
+            /** Step Up */
+            step_up: boolean;
+            /**
+             * Apply
+             * @enum {string}
+             */
+            apply: "live" | "next_run";
+            /** Unit */
+            unit: string;
+            /** Lo */
+            lo: number | null;
+            /** Hi */
+            hi: number | null;
         };
         /** SettingUpdate */
         SettingUpdate: {
             /** Value */
             value: unknown;
+            /** Expected Version */
+            expected_version?: number | null;
+            /** Reason */
+            reason?: string | null;
+            /** Otp */
+            otp?: string | null;
+        };
+        /** SettingVersionOut */
+        SettingVersionOut: {
+            /** Version */
+            version: number;
+            /** Value */
+            value: unknown;
+            /** Updated By */
+            updated_by: number | null;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /** StationOut */
+        StationOut: {
+            /** Branch Id */
+            branch_id: number;
+            /** Code */
+            code: string;
+            /** Name */
+            name: string;
+            /** Short Name */
+            short_name: string;
+            /** Kind */
+            kind: string;
+            /** Capacity Mw */
+            capacity_mw: number | null;
+            /** Lat */
+            lat: number | null;
+            /** Lon */
+            lon: number | null;
+            /** Inflow */
+            inflow: number;
+            /** Outflow */
+            outflow: number;
+            /** Closing */
+            closing: number | null;
+            /** Receivable */
+            receivable: number | null;
+            /** Payable */
+            payable: number | null;
+            /** Overdue Payable */
+            overdue_payable: number | null;
+            /** Production */
+            production?: {
+                [key: string]: number;
+            } | null;
         };
         /** TemporaryPassword */
         TemporaryPassword: {
@@ -1623,6 +2404,7 @@ export interface operations {
             query?: never;
             header?: {
                 "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
             };
             path?: never;
             cookie?: {
@@ -1657,6 +2439,7 @@ export interface operations {
             query?: never;
             header?: {
                 "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
             };
             path?: never;
             cookie?: {
@@ -1693,6 +2476,7 @@ export interface operations {
             query?: never;
             header?: {
                 "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
             };
             path?: never;
             cookie?: {
@@ -1727,6 +2511,7 @@ export interface operations {
             query?: never;
             header?: {
                 "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
             };
             path: {
                 session_id: string;
@@ -1765,6 +2550,7 @@ export interface operations {
             };
             header?: {
                 "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
             };
             path?: never;
             cookie?: {
@@ -1799,6 +2585,7 @@ export interface operations {
             query?: never;
             header?: {
                 "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
             };
             path?: never;
             cookie?: {
@@ -1837,6 +2624,7 @@ export interface operations {
             query?: never;
             header?: {
                 "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
             };
             path: {
                 user_id: number;
@@ -1877,6 +2665,7 @@ export interface operations {
             query?: never;
             header?: {
                 "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
             };
             path: {
                 user_id: number;
@@ -1913,6 +2702,7 @@ export interface operations {
             query?: never;
             header?: {
                 "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
             };
             path: {
                 user_id: number;
@@ -1949,6 +2739,7 @@ export interface operations {
             query?: never;
             header?: {
                 "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
             };
             path: {
                 user_id: number;
@@ -1985,6 +2776,7 @@ export interface operations {
             query?: never;
             header?: {
                 "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
             };
             path: {
                 user_id: number;
@@ -2019,6 +2811,7 @@ export interface operations {
             query?: never;
             header?: {
                 "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
             };
             path?: never;
             cookie?: {
@@ -2053,6 +2846,7 @@ export interface operations {
             query?: never;
             header?: {
                 "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
             };
             path?: never;
             cookie?: {
@@ -2087,6 +2881,7 @@ export interface operations {
             query?: never;
             header?: {
                 "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
             };
             path?: never;
             cookie?: {
@@ -2125,6 +2920,7 @@ export interface operations {
             query?: never;
             header?: {
                 "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
             };
             path: {
                 role_id: number;
@@ -2165,6 +2961,7 @@ export interface operations {
             query?: never;
             header?: {
                 "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
             };
             path?: never;
             cookie?: {
@@ -2199,6 +2996,7 @@ export interface operations {
             query?: never;
             header?: {
                 "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
             };
             path?: never;
             cookie?: {
@@ -2237,6 +3035,7 @@ export interface operations {
             query?: never;
             header?: {
                 "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
             };
             path: {
                 position_id: number;
@@ -2285,6 +3084,7 @@ export interface operations {
             };
             header?: {
                 "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
             };
             path?: never;
             cookie?: {
@@ -2325,6 +3125,7 @@ export interface operations {
             };
             header?: {
                 "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
             };
             path?: never;
             cookie?: {
@@ -2359,6 +3160,7 @@ export interface operations {
             query?: never;
             header?: {
                 "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
             };
             path?: never;
             cookie?: {
@@ -2393,6 +3195,7 @@ export interface operations {
             query?: never;
             header?: {
                 "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
             };
             path?: never;
             cookie?: {
@@ -2427,6 +3230,7 @@ export interface operations {
             query?: never;
             header?: {
                 "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
             };
             path: {
                 purpose: components["schemas"]["Purpose"];
@@ -2463,6 +3267,7 @@ export interface operations {
             query?: never;
             header?: {
                 "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
             };
             path?: never;
             cookie?: {
@@ -2497,6 +3302,7 @@ export interface operations {
             query?: never;
             header?: {
                 "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
             };
             path?: never;
             cookie?: {
@@ -2531,6 +3337,7 @@ export interface operations {
             query?: never;
             header?: {
                 "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
             };
             path?: never;
             cookie?: {
@@ -2565,6 +3372,7 @@ export interface operations {
             query?: never;
             header?: {
                 "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
             };
             path?: never;
             cookie?: {
@@ -2594,6 +3402,503 @@ export interface operations {
             };
         };
     };
+    svod_api_v1_obzor_svod_get: {
+        parameters: {
+            query?: {
+                br?: number | null;
+                per?: string;
+            };
+            header?: {
+                "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                "__Host-ugk_session"?: string | null;
+                "__Host-ugk_csrf"?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ObzorSvodOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    postup_api_v1_obzor_postup_get: {
+        parameters: {
+            query?: {
+                br?: number | null;
+                per?: string;
+            };
+            header?: {
+                "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                "__Host-ugk_session"?: string | null;
+                "__Host-ugk_csrf"?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ObzorFlowOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    rasxod_api_v1_obzor_rasxod_get: {
+        parameters: {
+            query?: {
+                br?: number | null;
+                per?: string;
+            };
+            header?: {
+                "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                "__Host-ugk_session"?: string | null;
+                "__Host-ugk_csrf"?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ObzorFlowOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    excel_api_v1_obzor_excel_get: {
+        parameters: {
+            query?: {
+                br?: number | null;
+                per?: string;
+            };
+            header?: {
+                "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                "__Host-ugk_session"?: string | null;
+                "__Host-ugk_csrf"?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ObzorExcelOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    item_api_v1_obzor_items__item_id__get: {
+        parameters: {
+            query?: {
+                br?: number | null;
+                per?: string;
+            };
+            header?: {
+                "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
+            };
+            path: {
+                item_id: number;
+            };
+            cookie?: {
+                "__Host-ugk_session"?: string | null;
+                "__Host-ugk_csrf"?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ItemBranchesOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    svod_api_v1_kazna_svod_get: {
+        parameters: {
+            query?: {
+                br?: number | null;
+                per?: string;
+            };
+            header?: {
+                "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                "__Host-ugk_session"?: string | null;
+                "__Host-ugk_csrf"?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KaznaSvodOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    platezhi_api_v1_kazna_platezhi_get: {
+        parameters: {
+            query?: {
+                br?: number | null;
+                per?: string;
+            };
+            header?: {
+                "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                "__Host-ugk_session"?: string | null;
+                "__Host-ugk_csrf"?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KaznaPlatezhiOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    platezhi_item_api_v1_kazna_platezhi_items__item_id__get: {
+        parameters: {
+            query?: {
+                br?: number | null;
+                per?: string;
+            };
+            header?: {
+                "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
+            };
+            path: {
+                item_id: number;
+            };
+            cookie?: {
+                "__Host-ugk_session"?: string | null;
+                "__Host-ugk_csrf"?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ItemBranchesOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    calendar_page_api_v1_kazna_calendar_get: {
+        parameters: {
+            query?: {
+                br?: number | null;
+                per?: string;
+            };
+            header?: {
+                "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                "__Host-ugk_session"?: string | null;
+                "__Host-ugk_csrf"?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KaznaCalendarOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    dogovory_api_v1_kazna_dogovory_get: {
+        parameters: {
+            query?: {
+                br?: number | null;
+                per?: string;
+            };
+            header?: {
+                "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                "__Host-ugk_session"?: string | null;
+                "__Host-ugk_csrf"?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KaznaDogovoryOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    celevye_api_v1_kazna_celevye_get: {
+        parameters: {
+            query?: {
+                br?: number | null;
+                per?: string;
+            };
+            header?: {
+                "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                "__Host-ugk_session"?: string | null;
+                "__Host-ugk_csrf"?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KaznaCelevyeOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    excel_xlsx_api_v1_obzor_excel_xlsx_get: {
+        parameters: {
+            query?: {
+                br?: number | null;
+                per?: string;
+            };
+            header?: {
+                "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                "__Host-ugk_session"?: string | null;
+                "__Host-ugk_csrf"?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_log_api_v1_exports_log_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                "__Host-ugk_session"?: string | null;
+                "__Host-ugk_csrf"?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExportLogIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_runs_api_v1_admin_etl_runs_get: {
         parameters: {
             query?: {
@@ -2602,6 +3907,7 @@ export interface operations {
             };
             header?: {
                 "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
             };
             path?: never;
             cookie?: {
@@ -2636,6 +3942,7 @@ export interface operations {
             query?: never;
             header?: {
                 "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
             };
             path: {
                 run_id: number;
@@ -2672,6 +3979,7 @@ export interface operations {
             query?: never;
             header?: {
                 "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
             };
             path?: never;
             cookie?: {
@@ -2710,6 +4018,7 @@ export interface operations {
             query?: never;
             header?: {
                 "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
             };
             path?: never;
             cookie?: {
@@ -2744,6 +4053,7 @@ export interface operations {
             query?: never;
             header?: {
                 "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
             };
             path?: never;
             cookie?: {
@@ -2782,6 +4092,7 @@ export interface operations {
             query?: never;
             header?: {
                 "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
             };
             path?: never;
             cookie?: {
@@ -2816,6 +4127,7 @@ export interface operations {
             query?: never;
             header?: {
                 "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
             };
             path: {
                 code: string;
@@ -2852,6 +4164,7 @@ export interface operations {
             query?: never;
             header?: {
                 "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
             };
             path: {
                 code: string;
@@ -2894,6 +4207,7 @@ export interface operations {
             };
             header?: {
                 "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
             };
             path?: never;
             cookie?: {
@@ -2928,6 +4242,7 @@ export interface operations {
             query?: never;
             header?: {
                 "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
             };
             path?: never;
             cookie?: {
@@ -2966,6 +4281,7 @@ export interface operations {
             query?: never;
             header?: {
                 "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
             };
             path?: never;
             cookie?: {
@@ -2995,11 +4311,49 @@ export interface operations {
             };
         };
     };
+    setting_history_api_v1_admin_settings__key__history_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
+            };
+            path: {
+                key: string;
+            };
+            cookie?: {
+                "__Host-ugk_session"?: string | null;
+                "__Host-ugk_csrf"?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SettingVersionOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     update_setting_api_v1_admin_settings__key__put: {
         parameters: {
             query?: never;
             header?: {
                 "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
             };
             path: {
                 key: string;

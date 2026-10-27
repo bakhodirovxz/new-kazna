@@ -78,7 +78,7 @@ export function SectionScreen({ me, menu, route, tools }: SectionScreenProps) {
         ) : hasPage ? (
           <PageBoundary key={`${section.id}/${page.id}`} onRetry={() => resolveSectionPage.reset(section.id, page.id)}>
             <Suspense fallback={<PageSkeleton />}>
-              <PageView section={section.id} page={page.id} filters={filters.state} />
+              <PageView section={section.id} page={page.id} filters={filters.state} onBranch={filters.setBranch} />
             </Suspense>
           </PageBoundary>
         ) : (

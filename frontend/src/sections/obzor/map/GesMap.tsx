@@ -1,5 +1,5 @@
 import { useId, type KeyboardEvent } from 'react';
-import type { StationOut } from './types';
+import type { StationOut } from '../../../api/types';
 import { formatMoney } from '../../../dash/money';
 import { t } from '../../../i18n';
 import { formatNumber } from '../../../i18n/format';

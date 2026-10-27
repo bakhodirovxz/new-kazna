@@ -6,6 +6,8 @@ export interface SectionPageProps {
   section: string;
   page: string;
   filters: FilterState;
+  /** TZ 6: filial qatori bosilganda filtrni o'zgartirish (qulflangan foydalanuvchida — o'zgarmaydi). */
+  onBranch(br: number | null): void;
 }
 
 export interface SectionPageModule {

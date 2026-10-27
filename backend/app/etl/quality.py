@@ -106,7 +106,7 @@ def _control_totals(conn: Connection, source: str, window: Window,
 # ko'rinsa (oy boshidan OLDIN unga tegishli hech qanday qoldiq yozuvi yo'q), o'sha
 # filial-oy uchun "nachalniy qoldiq" TO'LIQ emas (yangi hisob ulushi tushib qoladi) — bunday
 # filial-oylar tekshirib bo'lmaydi (`unverifiable`) va `violations`dan chiqarib tashlanadi.
-# Bu Task-6 agregatlarini o'zgartirmaydi — bevosita `dwh.fact_balance`ga so'rov beriladi.
+# Bu Task-6 agregatlarini o'zgartirmaydi — bevosita `dwh.balance_effective`ga so'rov beriladi.
 #
 # R2-1: oy chegaralari `date_trunc('month', :date_from)`dan (HAQIQIY TAKVIM oyi, 1-kundan)
 # hisoblanadi, xom `:date_from`dan emas — aks holda `:date_from` oy o'rtasida bo'lganda
@@ -127,7 +127,7 @@ _UNVERIFIABLE_SQL = text(
     "  GROUP BY month_id),\n"
     "first_ever AS (\n"
     "  SELECT branch_id, bank_id, min(date_id) AS first_date_id\n"
-    "  FROM dwh.fact_balance GROUP BY branch_id, bank_id)\n"
+    "  FROM dwh.balance_effective GROUP BY branch_id, bank_id)\n"
     "SELECT DISTINCT fe.branch_id, m.month_id\n"
     "FROM first_ever fe\n"
     "JOIN months m ON fe.first_date_id BETWEEN m.first_id AND m.end_id\n"
@@ -135,14 +135,48 @@ _UNVERIFIABLE_SQL = text(
 )
 
 
+# «Ввод данных»: filial-oyning kiruvchi YOKI chiquvchi qoldig'ini bergan qator `manual` bo'lsa,
+# 1C talabnomalari bilan "Разница" -- manbalararo solishtirish, yuklash nuqsoni emas
+# (`unverifiable`, sabab `manual_balance`). Qoldiq tanlash agregatdagi lateral bilan bir xil:
+# har hisob uchun oydan oldingi / oy oxirigacha OXIRGI yozuv.
+_MANUAL_BALANCE_SQL = text(
+    "WITH months AS (\n"
+    "  SELECT month_id, min(date_id) AS first_id, max(date_id) AS end_id\n"
+    "  FROM dwh.dim_date\n"
+    "  WHERE date BETWEEN date_trunc('month', CAST(:date_from AS date))::date\n"
+    "    AND CAST(:date_to AS date)\n"
+    "  GROUP BY month_id),\n"
+    "accounts AS (SELECT DISTINCT branch_id, bank_id FROM dwh.balance_effective)\n"
+    "SELECT DISTINCT a.branch_id, m.month_id\n"
+    "FROM accounts a CROSS JOIN months m\n"
+    "WHERE 'manual' IN (\n"
+    "  (SELECT fb.src_system FROM dwh.balance_effective fb WHERE fb.branch_id = a.branch_id\n"
+    "     AND fb.bank_id = a.bank_id AND fb.date_id < m.first_id\n"
+    "     ORDER BY fb.date_id DESC LIMIT 1),\n"
+    "  (SELECT fb.src_system FROM dwh.balance_effective fb WHERE fb.branch_id = a.branch_id\n"
+    "     AND fb.bank_id = a.bank_id AND fb.date_id <= m.end_id\n"
+    "     ORDER BY fb.date_id DESC LIMIT 1))\n"
+    "ORDER BY m.month_id, a.branch_id"
+)
+
+
+def _unverifiable(conn: Connection, window: Window) -> list[dict[str, Any]]:
+    params = {"date_from": window.date_from, "date_to": window.date_to}
+    found: dict[tuple[int, int], dict[str, Any]] = {
+        (r.branch_id, r.month_id): {"branch_id": r.branch_id, "month_id": r.month_id}
+        for r in conn.execute(_UNVERIFIABLE_SQL, params).all()
+    }
+    for r in conn.execute(_MANUAL_BALANCE_SQL, params).all():
+        entry = found.setdefault((r.branch_id, r.month_id),
+                                 {"branch_id": r.branch_id, "month_id": r.month_id})
+        entry["reason"] = "manual_balance"
+    return [found[k] for k in sorted(found, key=lambda k: (k[1], k[0]))]
+
+
 def _balance_identity(conn: Connection, build_id: int, window: Window,
                       tolerance: Decimal) -> CheckResult:
     months = window.month_ids()
-    unverifiable = [
-        {"branch_id": r.branch_id, "month_id": r.month_id}
-        for r in conn.execute(_UNVERIFIABLE_SQL,
-                              {"date_from": window.date_from, "date_to": window.date_to}).all()
-    ]
+    unverifiable = _unverifiable(conn, window)
     skip = {(u["branch_id"], u["month_id"]) for u in unverifiable}
     rows = conn.execute(
         text("SELECT branch_id, month_id, diff, inflow + outflow AS turnover "
@@ -207,7 +241,7 @@ def _capacity(conn: Connection, window: Window) -> CheckResult:
     rows = conn.execute(
         text("WITH daily AS (\n"
              "  SELECT g.branch_id, g.date_id, g.src_system, sum(g.generation) AS generation\n"
-             "  FROM dwh.fact_generation g\n"
+             "  FROM dwh.fact_generation g\n"  # manual-ok: faqat fakt qatorlari (reja emas)
              "  WHERE g.date_id BETWEEN :f AND :t\n"
              "  GROUP BY g.branch_id, g.date_id, g.src_system)\n"
              "SELECT d.branch_id, d.date_id, d.generation, v.capacity_mw\n"

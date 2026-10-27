@@ -131,12 +131,12 @@ bal AS (
   CROSS JOIN months m
   LEFT JOIN LATERAL (
     SELECT sum(z.balance) AS total FROM (
-      SELECT DISTINCT ON (fb.bank_id) fb.balance FROM dwh.fact_balance fb
+      SELECT DISTINCT ON (fb.bank_id) fb.balance FROM dwh.balance_effective fb
       WHERE fb.branch_id = b.branch_id AND fb.date_id < m.first_id
       ORDER BY fb.bank_id, fb.date_id DESC) z) ob ON true
   LEFT JOIN LATERAL (
     SELECT sum(z.balance) AS total FROM (
-      SELECT DISTINCT ON (fb.bank_id) fb.balance FROM dwh.fact_balance fb
+      SELECT DISTINCT ON (fb.bank_id) fb.balance FROM dwh.balance_effective fb
       WHERE fb.branch_id = b.branch_id AND fb.date_id <= m.end_id
       ORDER BY fb.bank_id, fb.date_id DESC) z) cb ON true)
 SELECT :build_id, bal.branch_id, bal.month_id, 0, coalesce(f.inflow, 0), coalesce(f.outflow, 0),
@@ -163,7 +163,7 @@ INSERT INTO mart.agg_payments_month (build_id, branch_id, month_id, item_id, pla
 WITH {_MONTHS},
 plan AS (
   SELECT p.branch_id, d.month_id, p.item_id, sum(p.amount) AS amount
-  FROM dwh.fact_payment_plan p
+  FROM dwh.payment_plan_effective p
   JOIN dwh.dim_date d ON d.date_id = p.date_id
   JOIN months m ON m.month_id = d.month_id
   WHERE p.doc_type <> :schedule_doc_type

@@ -99,7 +99,7 @@ test('kirituvchi hisob va qoldiq kiritadi, tasdiqlovchi tasdiqlaydi, nashr qilin
   await goto(page, 'vvod/kazna-balance');
   await page.getByRole('button', { name: 'Добавить' }).click();
   await pickFirstBranch(page);
-  await drawer.getByLabel('Счёт').fill(last4);
+  await drawer.getByRole('combobox', { name: 'Счёт' }).fill(last4);
   await drawer.getByRole('option', { name: new RegExp(last4) }).first().click();
   await drawer.getByLabel(/Дата/).fill(lastDayOfPreviousMonth());
   await drawer.getByLabel(/Остаток/).fill('1 500,00');

@@ -39,7 +39,7 @@ router = APIRouter(
     dependencies=[Depends(require_perm(*ALL_DATA_PERMS, Perm.AUDIT_READ, any_of=True))],
 )
 PAGE_SIZE = 100
-OPTION_LIMIT = 50
+OPTION_LIMIT = 500  # FE ro'yxatni to'liq yuklab filtrlaydi; dim_bank 50 dan oshadi
 # dim -> (kod ustuni, ko'rsatiladigan matn SQL); faqat koddan -- foydalanuvchi kiritmaydi.
 _LABELS = {
     "dim_bank": "bank_name || coalesce(' …' || account_last4, '')",

@@ -718,6 +718,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/settings/{key}/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Setting History */
+        get: operations["setting_history_api_v1_admin_settings__key__history_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/settings/{key}": {
         parameters: {
             query?: never;
@@ -728,6 +745,74 @@ export interface paths {
         get?: never;
         /** Update Setting */
         put: operations["update_setting_api_v1_admin_settings__key__put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/integrations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Integrations */
+        get: operations["list_integrations_api_v1_admin_integrations_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/integrations/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Update Integration */
+        put: operations["update_integration_api_v1_admin_integrations__name__put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/integrations/{name}/check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Request Check */
+        post: operations["request_check_api_v1_admin_integrations__name__check_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/integrations/checks/{check_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Check */
+        get: operations["get_check_api_v1_admin_integrations_checks__check_id__get"];
+        put?: never;
         post?: never;
         delete?: never;
         options?: never;
@@ -1015,6 +1100,61 @@ export interface components {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
         };
+        /** IntegrationCheckOut */
+        IntegrationCheckOut: {
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "pending" | "running" | "ok" | "failed";
+            /** Code */
+            code: string | null;
+            /**
+             * Requested At
+             * Format: date-time
+             */
+            requested_at: string;
+            /** Finished At */
+            finished_at: string | null;
+        };
+        /** IntegrationOut */
+        IntegrationOut: {
+            /** Name */
+            name: string;
+            /** Title */
+            title: string;
+            /**
+             * Check In
+             * @enum {string}
+             */
+            check_in: "worker" | "api";
+            /** Endpoint */
+            endpoint: string[];
+            /** Fields */
+            fields: components["schemas"]["SettingOut"][];
+            /** Secrets */
+            secrets: components["schemas"]["SecretStatusOut"][];
+            last_check: components["schemas"]["IntegrationCheckOut"] | null;
+        };
+        /** IntegrationUpdate */
+        IntegrationUpdate: {
+            /** Values */
+            values?: {
+                [key: string]: unknown;
+            };
+            /** Secrets */
+            secrets?: {
+                [key: string]: string | null;
+            };
+            /** Reason */
+            reason?: string | null;
+            /** Otp */
+            otp?: string | null;
+        };
         /** KeyOut */
         KeyOut: {
             /** Purpose */
@@ -1064,6 +1204,8 @@ export interface components {
             branch_ids: number[] | null;
             /** Must Change Password */
             must_change_password: boolean;
+            /** Password Min Length */
+            password_min_length: number;
         };
         /** MenuGroupOut */
         MenuGroupOut: {
@@ -1285,6 +1427,22 @@ export interface components {
             /** Reencrypted */
             reencrypted: number;
         };
+        /** SecretStatusOut */
+        SecretStatusOut: {
+            /** Name */
+            name: string;
+            /** Title */
+            title: string;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "panel" | "env" | "none";
+            /** Updated At */
+            updated_at: string | null;
+            /** Updated By */
+            updated_by: number | null;
+        };
         /** SessionOut */
         SessionOut: {
             /**
@@ -1321,11 +1479,61 @@ export interface components {
             updated_by: number | null;
             /** Updated At */
             updated_at: string | null;
+            /** Default */
+            default: unknown;
+            /**
+             * Source
+             * @enum {string}
+             */
+            source: "panel" | "env" | "default";
+            /** Category */
+            category: string;
+            /** Title */
+            title: string;
+            /** Kind */
+            kind: string;
+            /** Perm */
+            perm: string;
+            /** Guarded */
+            guarded: boolean;
+            /** Step Up */
+            step_up: boolean;
+            /**
+             * Apply
+             * @enum {string}
+             */
+            apply: "live" | "next_run";
+            /** Unit */
+            unit: string;
+            /** Lo */
+            lo: number | null;
+            /** Hi */
+            hi: number | null;
         };
         /** SettingUpdate */
         SettingUpdate: {
             /** Value */
             value: unknown;
+            /** Expected Version */
+            expected_version?: number | null;
+            /** Reason */
+            reason?: string | null;
+            /** Otp */
+            otp?: string | null;
+        };
+        /** SettingVersionOut */
+        SettingVersionOut: {
+            /** Version */
+            version: number;
+            /** Value */
+            value: unknown;
+            /** Updated By */
+            updated_by: number | null;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
         };
         /** TemporaryPassword */
         TemporaryPassword: {
@@ -1623,6 +1831,7 @@ export interface operations {
             query?: never;
             header?: {
                 "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
             };
             path?: never;
             cookie?: {
@@ -1657,6 +1866,7 @@ export interface operations {
             query?: never;
             header?: {
                 "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
             };
             path?: never;
             cookie?: {
@@ -1693,6 +1903,7 @@ export interface operations {
             query?: never;
             header?: {
                 "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
             };
             path?: never;
             cookie?: {
@@ -1727,6 +1938,7 @@ export interface operations {
             query?: never;
             header?: {
                 "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
             };
             path: {
                 session_id: string;
@@ -1765,6 +1977,7 @@ export interface operations {
             };
             header?: {
                 "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
             };
             path?: never;
             cookie?: {
@@ -1799,6 +2012,7 @@ export interface operations {
             query?: never;
             header?: {
                 "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
             };
             path?: never;
             cookie?: {
@@ -1837,6 +2051,7 @@ export interface operations {
             query?: never;
             header?: {
                 "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
             };
             path: {
                 user_id: number;
@@ -1877,6 +2092,7 @@ export interface operations {
             query?: never;
             header?: {
                 "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
             };
             path: {
                 user_id: number;
@@ -1913,6 +2129,7 @@ export interface operations {
             query?: never;
             header?: {
                 "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
             };
             path: {
                 user_id: number;
@@ -1949,6 +2166,7 @@ export interface operations {
             query?: never;
             header?: {
                 "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
             };
             path: {
                 user_id: number;
@@ -1985,6 +2203,7 @@ export interface operations {
             query?: never;
             header?: {
                 "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
             };
             path: {
                 user_id: number;
@@ -2019,6 +2238,7 @@ export interface operations {
             query?: never;
             header?: {
                 "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
             };
             path?: never;
             cookie?: {
@@ -2053,6 +2273,7 @@ export interface operations {
             query?: never;
             header?: {
                 "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
             };
             path?: never;
             cookie?: {
@@ -2087,6 +2308,7 @@ export interface operations {
             query?: never;
             header?: {
                 "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
             };
             path?: never;
             cookie?: {
@@ -2125,6 +2347,7 @@ export interface operations {
             query?: never;
             header?: {
                 "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
             };
             path: {
                 role_id: number;
@@ -2165,6 +2388,7 @@ export interface operations {
             query?: never;
             header?: {
                 "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
             };
             path?: never;
             cookie?: {
@@ -2199,6 +2423,7 @@ export interface operations {
             query?: never;
             header?: {
                 "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
             };
             path?: never;
             cookie?: {
@@ -2237,6 +2462,7 @@ export interface operations {
             query?: never;
             header?: {
                 "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
             };
             path: {
                 position_id: number;
@@ -2285,6 +2511,7 @@ export interface operations {
             };
             header?: {
                 "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
             };
             path?: never;
             cookie?: {
@@ -2325,6 +2552,7 @@ export interface operations {
             };
             header?: {
                 "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
             };
             path?: never;
             cookie?: {
@@ -2359,6 +2587,7 @@ export interface operations {
             query?: never;
             header?: {
                 "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
             };
             path?: never;
             cookie?: {
@@ -2393,6 +2622,7 @@ export interface operations {
             query?: never;
             header?: {
                 "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
             };
             path?: never;
             cookie?: {
@@ -2427,6 +2657,7 @@ export interface operations {
             query?: never;
             header?: {
                 "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
             };
             path: {
                 purpose: components["schemas"]["Purpose"];
@@ -2463,6 +2694,7 @@ export interface operations {
             query?: never;
             header?: {
                 "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
             };
             path?: never;
             cookie?: {
@@ -2497,6 +2729,7 @@ export interface operations {
             query?: never;
             header?: {
                 "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
             };
             path?: never;
             cookie?: {
@@ -2531,6 +2764,7 @@ export interface operations {
             query?: never;
             header?: {
                 "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
             };
             path?: never;
             cookie?: {
@@ -2565,6 +2799,7 @@ export interface operations {
             query?: never;
             header?: {
                 "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
             };
             path?: never;
             cookie?: {
@@ -2602,6 +2837,7 @@ export interface operations {
             };
             header?: {
                 "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
             };
             path?: never;
             cookie?: {
@@ -2636,6 +2872,7 @@ export interface operations {
             query?: never;
             header?: {
                 "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
             };
             path: {
                 run_id: number;
@@ -2672,6 +2909,7 @@ export interface operations {
             query?: never;
             header?: {
                 "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
             };
             path?: never;
             cookie?: {
@@ -2710,6 +2948,7 @@ export interface operations {
             query?: never;
             header?: {
                 "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
             };
             path?: never;
             cookie?: {
@@ -2744,6 +2983,7 @@ export interface operations {
             query?: never;
             header?: {
                 "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
             };
             path?: never;
             cookie?: {
@@ -2782,6 +3022,7 @@ export interface operations {
             query?: never;
             header?: {
                 "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
             };
             path?: never;
             cookie?: {
@@ -2816,6 +3057,7 @@ export interface operations {
             query?: never;
             header?: {
                 "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
             };
             path: {
                 code: string;
@@ -2852,6 +3094,7 @@ export interface operations {
             query?: never;
             header?: {
                 "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
             };
             path: {
                 code: string;
@@ -2894,6 +3137,7 @@ export interface operations {
             };
             header?: {
                 "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
             };
             path?: never;
             cookie?: {
@@ -2928,6 +3172,7 @@ export interface operations {
             query?: never;
             header?: {
                 "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
             };
             path?: never;
             cookie?: {
@@ -2966,6 +3211,7 @@ export interface operations {
             query?: never;
             header?: {
                 "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
             };
             path?: never;
             cookie?: {
@@ -2995,11 +3241,49 @@ export interface operations {
             };
         };
     };
+    setting_history_api_v1_admin_settings__key__history_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
+            };
+            path: {
+                key: string;
+            };
+            cookie?: {
+                "__Host-ugk_session"?: string | null;
+                "__Host-ugk_csrf"?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SettingVersionOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     update_setting_api_v1_admin_settings__key__put: {
         parameters: {
             query?: never;
             header?: {
                 "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
             };
             path: {
                 key: string;
@@ -3022,6 +3306,156 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SettingOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_integrations_api_v1_admin_integrations_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                "__Host-ugk_session"?: string | null;
+                "__Host-ugk_csrf"?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IntegrationOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_integration_api_v1_admin_integrations__name__put: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
+            };
+            path: {
+                name: string;
+            };
+            cookie?: {
+                "__Host-ugk_session"?: string | null;
+                "__Host-ugk_csrf"?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IntegrationUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IntegrationOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    request_check_api_v1_admin_integrations__name__check_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
+            };
+            path: {
+                name: string;
+            };
+            cookie?: {
+                "__Host-ugk_session"?: string | null;
+                "__Host-ugk_csrf"?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IntegrationCheckOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_check_api_v1_admin_integrations_checks__check_id__get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
+            };
+            path: {
+                check_id: number;
+            };
+            cookie?: {
+                "__Host-ugk_session"?: string | null;
+                "__Host-ugk_csrf"?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IntegrationCheckOut"];
                 };
             };
             /** @description Validation Error */

@@ -1,6 +1,6 @@
 import { t } from '../i18n';
 
-/** Backend siyosati (1-reja Global Constraints): ≥12 belgi, 4 turdan kamida 3 tasi, loginsiz. */
+/** Server standarti (≥12); haqiqiy qiymat — `me.password_min_length`. 4 turdan kamida 3 tasi, loginsiz. */
 export const MIN_PASSWORD_LENGTH = 12;
 
 export interface PasswordRules {
@@ -18,19 +18,23 @@ export function characterClasses(password: string): number {
   return count;
 }
 
-export function checkPassword(password: string, username: string): PasswordRules {
+export function checkPassword(
+  password: string,
+  username: string,
+  minLength = MIN_PASSWORD_LENGTH,
+): PasswordRules {
   const folded = password.toLocaleLowerCase();
   return {
-    length: password.length >= MIN_PASSWORD_LENGTH,
+    length: password.length >= minLength,
     classes: characterClasses(password) >= 3,
     noUsername: !username || !folded.includes(username.toLocaleLowerCase()),
   };
 }
 
-export function passwordProblemText(code: string): string {
+export function passwordProblemText(code: string, minLength = MIN_PASSWORD_LENGTH): string {
   switch (code) {
     case 'password_too_short':
-      return t('password.problem.too_short');
+      return t('password.problem.too_short', { n: minLength });
     case 'password_too_simple':
       return t('password.problem.too_simple');
     case 'password_contains_username':

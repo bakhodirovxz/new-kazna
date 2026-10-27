@@ -5,6 +5,9 @@ import { dayStartIso } from '../i18n/format';
 import type {
   AlertRuleOut,
   AuditOut,
+  SettingOut,
+  SettingUpdate,
+  SettingVersionOut,
   BuildOut,
   EtlRequestOut,
   EtlRunDetail,
@@ -34,6 +37,8 @@ import type {
 export const USERS_PAGE_SIZE = 50;
 
 export const adminKeys = {
+  settings: ['admin', 'settings'] as const,
+  integrations: ['admin', 'integrations'] as const,
   users: ['admin', 'users'] as const,
   positions: ['admin', 'positions'] as const,
   roles: ['admin', 'roles'] as const,
@@ -232,6 +237,35 @@ export function useUpdateFinAssumptions() {
   return useMutation({
     mutationFn: (items: FinAssumptionItem[]) =>
       api<FinAssumptionOut[]>('/admin/fin-assumptions', { method: 'PUT', body: { items } }),
+    onSuccess: invalidate,
+    onError,
+    meta: { inline: true },
+  });
+}
+
+export function useSettings() {
+  return useQuery({
+    queryKey: adminKeys.settings,
+    queryFn: ({ signal }) => api<SettingOut[]>('/admin/settings', { signal }),
+    staleTime: 0,
+  });
+}
+
+export function useSettingHistory(key: string | null) {
+  return useQuery({
+    queryKey: [...adminKeys.settings, 'history', key],
+    queryFn: ({ signal }) => api<SettingVersionOut[]>(`/admin/settings/${encodeURIComponent(key ?? '')}/history`, { signal }),
+    enabled: key !== null,
+    staleTime: 0,
+  });
+}
+
+export function useUpdateSetting() {
+  const invalidate = useInvalidate(adminKeys.settings);
+  const onError = useRefetchOnConflict(adminKeys.settings);
+  return useMutation({
+    mutationFn: ({ key, body }: { key: string; body: SettingUpdate }) =>
+      api<SettingOut>(`/admin/settings/${encodeURIComponent(key)}`, { method: 'PUT', body }),
     onSuccess: invalidate,
     onError,
     meta: { inline: true },

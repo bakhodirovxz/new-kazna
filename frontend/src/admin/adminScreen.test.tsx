@@ -34,7 +34,7 @@ describe('AdminScreen', () => {
     });
     renderWithProviders(<Harness me={ME_ADMIN} menu={MENU_FULL} />, { hash: '#admin/users' });
     const side = await screen.findByRole('complementary', { name: 'Администрирование' });
-    expect(within(side).getAllByRole('link')).toHaveLength(8);
+    expect(within(side).getAllByRole('link')).toHaveLength(11);
     expect(within(side).getByRole('link', { name: 'Пользователи' })).toHaveAttribute('aria-current', 'page');
     expect(await screen.findByRole('heading', { level: 1, name: 'Пользователи' })).toBeInTheDocument();
     expect(document.title).toBe('Пользователи | Администрирование | UGEKAZNA');

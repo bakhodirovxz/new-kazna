@@ -43,7 +43,7 @@ export function PasswordChangePage({ me }: { me: MeOut }) {
   const [problems, setProblems] = useState<string[]>([]);
   const [otherError, setOtherError] = useState<unknown>(null);
   const refs = { current: useRef<HTMLInputElement>(null), next: useRef<HTMLInputElement>(null), repeat: useRef<HTMLInputElement>(null) };
-  const rules = checkPassword(next, me.username);
+  const rules = checkPassword(next, me.username, me.password_min_length);
   useDocumentTitle(t('password.docTitle'));
 
   const onSubmit = (event: FormEvent) => {
@@ -100,7 +100,7 @@ export function PasswordChangePage({ me }: { me: MeOut }) {
               <b>{t('password.policyFailed')}</b>
               <ul className="form-error__list">
                 {problems.map((code) => (
-                  <li key={code}>{passwordProblemText(code)}</li>
+                  <li key={code}>{passwordProblemText(code, me.password_min_length)}</li>
                 ))}
               </ul>
             </div>
@@ -134,7 +134,7 @@ export function PasswordChangePage({ me }: { me: MeOut }) {
           onChange={(e) => setNext(e.target.value)}
         />
         <ul className="rules" aria-label={t('password.rulesTitle')}>
-          <Rule id="length" ok={rules.length} text={t('password.rule.length')} />
+          <Rule id="length" ok={rules.length} text={t('password.rule.length', { n: me.password_min_length })} />
           <Rule id="classes" ok={rules.classes} text={t('password.rule.classes')} />
           <Rule id="username" ok={next.length > 0 && rules.noUsername} text={t('password.rule.username')} />
           <Rule id="match" ok={next.length > 0 && next === repeat} text={t('password.rule.match')} />

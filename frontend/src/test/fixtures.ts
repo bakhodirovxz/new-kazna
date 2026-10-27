@@ -12,6 +12,8 @@ export const ALL_PERMISSIONS = [
   'admin:settings',
   'admin:etl',
   'admin:keys',
+  'admin:security',
+  'admin:integrations',
   'audit:read',
 ];
 
@@ -23,6 +25,7 @@ export const ME_ADMIN: MeOut = {
   permissions: ALL_PERMISSIONS,
   branch_ids: null,
   must_change_password: false,
+  password_min_length: 12,
 };
 
 export const ME_BRANCH: MeOut = {
@@ -33,6 +36,7 @@ export const ME_BRANCH: MeOut = {
   permissions: ['section:obzor:view', 'section:kazna:view', 'section:proizvodstvo:view', 'section:sklad:view', 'section:kadry:view', 'export:csv', 'export:xlsx'],
   branch_ids: [3],
   must_change_password: false,
+  password_min_length: 12,
 };
 
 export const ME_AUDITOR: MeOut = {
@@ -43,6 +47,7 @@ export const ME_AUDITOR: MeOut = {
   permissions: ['section:obzor:view', 'audit:read'],
   branch_ids: null,
   must_change_password: false,
+  password_min_length: 12,
 };
 
 const SVOD = { id: 'svod', title: 'Сводка' };

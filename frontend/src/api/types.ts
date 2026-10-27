@@ -55,6 +55,12 @@ export type FinAssumptionOut = Schemas['FinAssumptionOut'];
 export type FinAssumptionItem = Schemas['FinAssumptionItem'];
 export type FinAssumptionsUpdate = Schemas['FinAssumptionsUpdate'];
 export type SettingOut = Schemas['SettingOut'];
+export type SettingUpdate = Schemas['SettingUpdate'];
+export type SettingVersionOut = Schemas['SettingVersionOut'];
+export type SecretStatusOut = Schemas['SecretStatusOut'];
+export type IntegrationCheckOut = Schemas['IntegrationCheckOut'];
+export type IntegrationOut = Schemas['IntegrationOut'];
+export type IntegrationUpdate = Schemas['IntegrationUpdate'];
 
 /** `app.admin.schemas.Page[T]` — generik; generatsiya nomlariga (`Page_UserOut_`) bog'lanmaymiz. */
 export interface Page<T> {

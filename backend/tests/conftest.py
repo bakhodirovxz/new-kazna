@@ -196,3 +196,11 @@ def setting() -> Iterator[Callable[[str, object], None]]:
     yield put
     for key in dict.fromkeys(touched):
         clear_setting(key)
+
+
+@pytest.fixture
+def clean_manual() -> None:
+    """«Ввод данных» jadvallarini testdan oldin tozalaydi (biznes-kalitlar to'qnashmasin)."""
+    with get_engine("migrator").begin() as conn:
+        conn.execute(text(
+            "TRUNCATE core.manual_entry, core.manual_head, core.manual_batch RESTART IDENTITY"))

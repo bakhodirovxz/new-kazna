@@ -142,22 +142,6 @@ STATEMENTS = [
     """,
     "CREATE TRIGGER manual_batch_guard BEFORE UPDATE ON core.manual_batch "
     "FOR EACH ROW EXECUTE FUNCTION core.manual_batch_guard()",
-    # Hech qachon tasdiqlanmagan bosh olib tashlanishi mumkin (draft'dan yangi yozuv chiqarilganda
-    # biznes-kalit band bo'lib qolmasligi uchun); tasdiqlangan bosh -- hech qachon.
-    """
-    CREATE FUNCTION core.manual_head_guard() RETURNS trigger
-    LANGUAGE plpgsql SECURITY INVOKER SET search_path = pg_catalog, pg_temp AS $$
-    BEGIN
-      IF OLD.approved_version IS NULL THEN
-        RETURN OLD;
-      END IF;
-      RAISE EXCEPTION 'manual_head: approved record cannot be deleted'
-        USING ERRCODE = 'check_violation';
-    END
-    $$
-    """,
-    "CREATE TRIGGER manual_head_guard BEFORE DELETE ON core.manual_head "
-    "FOR EACH ROW EXECUTE FUNCTION core.manual_head_guard()",
     # --- Grantlar: ugk_app yozadi (ustun darajasida), ugk_etl faqat o'qiydi ---
     "GRANT SELECT, INSERT ON core.manual_batch, core.manual_head, core.manual_entry TO ugk_app",
     "GRANT UPDATE (status, rows, reason, submitted_at, decided_by, decided_at, decision_comment, "
@@ -165,7 +149,7 @@ STATEMENTS = [
     "GRANT UPDATE (approved_version, approved_deleted, pending_batch_id, version, updated_at, "
     "code) ON core.manual_head TO ugk_app",
     "GRANT UPDATE (bank_enc, pii_enc) ON core.manual_entry TO ugk_app",
-    "GRANT DELETE ON core.manual_entry, core.manual_head TO ugk_app",
+    "GRANT DELETE ON core.manual_entry TO ugk_app",
     "GRANT USAGE ON SEQUENCE core.manual_batch_batch_id_seq, core.manual_head_entry_id_seq, "
     "core.manual_entry_id_seq TO ugk_app",
     "GRANT SELECT ON core.manual_batch, core.manual_head, core.manual_entry TO ugk_etl",
@@ -189,6 +173,5 @@ def downgrade() -> None:
     op.execute("ALTER TABLE dwh.dim_bank DROP COLUMN account_last4")
     for table in ("manual_entry", "manual_head", "manual_batch"):
         op.execute(f"DROP TABLE core.{table}")
-    op.execute("DROP FUNCTION core.manual_head_guard()")
     op.execute("DROP FUNCTION core.manual_batch_guard()")
     op.execute("DROP FUNCTION core.manual_entry_guard()")

@@ -148,25 +148,14 @@ def test_entry_append_only_except_reencrypt() -> None:
         s.execute(text("DELETE FROM core.manual_entry WHERE id = :i"), {"i": row})
 
 
-def test_draft_entry_can_be_deleted() -> None:
+def test_draft_entry_can_be_deleted_but_heads_never() -> None:
     with _as_app(None) as s:
         bid = s.execute(text(NEW_BATCH), {"b": 2}).scalar_one()
         e, row = _mk_entry(s, bid, key="dd")
         s.execute(text("DELETE FROM core.manual_entry WHERE id = :i"), {"i": row})
-        s.execute(text("DELETE FROM core.manual_head WHERE entry_id = :i"), {"i": e})
-        s.commit()
-
-
-def test_approved_head_cannot_be_deleted() -> None:
-    with _as_app(None) as s:
-        bid = s.execute(text(NEW_BATCH), {"b": 2}).scalar_one()
-        e = s.execute(text(
-            "INSERT INTO core.manual_head (entity, branch_id, business_key, approved_version) "
-            "VALUES ('kazna.balance', 2, 'ah', 1) RETURNING entry_id")).scalar_one()
-        with pytest.raises(DBAPIError, match="cannot be deleted"):
+        with pytest.raises(ProgrammingError, match="permission denied"):
             s.execute(text("DELETE FROM core.manual_head WHERE entry_id = :i"), {"i": e})
         s.rollback()
-        del bid
 
 
 def test_etl_reads_but_cannot_write() -> None:

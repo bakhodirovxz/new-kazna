@@ -18,6 +18,7 @@ from tests.manual_helpers import (
     seed_dwh_bank,
 )
 
+pytestmark = pytest.mark.usefixtures("clean_manual")
 BAL = ENTITIES["kazna.balance"]
 BANK = "BA-t4bank0000000001"
 Setting = Callable[[str, object], None]

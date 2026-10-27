@@ -3,13 +3,20 @@
 from __future__ import annotations
 
 import itertools
-from datetime import date
+import json
+import uuid
+from collections.abc import Callable
+from datetime import UTC, date, datetime
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import text
+from sqlalchemy import select, text
 
-from app.core.db import get_engine
+from app.auth.context import AuthContext, build_context
+from app.auth.models import User
+from app.core.db import apply_rls, get_engine, new_session
+from app.core.request_meta import ClientMeta
+from tests.helpers import SeedUser
 
 _n = itertools.count(1)
 
@@ -62,3 +69,47 @@ def migrator_sql(sql: str, **params: Any) -> list[tuple[Any, ...]]:
         conn.execute(text("SELECT set_config('app.scope_all', 'on', true)"))
         res = conn.execute(text(sql), params)
         return [tuple(r) for r in res.all()] if res.returns_rows else []
+
+
+# --- servis testlari: haqiqiy AuthContext + RLS sessiya (har chaqiruv alohida tranzaksiya) ---
+META = ClientMeta(ip="127.0.0.1", ua="pytest", request_id="req-manual")
+
+
+def ctx_of(user: SeedUser) -> AuthContext:
+    with new_session() as s:
+        row = s.execute(select(User).where(User.id == user.id)).scalar_one()
+        return build_context(s, row, uuid.uuid4(), datetime.now(UTC))
+
+
+def run(ctx: AuthContext, fn: Callable[..., Any], /, *args: Any, **kwargs: Any) -> Any:
+    """Servis funksiyasini foydalanuvchi doirasidagi (RLS) yangi sessiyada chaqiradi."""
+    with new_session() as s:
+        apply_rls(s, ctx.branch_ids)
+        try:
+            return fn(s, ctx, META, *args, **kwargs)
+        finally:
+            s.rollback()
+
+
+def read(ctx: AuthContext, fn: Callable[..., Any], /, *args: Any, **kwargs: Any) -> Any:
+    """Faqat o'qish servislari (meta yo'q)."""
+    with new_session() as s:
+        apply_rls(s, ctx.branch_ids)
+        try:
+            return fn(s, ctx, *args, **kwargs)
+        finally:
+            s.rollback()
+
+
+def audit_rows(action: str | None = None) -> list[dict[str, Any]]:
+    sql = "SELECT action, result, user_id, object_id, details FROM core.audit_log"
+    sql += " WHERE action = :a" if action else " WHERE action LIKE 'data.%'"
+    sql += " ORDER BY id"
+    return [
+        {"action": r[0], "result": r[1], "user_id": r[2], "object_id": r[3], "details": r[4]}
+        for r in migrator_sql(sql, **({"a": action} if action else {}))
+    ]
+
+
+def audit_dump() -> str:
+    return json.dumps([r["details"] for r in audit_rows()], ensure_ascii=False, default=str)

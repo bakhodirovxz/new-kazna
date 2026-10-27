@@ -111,9 +111,11 @@ export interface CreateBatchIn {
   reason?: string | null;
 }
 
+/** gcTime: 0 -- `variables` (bank hisob raqami ochiq matnda) MutationCache'da qolmasin. */
 export function useCreateBatch() {
   const invalidate = useInvalidate();
   return useMutation({
+    gcTime: 0,
     mutationFn: (body: CreateBatchIn) => api<EntryBatch>('/data/batches', { method: 'POST', body }),
     onSuccess: invalidate,
   });
@@ -122,6 +124,7 @@ export function useCreateBatch() {
 export function useUpdateBatch() {
   const invalidate = useInvalidate();
   return useMutation({
+    gcTime: 0,
     mutationFn: (v: { id: number; expected_version: number; items: EntryItem[] }) =>
       api<EntryBatch>(`/data/batches/${v.id}`, {
         method: 'PUT',

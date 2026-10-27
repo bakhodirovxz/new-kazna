@@ -1,4 +1,4 @@
-import { screen, within } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import { expectNoAxeViolations } from '../test/axe';
 import { BRANCHES } from '../test/fixtures';
@@ -69,15 +69,16 @@ describe('EntityPage', () => {
     expect(srv.calls.some((c) => c.method === 'POST')).toBe(false);
   });
 
-  it('submits a new record with a canonical value', async () => {
+  it('submits a new record with a canonical value and keeps no variables in the mutation cache', async () => {
     const srv = server(BALANCE, [], { 'POST /data/batches': json({ batch_id: 1, version: 2 }, 201) });
-    const { user } = renderWithProviders(<EntityPage entity={BALANCE} filters={{ br: 3, per: 'ytd' }} />);
+    const { user, client } = renderWithProviders(<EntityPage entity={BALANCE} filters={{ br: 3, per: 'ytd' }} />);
     await user.click(await screen.findByRole('button', { name: 'Добавить' }));
     const dialog = await screen.findByRole('dialog');
     await user.type(within(dialog).getByLabelText(/Дата/), '2026-09-30');
     await user.type(within(dialog).getByLabelText(/Остаток/), '12 345,67');
     await user.click(within(dialog).getByRole('button', { name: 'Отправить на согласование' }));
     await screen.findByText('Отправлено на согласование');
+    await waitFor(() => expect(client.getMutationCache().getAll()).toHaveLength(0));
     expect(srv.calls.find((c) => c.method === 'POST')?.body).toEqual({
       entity: 'kazna.balance', branch_id: 3, origin: 'form', submit: true, reason: null,
       items: [{ entry_id: null, expected_version: null, delete: false,

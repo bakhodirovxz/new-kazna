@@ -16,6 +16,7 @@ Haqiqiy fayllar `deploy/secrets/` da (git'ga tushmaydi). Yaratish: `python scrip
 | pgbackrest_cipher_pass | pgBackRest repo AES-256 paroli — mavjud repo uchun O'ZGARTIRIB BO'LMAYDI |
 | tls_cert.pem | korporativ TLS sertifikati (PEM, to'liq zanjir: server + oraliq CA) |
 | tls_key.pem | shu sertifikatning yopiq kaliti (PEM, parolsiz) |
+| onec_ca_bundle.pem | 1C serveri sertifikatini imzolagan korporativ CA (PEM); bo'sh fayl — tizim CA. 1C login/paroli fayl EMAS — panelda |
 
 Prod (Linux): `sudo scripts/secrets_perms.sh <sirlar papkasi>` — `root:10001` (userns-remap bo'lsa
 `root:<subgid bazasi + 10001>`), fayllar `0440`, papka `0750`. Batafsil: `docs/ops/install-upgrade.md`.

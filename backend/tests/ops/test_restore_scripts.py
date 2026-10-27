@@ -54,6 +54,18 @@ def test_restore_script_always_records_valid_label() -> None:
     assert "code=1" in script  # yozuv yozilmasa, chiqish kodi 0 bo'lmaydi
 
 
+def test_restore_test_never_masks_failed_scratch_cleanup() -> None:
+    script = repo_path("scripts/restore_test.sh").read_text(encoding="utf-8")
+    cleanup = script[script.index("finish()"):script.index("# CLI faqat pgBackRest")]
+    assert "|| true" not in cleanup  # shifrsiz nusxa diskda qolsa, jim o'tib ketmasin
+    assert "vaqtinchalik klaster o'chirilmadi" in cleanup and "code=1" in cleanup
+
+
+def test_backup_health_age_exceeds_schedule_gap() -> None:
+    script = repo_path("deploy/pgbackrest/bin/ugk-backup").read_text(encoding="utf-8")
+    assert "BACKUP_MAX_AGE_SECONDS:=28800" in script  # 8 soat > 6 soatlik oraliq
+
+
 def test_services_have_timeout_hardening_and_alert() -> None:
     services = sorted(repo_path("deploy/systemd").glob("*.service"))
     assert len(services) == 3

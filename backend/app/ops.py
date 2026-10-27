@@ -30,7 +30,8 @@ from app.devtools import LOAD_PREFIX
 from app.dwh.freshness import freshness
 
 RESTORE_KEY = "last_restore_test"
-RESTORE_MAX_AGE = timedelta(days=35)
+# Таймер — первая суббота месяца (интервал до 35 дней) плюс длительность запуска.
+RESTORE_MAX_AGE = timedelta(days=40)
 RTO_SECONDS = 7200
 RPO = timedelta(minutes=15)  # 04b: core.settings'ga ko'chirilishi mumkin
 ARCHIVER_GRACE = timedelta(minutes=5)  # archive_timeout + archive-push davomiyligi uchun zaxira
@@ -229,12 +230,14 @@ def ops_check(
     app_clock: Callable[[], datetime] = _utcnow,
     notes: list[str] | None = None,
     env: str | None = None,
+    collected: list[Problem] | None = None,
 ) -> list[Problem]:
     """`notes` (ixtiyoriy) — muammo bo'lmagan ma'lumot qatorlari (masalan, `skipped` qoidalar).
-    `env` — standart `Settings.env` (test uchun almashtiriladi)."""
+    `env` — standart `Settings.env` (test uchun almashtiriladi). `collected` — chaqiruvchining
+    ro'yxati: keyingi qadam xato bersa ham topilgan muammolar yo'qolmasin."""
     now = now or _utcnow()
     env = env or get_settings().env
-    problems: list[Problem] = []
+    problems: list[Problem] = collected if collected is not None else []
     with get_engine("app").connect() as conn:
         def _days(key: str) -> timedelta:
             return timedelta(days=int(sysconfig.current(conn, key)))
@@ -320,7 +323,11 @@ def ops_check(
             f"Часы приложения и СУБД расходятся на {int(skew.total_seconds())} с — "
             "проверьте chrony/NTP"))
     if tls_cert is not None:
-        problems.extend(check_tls(tls_cert, now, warn=tls_warn, critical=tls_critical))
+        try:
+            problems.extend(check_tls(tls_cert, now, warn=tls_warn, critical=tls_critical))
+        except Exception as exc:  # нечитаемый сертификат не должен скрыть найденные замечания
+            problems.append(Problem("tls_cert_unreadable", "critical",
+                                    f"Не удалось проверить сертификат: {type(exc).__name__}"))
     return problems
 
 

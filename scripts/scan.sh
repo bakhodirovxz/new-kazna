@@ -25,6 +25,18 @@ add_runtime() { # <image nomi> <komponent> <env o'zgaruvchisi>
     python /sbom_runtime.py "/sbom/$1.cdx.json" "$2=${ver#v}"
 }
 mkdir -p build/images build/sbom build/.trivy-cache
+# Korporativ CA runtime image'larida ishonchli bo'lmasligi shart (faqat build vaqtida): regressiya himoyasi.
+ca_file=backend/certs/organization-ca-3.crt
+if [ -f "$ca_file" ]; then
+  ca_line="$(sed -n 2p "$ca_file")"
+  for name in ugekazna-backend ugekazna-web; do
+    hits="$(docker run --rm --entrypoint grep "$name:$VERSION" -cF "$ca_line" /etc/ssl/certs/ca-certificates.crt || true)"
+    if [ "$hits" != 0 ]; then
+      echo "XATO: korporativ CA $name image'iga tushib qolgan" >&2
+      exit 1
+    fi
+  done
+fi
 TRIVY=(docker compose -f deploy/compose.tools.yml run --rm -T trivy)
 status=0
 for name in ugekazna-backend ugekazna-web ugekazna-db ugekazna-redis; do

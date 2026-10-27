@@ -174,7 +174,7 @@ _DEFS: tuple[SettingDef, ...] = (
             title="Запросов API одного пользователя в минуту", **_SEC),
     int_def("ratelimit.password_change_per_15min", 5, 1, 5,
             title="Попыток смены пароля за 15 минут", **_SEC),
-    int_def("ops.restore_max_age_days", 35, 1, 35, category="ops", perm=Perm.ADMIN_SECURITY,
+    int_def("ops.restore_max_age_days", 40, 1, 40, category="ops", perm=Perm.ADMIN_SECURITY,
             guarded=True, title="Проверка восстановления не реже, чем раз в", unit="дн."),
     int_def("ops.dek_max_age_days", 365, 30, 365, category="ops", perm=Perm.ADMIN_SECURITY,
             guarded=True, title="Предупреждать о ротации ключа старше", unit="дн."),

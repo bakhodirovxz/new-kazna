@@ -68,3 +68,13 @@ def test_web_image_caddy_has_no_file_capability() -> None:
     # Yangi fayl sifatida yoziladi: cap_net_bind_service ko'chmaydi (cap_drop ALL: EPERM yo'q).
     text = repo_path("frontend/Dockerfile").read_text(encoding="utf-8")
     assert "COPY --from=caddy-build /caddy-nocap /usr/bin/caddy" in text
+
+
+def test_catch_all_site_has_same_ciphers_and_curves_as_domain_site() -> None:
+    text = _caddy()
+    ciphers = re.findall(r"^\s+ciphers ([^\n]+)$", text, re.M)
+    curves = re.findall(r"^\s+curves ([^\n]+)$", text, re.M)
+    assert len(ciphers) == 2 and len(set(ciphers)) == 1  # begona SNI ham o'sha to'plamni oladi
+    assert len(curves) == 2 and len(set(curves)) == 1
+    catch_all = re.search(r"^https:// \{.*?respond 421", text, re.S | re.M)
+    assert catch_all and "ciphers" in catch_all.group(0)

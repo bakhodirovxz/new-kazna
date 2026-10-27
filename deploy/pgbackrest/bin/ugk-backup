@@ -12,7 +12,7 @@ set -eu
 STANZA=ugk
 : "${BACKUP_FULL_AT:=2000}"
 : "${BACKUP_DIFF_AT:=0200 0800 1400}"
-: "${BACKUP_MAX_AGE_SECONDS:=25200}"
+: "${BACKUP_MAX_AGE_SECONDS:=28800}"
 : "${BACKUP_INITIAL_FULL:=yes}"
 STATE=/tmp/ugk-backup
 mkdir -p "$STATE"

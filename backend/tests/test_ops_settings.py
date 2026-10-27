@@ -19,7 +19,7 @@ def restore_row() -> Iterator[None]:
 
 
 def test_ops_keys_are_tighten_only() -> None:
-    expected = {"ops.restore_max_age_days": (35, "hi"), "ops.dek_max_age_days": (365, "hi"),
+    expected = {"ops.restore_max_age_days": (40, "hi"), "ops.dek_max_age_days": (365, "hi"),
                 "ops.clock_skew_max_seconds": (60, "hi"), "ops.tls_warn_days": (30, "lo"),
                 "ops.tls_critical_days": (7, "lo")}
     for key, (bound, side) in expected.items():

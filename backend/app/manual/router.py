@@ -3,11 +3,9 @@ obyekt/bo'lim ruxsati va filial doirasi servisda tekshiriladi (deny-by-default).
 
 from __future__ import annotations
 
-import hashlib
 from typing import Annotated, Any, Literal
-from urllib.parse import unquote
 
-from fastapi import APIRouter, Depends, Query, Request, Response
+from fastapi import APIRouter, Body, Depends, Query, Request, Response
 from sqlalchemy import text
 from starlette.concurrency import run_in_threadpool
 
@@ -16,7 +14,7 @@ from app.auth.context import AuthContext, Ctx, require_perm
 from app.auth.permissions import ALL_DATA_PERMS, SECTION_TITLES, Perm, data_perm
 from app.core import ratelimit
 from app.core.db import DB
-from app.core.errors import ForbiddenError, NotFoundError, ValidationFailed
+from app.core.errors import AppError, ConflictError, ForbiddenError, NotFoundError, ValidationFailed
 from app.core.request_meta import Meta
 from app.manual import approval, imports, store
 from app.manual.entities import ENTITIES, FieldDef, ManualEntity
@@ -269,39 +267,61 @@ def template_xlsx(entity_id: str, ctx: Ctx) -> Response:
     return _download(imports.template_xlsx(entity), imports.XLSX_TYPE, f"{entity.id}.xlsx")
 
 
+def _remap(exc: AppError, lines: list[int]) -> AppError:
+    """ItemIn indeksi (1 = birinchi ma'lumot qatori) -> fayl qatori; xato shakli bir joyda (M8)."""
+    rows = [{**r, "row": lines[r["row"] - 1] if 0 < r["row"] <= len(lines) else r["row"]}
+            for r in exc.params.get("rows", []) if isinstance(r, dict)]
+    params = {**exc.params, "rows": rows}
+    if isinstance(exc, ValidationFailed):
+        return ValidationFailed("import_invalid", **params)
+    return type(exc)(exc.code, **params)
+
+
 @router.post("/entities/{entity_id}/import", status_code=201)
 async def import_file(
     entity_id: str, request: Request, ctx: Ctx, db: DB, meta: Meta,
     branch_id: Annotated[int, Query(ge=1)],
+    # tana parametri: FastAPI tanani bog'liqliklardan (DB slot!) OLDIN o'qiydi -- sekin yuklash
+    # DB ulanishini ushlab turmaydi (review I5)
+    body: Annotated[bytes, Body(media_type="application/octet-stream")],
 ) -> BatchOut:
     entity = _writable(ctx, entity_id)
     ctx.assert_branch(branch_id)
     media = request.headers.get("content-type", "").split(";")[0].strip().lower()
+    name = imports.safe_name(request.headers.get("x-file-name", ""))
+    digest = imports.file_digest(body)
+
+    def rejected(exc: AppError) -> None:
+        log_event(meta, AuditAction.DATA_IMPORT_REJECTED, user_id=ctx.user_id, result="fail",
+                  object_type="manual_entity", object_id=entity.id,
+                  details={"entity": entity.id, "branch_id": branch_id, "size": len(body),
+                           "error": exc.code, "file_name": name, "hmac": digest.hex()})
+
     if media not in (imports.CSV_TYPE, imports.XLSX_TYPE):
-        raise ValidationFailed("unsupported_file")
+        exc = ValidationFailed("unsupported_file")
+        rejected(exc)
+        raise exc
     ratelimit.check("data_import", str(ctx.user_id), ratelimit.DATA_IMPORT_PER_USER)
-    body = await request.body()  # <= 1 MiB (BodySizeLimitMiddleware); diskka yozilmaydi
-    name = store._BAD_TEXT.sub("", unquote(request.headers.get("x-file-name", "")))[:200] or None
-    digest = hashlib.sha256(body)
 
     def work() -> BatchOut:
-        rows = imports.parse_upload(entity, body, media)
+        lines: list[int] = []
         try:
+            items, lines = imports.parse_upload(entity, body, media)
             out = store.create_batch(
                 db, ctx, meta, entity_id=entity.id, branch_id=branch_id, origin="import",
-                items=[ItemIn(values=r) for r in rows],
-                file_meta={"name": name, "sha256": digest.digest()})  # bytea
-        except ValidationFailed as exc:
-            if "rows" not in exc.params:
-                raise
-            # ItemIn indeksi (1 = birinchi ma'lumot qatori) -> fayl qatori (1 = sarlavha)
-            shifted = [{**r, "row": r["row"] + 1} for r in exc.params["rows"]]
-            raise ValidationFailed("import_invalid", rows=shifted,
-                                   fields=exc.params.get("fields", [])) from None
+                items=[ItemIn(values=r) for r in items],
+                file_meta={"name": name, "sha256": digest})
+        except (ValidationFailed, ConflictError) as exc:
+            new = _remap(exc, lines) if lines and exc.params.get("rows") else exc
+            rejected(new)
+            raise new from None
+        except AppError as exc:  # import_busy va h.k.
+            rejected(exc)
+            raise
         log_event(meta, AuditAction.DATA_IMPORTED, user_id=ctx.user_id,
                   object_type="manual_batch", object_id=out.batch_id,
                   details={"batch_id": out.batch_id, "entity": entity.id, "file_name": name,
-                           "sha256": digest.hexdigest(), "rows": out.rows})
+                           "hmac": digest.hex(), "size": len(body), "rows": out.rows})
         return out
 
     return await run_in_threadpool(work)

@@ -15,6 +15,7 @@ import pytest
 from fastapi.testclient import TestClient
 from openpyxl import Workbook, load_workbook
 
+from app.core.errors import ValidationFailed
 from app.main import create_app
 from app.manual import imports
 from app.manual.entities import ENTITIES
@@ -92,10 +93,12 @@ def test_csv_import_creates_draft(client_for, make_user: MakeUser) -> None:  # t
     out = r.json()
     assert out["status"] == "draft" and out["rows"] == 2 and out["origin"] == "import"
     name, sha = migrator_sql("SELECT file_name, file_sha256 FROM core.manual_batch")[0]
-    assert (name, bytes(sha)) == ("ostatki.csv", hashlib.sha256(body).digest())
+    assert (name, bytes(sha)) == ("ostatki.csv", imports.file_digest(body))
+    assert bytes(sha) != hashlib.sha256(body).digest()  # I3: kalitli HMAC, oddiy SHA-256 emas
     ev = [a for a in audit_rows("data.imported") if a["result"] == "ok"]
     assert len(ev) == 1
-    assert ev[0]["details"]["sha256"] == hashlib.sha256(body).hexdigest()
+    assert ev[0]["details"]["hmac"] == imports.file_digest(body).hex()
+    assert hashlib.sha256(body).hexdigest() not in json.dumps(ev[0]["details"])
     assert ev[0]["details"]["rows"] == 2 and ev[0]["details"]["file_name"] == "ostatki.csv"
     assert "1500" not in json.dumps(ev[0]["details"])  # mazmun auditda yo'q
 
@@ -227,9 +230,10 @@ def test_formula_without_cache_rejected(client_for, make_user: MakeUser) -> None
 
 def test_wrong_content_type_422(client_for, make_user: MakeUser) -> None:  # type: ignore[no-untyped-def]
     maker = client_for(make_user("spec_kazna"))
-    for ctype in ("application/json", "text/plain", "application/octet-stream"):
+    for ctype in ("text/plain", "application/octet-stream"):
         r = _post(maker, _csv(_row()), ctype)
         assert r.status_code == 422 and r.json()["error"]["code"] == "unsupported_file"
+    assert _post(maker, _csv(_row()), "application/json").status_code == 422
     assert _batches() == 0
 
 
@@ -271,3 +275,247 @@ def test_template_csv_endpoint(client_for, make_user: MakeUser) -> None:  # type
     r = maker.get("/api/v1/data/entities/kazna.balance/template.csv")
     assert r.status_code == 200 and r.content.startswith(b"\xef\xbb\xbf")
     assert "attachment" in r.headers["content-disposition"]
+
+
+# --- review round 1 ---------------------------------------------------------------------------
+
+ACCOUNT = ENTITIES["kazna.bank_account"]
+SHEET = "xl/worksheets/sheet1.xml"
+PARSE_SCRIPT = """
+import json, sys, time
+
+
+def hwm():  # VmHWM exec'da nolga tushadi (ru_maxrss ota-ona cho'qqisini meros qiladi)
+    for line in open('/proc/self/status'):
+        if line.startswith('VmHWM'):
+            return int(line.split()[1]) / 1024
+
+
+from app.core.errors import AppError
+from app.manual import imports
+from app.manual.entities import ENTITIES
+body = open(sys.argv[1], 'rb').read()
+base = hwm()
+t = time.time()
+try:
+    imports.parse_upload(ENTITIES['kazna.balance'], body, imports.XLSX_TYPE)
+    out = 'ok'
+except AppError as exc:
+    out = exc.code
+print(json.dumps({'out': out, 'secs': time.time() - t, 'peak': hwm(),
+                  'mib': hwm() - base}))
+"""
+MIB = 1024 * 1024
+
+
+def _patched(src: bytes, parts: dict[str, bytes | None]) -> bytes:
+    buf = io.BytesIO()
+    with zipfile.ZipFile(io.BytesIO(src)) as zin, zipfile.ZipFile(
+            buf, "w", zipfile.ZIP_DEFLATED) as zout:
+        for n in zin.namelist():
+            if n not in parts:
+                zout.writestr(n, zin.read(n))
+        for n, data in parts.items():
+            if data is not None:
+                zout.writestr(n, data)
+    return buf.getvalue()
+
+
+def _valid() -> bytes:
+    return _xlsx([[branch_code(1), BANK, "2026-09-30", 1]])
+
+
+def _sheet(rows_xml: str) -> bytes:
+    return ('<?xml version="1.0"?><worksheet xmlns="http://schemas.openxmlformats.org/'
+            f'spreadsheetml/2006/main"><sheetData>{rows_xml}</sheetData></worksheet>').encode()
+
+
+NS = b'xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"'
+STYLES_HEAD = b"<styleSheet " + NS + b"><cellXfs>"
+STYLES_TAIL = b"</cellXfs></styleSheet>"
+SST_HEAD = b"<sst " + NS + b">"
+
+CRAFTED = {
+    "styles_19mib": lambda: {
+        "xl/styles.xml": STYLES_HEAD + b"<xf/>" * (19 * MIB // 4) + STYLES_TAIL},
+    "styles_400k": lambda: {"xl/styles.xml": STYLES_HEAD + "".join(
+        f'<xf numFmtId="{i}" fontId="{i}"/>' for i in range(12_000)).encode() + STYLES_TAIL},
+    "sst_19mib": lambda: {
+        "xl/sharedStrings.xml": SST_HEAD + b"<si/>" * (19 * MIB // 4) + b"</sst>"},
+    "sst_1_9mib": lambda: {"xl/sharedStrings.xml": SST_HEAD + "".join(
+        f"<si><t>s{i}</t></si>" for i in range(80_000)).encode() + b"</sst>"},
+    "wide_row_19mib": lambda: {SHEET: _sheet('<row r="1">' + "<c/>" * (19 * MIB // 4) + "</row>")},
+    "wide_row_3mib": lambda: {SHEET: _sheet('<row r="1">' + "".join(
+        f'<c r="A1"><v>{i}</v></c>' for i in range(100_000)) + "</row>")},
+    "many_rows_3mib": lambda: {SHEET: _sheet(
+        "".join(f'<row r="{i}"/>' for i in range(1, 170_000)))},
+}
+
+
+@pytest.mark.parametrize("name", sorted(CRAFTED))
+def test_crafted_xlsx_is_cheap(name: str, tmp_path) -> None:  # type: ignore[no-untyped-def]
+    import os
+    import subprocess
+    import sys
+
+    path = tmp_path / "f.xlsx"
+    path.write_bytes(_patched(_valid(), CRAFTED[name]()))
+    assert path.stat().st_size < 1_048_576
+    res = subprocess.run([sys.executable, "-c", PARSE_SCRIPT, str(path)], capture_output=True,
+                         text=True, check=True, cwd="/app",
+                         env={**os.environ, "PYTHONPATH": "/app"})
+    out = json.loads(res.stdout.strip().splitlines()[-1])
+    print(name, out)  # noqa: T201 -- o'lchangan son hisobot uchun
+    assert out["secs"] < 5 and out["mib"] < 150
+    assert out["out"] in {"ok", "unsupported_file", "import_invalid"}
+
+
+def test_xlsx_dimension_is_not_trusted() -> None:
+    rows = [[branch_code(1), BANK, f"2026-{m:02d}-28", m] for m in range(1, 10)]
+    src = _xlsx(rows + [[branch_code(1), BANK, f"2025-{m:02d}-28", m] for m in range(1, 10)])
+    with zipfile.ZipFile(io.BytesIO(src)) as zf:
+        sheet = zf.read(SHEET)
+    assert b'ref="A1:D19"' in sheet
+    body = _patched(src, {SHEET: sheet.replace(b'ref="A1:D19"', b'ref="A1:D2"')})
+    items, lines = imports.parse_upload(BALANCE, body, XLSX)
+    assert len(items) == 18 and lines[-1] == 19
+
+
+def test_xlsx_rows_after_a_gap_are_not_dropped() -> None:
+    wb = Workbook()
+    ws = wb.active
+    ws.append([f.name for f in BALANCE.fields])
+    ws.append([branch_code(1), BANK, "2026-01-28", 1])
+    for col, value in enumerate([branch_code(1), BANK, "2026-02-28", 2], start=1):
+        ws.cell(row=7012, column=col, value=value)
+    buf = io.BytesIO()
+    wb.save(buf)
+    items, lines = imports.parse_upload(BALANCE, buf.getvalue(), XLSX)
+    assert len(items) == 2 and lines == [2, 7012]
+
+
+def test_xlsx_over_5000_rows_is_an_error_not_a_truncation(client_for, make_user: MakeUser) -> None:  # type: ignore[no-untyped-def]
+    maker = client_for(make_user("spec_kazna"))
+    body = _xlsx([[branch_code(1), BANK, "2026-01-28", 1]] * 5001)
+    r = _post(maker, body, XLSX)
+    assert r.status_code == 422 and _codes(r)[0][2] == "too_many_rows"
+    assert _batches() == 0
+
+
+def test_numeric_cell_for_text_or_secret_is_rejected() -> None:
+    num = 20208000900123456789
+    header = [f.name for f in ACCOUNT.fields]
+    body = _xlsx([[branch_code(1), "Асакабанк", num, "UZS"]], header=header)
+    with pytest.raises(ValidationFailed) as exc:
+        imports.parse_upload(ACCOUNT, body, XLSX)
+    assert exc.value.params["rows"] == [
+        {"row": 2, "field": "account_number", "code": "text_required"}]
+    ok = _xlsx([[branch_code(1), "Асакабанк", str(num), "UZS"]], header=header)
+    assert imports.parse_upload(ACCOUNT, ok, XLSX)[0][0]["account_number"] == str(num)
+    ws = load_workbook(io.BytesIO(imports.template_xlsx(ACCOUNT)))["Данные"]
+    letter = "ABCDEFG"[header.index("account_number")]
+    assert ws.column_dimensions[letter].number_format == "@"
+
+
+def test_rejected_uploads_are_audited(client_for, make_user: MakeUser) -> None:  # type: ignore[no-untyped-def]
+    maker = client_for(make_user("spec_kazna"))
+    seen = len(audit_rows("data.import.rejected"))
+    macro = _patched(_valid(), {"xl/vbaProject.bin": b"x"})
+    assert _post(maker, macro, XLSX, "evil.xlsx").status_code == 422
+    assert _post(maker, _csv(_row(value="1.005")), CSV, "bad.csv").status_code == 422
+    assert _post(maker, b"x", "text/plain", "a.txt").status_code == 422
+    rows = audit_rows("data.import.rejected")[seen:]
+    assert [r["details"]["error"] for r in rows] == [
+        "unsupported_file", "import_invalid", "unsupported_file"]
+    d = rows[0]["details"]
+    assert d["entity"] == "kazna.balance" and d["file_name"] == "evil.xlsx"
+    assert d["size"] == len(macro) and d["hmac"] == imports.file_digest(macro).hex()
+    assert "1.005" not in json.dumps([r["details"] for r in rows])
+    assert all(r["result"] == "fail" for r in rows)
+
+
+def test_error_rows_use_physical_file_lines(client_for, make_user: MakeUser) -> None:  # type: ignore[no-untyped-def]
+    maker = client_for(make_user("spec_kazna"))
+    bad_ref = f"{branch_code(1)};BA-nonexistent;2026-08-29;1"
+    r = _post(maker, _csv(_row(), "", bad_ref))  # 1 sarlavha, 2 qator, 3 bo'sh, 4 xato
+    assert r.status_code == 422 and _codes(r) == [(4, "bank_code", "reference_not_found")]
+
+
+def test_collision_reports_the_row(client_for, make_user: MakeUser) -> None:  # type: ignore[no-untyped-def]
+    maker = client_for(make_user("spec_kazna"))
+    item = {"values": {"branch_code": branch_code(1), "bank_code": BANK, "date": "2026-09-30",
+                       "balance": "5.00"}}
+    r = maker.post("/api/v1/data/batches", json={
+        "entity": "kazna.balance", "branch_id": 1, "origin": "form", "submit": True,
+        "items": [item]})
+    assert r.status_code == 201, r.text
+    r = _post(maker, _csv(_row("2026-08-29"), "", _row("2026-09-15"), _row("2026-07-01")))
+    assert r.status_code == 409 and r.json()["error"]["code"] == "duplicate_record"
+    assert r.json()["error"]["params"]["rows"] == [
+        {"row": 4, "field": "date", "code": "duplicate_record"}]
+    assert _batches() == 1  # faqat oldingi form paketi
+
+
+@pytest.mark.parametrize("member", [
+    "xl/VbaProject.bin", "XL/vbaproject.BIN", "xl/externallinks/externalLink1.xml",
+    "xl/activeX/activeX1.xml", "xl/embeddings/oleObject1.bin"])
+def test_case_variant_dangerous_parts_rejected(member: str) -> None:
+    with pytest.raises(ValidationFailed) as exc:
+        imports.parse_upload(BALANCE, _patched(_valid(), {member: b"x"}), XLSX)
+    assert exc.value.code == "unsupported_file"
+
+
+def test_busy_gate_and_fail_closed(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    import openpyxl
+
+    from app.core.errors import AppError
+
+    assert openpyxl.DEFUSEDXML is True
+    assert imports._xlsx_gate.acquire(blocking=False)
+    try:
+        with pytest.raises(AppError) as exc:
+            imports.parse_upload(BALANCE, _valid(), XLSX)
+        assert exc.value.code == "import_busy" and exc.value.status_code == 429
+    finally:
+        imports._xlsx_gate.release()
+    monkeypatch.setattr(openpyxl, "DEFUSEDXML", False)
+    with pytest.raises(ValidationFailed) as exc2:
+        imports.parse_upload(BALANCE, _valid(), XLSX)
+    assert exc2.value.code == "unsupported_file"
+
+
+def test_file_name_is_sanitised() -> None:
+    raw = quote("C:\\fakepath\\a\u202e\u200bb\x85c\u2028.csv")
+    assert imports.safe_name(raw) == "abc.csv"
+    assert len(imports.safe_name("x" * 500) or "") == 200
+    assert imports.safe_name("\u200b") is None
+
+
+def test_import_route_declares_a_body_so_it_is_read_before_the_db_slot() -> None:
+    from fastapi.routing import APIRoute
+
+    app = create_app()
+    routes = [r for r in app.routes if isinstance(r, APIRoute) and r.path.endswith("/import")]
+    if routes:
+        assert routes[0].body_field is not None
+    else:  # lazy _IncludedRouter (fastapi 0.141): OpenAPI schema bor
+        spec = app.openapi()["paths"]["/api/v1/data/entities/{entity_id}/import"]["post"]
+        assert "requestBody" in spec
+
+
+def test_legit_5000_row_xlsx_fits_the_caps(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    import os
+    import subprocess
+    import sys
+
+    code = branch_code(1)
+    rows = [[code, BANK, f"2026-{i % 12 + 1:02d}-{i % 28 + 1:02d}", f"{i}.25"]
+            for i in range(5000)]
+    path = tmp_path / "f.xlsx"
+    path.write_bytes(_xlsx(rows))
+    res = subprocess.run([sys.executable, "-c", PARSE_SCRIPT, str(path)], capture_output=True,
+                         text=True, check=True, cwd="/app",
+                         env={**os.environ, "PYTHONPATH": "/app"})
+    out = json.loads(res.stdout.strip().splitlines()[-1])
+    print("legit_5000", path.stat().st_size, out)  # noqa: T201
+    assert out["out"] == "ok" and out["secs"] < 5 and out["mib"] < 150

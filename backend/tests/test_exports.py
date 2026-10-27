@@ -149,3 +149,30 @@ def test_export_log(client_for: Callable[[SeedUser], TestClient],
                         json={**body, "section": "kazna"}).status_code == 403
     econ = client_for(make_user("economist_filiala", branch_ids=(3,)))
     assert econ.post("/api/v1/exports/log", json={**body, "br": 4}).status_code == 403
+
+
+def test_export_log_hardening(client_for: Callable[[SeedUser], TestClient],
+                              make_user: Callable[..., SeedUser]) -> None:
+    client = client_for(make_user("rukovodstvo"))
+    body = {"kind": "csv", "section": "obzor", "page": "svod", "card": "ok", "per": "m08"}
+    for card in ("a\nb", "x\x01y", "\x7f"):
+        assert client.post("/api/v1/exports/log", json={**body, "card": card}).status_code == 422
+    # page section'ga tegishli bo'lishi shart
+    assert client.post("/api/v1/exports/log", json={**body, "page": "platezhi"}).status_code == 422
+    assert client.post("/api/v1/exports/log", json=body).status_code == 204
+    for _ in range(40):
+        last = client.post("/api/v1/exports/log", json=body).status_code
+    assert last == 429  # shortcut-limit 30/min
+
+
+def test_xlsx_strips_illegal_control_chars() -> None:
+    period = resolve_period("m08", TEST_AS_OF)
+    kpis = CashKpisOut(opening=None, inflow=1, outflow=0, net=1, closing=None, diff=None,
+                       opening_prev=None, inflow_prev=0, outflow_prev=0, net_prev=0,
+                       closing_prev=None, diff_prev=None, has_data=True)
+    branch = BranchCashOut(branch_id=9, name="Фил\x01иал\x0b", short_name="x", opening=None,
+                           inflow=1, outflow=0, net=1, closing=None, diff=None)
+    data = ObzorExcelOut(period=period_out(period), kpis=kpis, branches=[branch],
+                         total=branch.model_copy(update={"branch_id": 0}), detail=[])
+    body = build_workbook(data, [], [], "все филиалы")
+    assert load_workbook(io.BytesIO(body))["Сводка"]["A4"].value == "Филиал"

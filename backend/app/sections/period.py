@@ -45,7 +45,13 @@ class ReportPeriod:
         return sum(self.today.day / days if m == current else 1.0 for m in self.months)
 
 
+def normalize_per(code: str) -> str:
+    """TZ xatcho'plari `per=05` -> `m05` (kesh kaliti ham shu shaklda)."""
+    return f"m{code}" if code.isdigit() and len(code) == 2 else code
+
+
 def resolve_period(code: str, today: date) -> ReportPeriod:
+    code = normalize_per(code)
     for period in build_periods(today):
         if period.code != code:
             continue

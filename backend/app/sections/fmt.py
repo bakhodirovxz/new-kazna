@@ -22,3 +22,13 @@ def fmt_money(mln: float, digits: int = 1) -> str:
 
 def fmt_pct(ratio: float, digits: int = 1) -> str:
     return f"{fmt_num(ratio * 100, digits)}%"
+
+
+def plural(n: int, one: str, few: str, many: str) -> str:
+    """Ruscha ko'plik: 1 договор, 2 договора, 5 договоров, 21 договор."""
+    tail, tens = n % 10, n % 100
+    if tail == 1 and tens != 11:
+        return one
+    if 2 <= tail <= 4 and not 12 <= tens <= 14:
+        return few
+    return many

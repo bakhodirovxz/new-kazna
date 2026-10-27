@@ -93,8 +93,8 @@ class StationOut(_Out):
     capacity_mw: float | None
     lat: float | None
     lon: float | None
-    inflow: float
-    outflow: float
+    inflow: float | None
+    outflow: float | None
     closing: float | None
     receivable: float | None
     payable: float | None
@@ -322,3 +322,24 @@ class KaznaCelevyeOut(_Out):
     period: ReportPeriodOut
     sources: list[FundRowOut]
     branches: list[FundRowOut]
+
+
+class AlertOut(_Out):
+    code: str
+    level: str
+    title: str
+    message: str
+    section: str
+    page: str
+    value: float | None
+
+
+class AlertsOut(_Out):
+    period: ReportPeriodOut
+    items: list[AlertOut]
+    checked: list[str]
+
+
+class AlertCountOut(_Out):
+    count: int
+    critical: int

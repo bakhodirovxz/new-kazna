@@ -83,6 +83,8 @@ EXPECTED_ROUTES = frozenset({
     ("GET", "/api/v1/kazna/celevye"),
     ("GET", "/api/v1/obzor/excel.xlsx"),
     ("POST", "/api/v1/exports/log"),
+    ("GET", "/api/v1/obzor/vnimanie"),
+    ("GET", "/api/v1/obzor/vnimanie/count"),
     ("GET", "/api/v1/obzor/svod"),
     ("GET", "/api/v1/obzor/postup"),
     ("GET", "/api/v1/obzor/rasxod"),

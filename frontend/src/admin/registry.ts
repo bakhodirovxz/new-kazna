@@ -20,4 +20,5 @@ export const ADMIN_COMPONENTS: Partial<Record<AdminPageId, AdminPageComponent>> 
   finmodel: lazy(() => import('./FinAssumptionsPage')),
   settings: lazy(() => import('./SettingsPage')),
   security: lazy(() => import('./SecurityPage')),
+  integrations: lazy(() => import('./IntegrationsPage')),
 };

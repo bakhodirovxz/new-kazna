@@ -5,6 +5,9 @@ import { dayStartIso } from '../i18n/format';
 import type {
   AlertRuleOut,
   AuditOut,
+  IntegrationCheckOut,
+  IntegrationOut,
+  IntegrationUpdate,
   SettingOut,
   SettingUpdate,
   SettingVersionOut,
@@ -269,6 +272,42 @@ export function useUpdateSetting() {
     onSuccess: invalidate,
     onError,
     meta: { inline: true },
+  });
+}
+
+export function useIntegrations() {
+  return useQuery({
+    queryKey: adminKeys.integrations,
+    queryFn: ({ signal }) => api<IntegrationOut[]>('/admin/integrations', { signal }),
+    staleTime: 0,
+  });
+}
+
+export function useUpdateIntegration() {
+  const invalidate = useInvalidate(adminKeys.integrations);
+  return useMutation({
+    mutationFn: ({ name, body }: { name: string; body: IntegrationUpdate }) =>
+      api<IntegrationOut>(`/admin/integrations/${encodeURIComponent(name)}`, { method: 'PUT', body }),
+    onSuccess: invalidate,
+    meta: { inline: true },
+  });
+}
+
+export function useRequestCheck() {
+  return useMutation({
+    mutationFn: (name: string) => api<IntegrationCheckOut>(`/admin/integrations/${encodeURIComponent(name)}/check`, { method: 'POST' }),
+    meta: { inline: true },
+  });
+}
+
+const CHECK_DONE = new Set(['ok', 'failed']);
+
+export function useIntegrationCheck(id: number | null) {
+  return useQuery({
+    queryKey: [...adminKeys.integrations, 'check', id],
+    queryFn: ({ signal }) => api<IntegrationCheckOut>(`/admin/integrations/checks/${id ?? 0}`, { signal, background: true }),
+    enabled: id !== null,
+    refetchInterval: (query) => (query.state.data && CHECK_DONE.has(query.state.data.status) ? false : 2_000),
   });
 }
 

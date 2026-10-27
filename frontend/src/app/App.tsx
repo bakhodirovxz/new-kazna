@@ -4,6 +4,7 @@ import { AuthFlowProvider, useAuthFlow } from '../auth/AuthFlow';
 import { ToastProvider, useToast } from '../ui/Toast';
 import { makeQueryClient } from './queryClient';
 import { RootBoundary } from './RootBoundary';
+import { ScreenEnded } from '../screen/ScreenEnded';
 import { Routes } from './Routes';
 
 function ClientBoundary({ children }: { children: ReactNode }) {
@@ -21,6 +22,7 @@ export function App() {
         <AuthFlowProvider>
           <ClientBoundary>
             <Routes />
+            <ScreenEnded />
           </ClientBoundary>
         </AuthFlowProvider>
       </ToastProvider>

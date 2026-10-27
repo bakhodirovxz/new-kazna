@@ -4,11 +4,13 @@ import { createQueryClient } from '../api/queryClient';
 import { meKey } from '../auth/api';
 import { isPublicRoute, parseHash, safeNext } from '../router/hash';
 import { currentPath, navigate } from '../router/store';
+import { isScreenActive, markSessionEnded } from '../screen/store';
 
 /** Sessiya tugadi: kesh va AuthFlow tozalanadi, joriy kanonik yo'l `next` bilan login'ga. Idempotent:
  *  login/2FA marshrutida hech narsa qilmaydi, shuning uchun N ta parallel 401 — bitta o'tish. */
 export function endSession(client: QueryClient, clearFlow: () => void): void {
   if (isPublicRoute(parseHash(window.location.hash))) return;
+  if (isScreenActive()) markSessionEnded(); // kiosk: jim login o'rniga aniq «Сеанс завершён»
   const next = safeNext(currentPath());
   clearFlow();
   navigate({ kind: 'login', next }, { replace: true });

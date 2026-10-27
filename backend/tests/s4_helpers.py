@@ -5,10 +5,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from sqlalchemy import text
+from sqlalchemy import select, text
+
+from app.auth.models import Role, RolePermission
+from app.core.db import get_engine, new_session
 
 from app.etl.db import etl_transaction
-from tests.etl_helpers import branch_row, cash_row, merge_all, new_tag, open_run, stage
+from tests.etl_helpers import branch_row, cash_row, merge_all, new_tag, open_run, purge_source, stage
 from tests.s1_helpers import rebuild
 
 DONE, ANNOUNCED, EVAL, CANCELLED = "договор заключён", "объявлен", "на оценке", "отменён"
@@ -214,3 +217,31 @@ def hr_scenario(source: str, *, publish: bool = False) -> HrScenario:
     build_id = rebuild(run_id, publish=publish)
     return HrScenario(source, tag, _branch_id(f"T-{tag}"), f"T-{tag}", run_id, build_id,
                       f"SAL-{tag}")
+
+
+def section_branch_role(section: str) -> str:
+    """Filial doirasidagi (scope_all = false) va faqat bitta bo'limni ko'radigan test roli —
+    seed rollarida «Закупки»/«Инвестиции» uchun bunday rol yo'q."""
+    code = f"t_{section}_branch"
+    with new_session() as s:
+        exists = s.execute(select(Role.id).where(Role.code == code)).scalar()
+        if exists is None:
+            role = Role(code=code, name=f"Тест: {section} филиала", scope_all=False)
+            s.add(role)
+            s.flush()
+            s.add(RolePermission(role_id=role.id, permission_code=f"section:{section}:view"))
+            s.commit()
+    return code
+
+
+def purge_s4(source: str) -> None:
+    """Modul darajasidagi ssenariyni tozalash: foydalanuvchilarning filial biriktirishlari
+    (core.position_branches) dim_branch'ni ushlab turmasin. dim_branch RLS ostida — id'lar
+    etl ulanishi bilan olinadi."""
+    with etl_transaction() as conn:
+        ids = list(conn.execute(text("SELECT branch_id FROM dwh.dim_branch WHERE src_system = :s"),
+                                {"s": source}).scalars())
+    with get_engine("migrator").begin() as conn:
+        conn.execute(text("DELETE FROM core.position_branches WHERE branch_id = ANY(:ids)"),
+                     {"ids": ids})
+    purge_source(source)

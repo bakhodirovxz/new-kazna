@@ -412,9 +412,11 @@ def _moved_sql(name: str) -> str:
 
 @cache
 def _replace_sql(name: str) -> str:
+    # forward maqsad: manba oynadan keyingi (kelajak) qatorlarni ham beradi — yuqori chegara yo'q.
+    upper = "" if TARGETS[name].forward else " AND t.date_id <= :to_id"
     return (
         f"DELETE FROM dwh.{name} t WHERE t.src_system = :source "
-        "AND t.date_id BETWEEN :from_id AND :to_id AND NOT EXISTS ("
+        f"AND t.date_id >= :from_id{upper} AND NOT EXISTS ("
         "SELECT 1 FROM stg.rows s WHERE s.load_id = :load_id AND s.target = :target "
         "AND s.payload->>'src_id' = t.src_id AND s.payload->>'doc_type' = t.doc_type)"
     )

@@ -39,6 +39,9 @@ _ITEM_BY_DIRECTION = (
     f"ELSE '{OTHER_OUT_ITEM}' END"
 )
 _ITEM_OUT = f"'{OTHER_OUT_ITEM}'"
+# fact_payment_plan ichida sanali to'lov jadvali (kalendar) oylik rejadan shu doc_type
+# bilan ajraladi.
+SCHEDULE_DOC_TYPE = "payment_schedule"
 
 
 @dataclass(frozen=True, slots=True)
@@ -90,6 +93,9 @@ class Target:
     windowed: bool = False  # oyna ichida to'liq almashtiriladi
     scd: Scd | None = None
     sensitive: tuple[Sensitive, ...] = ()
+    # Manba kelajak sanali qatorlarni ham to'liq beradi (reja, jadval): to'liq almashtirishda
+    # oynadan keyingi eski qatorlar ham o'chiriladi.
+    forward: bool = False
 
     @property
     def allowed_keys(self) -> frozenset[str]:
@@ -114,10 +120,10 @@ def _dim(name: str, columns: tuple[str, ...], **kw: object) -> Target:
 
 
 def _fact(name: str, measures: tuple[str, ...], lookups: tuple[Lookup, ...],
-          partition: Literal["month", "year"] | None = None) -> Target:
+          partition: Literal["month", "year"] | None = None, *, forward: bool = False) -> Target:
     conflict = ("src_system", "doc_type", "src_id") + (("date_id",) if partition else ())
     return Target(name, "fact", _FACT_TECH + measures, conflict, lookups, partition,
-                  windowed=True)
+                  windowed=True, forward=forward)
 
 
 _ALL: tuple[Target, ...] = (
@@ -151,7 +157,7 @@ _ALL: tuple[Target, ...] = (
            Lookup("bank_id", "dim_bank", nullable=True)), "month"),
     _fact("fact_balance", ("balance",), (BRANCH, Lookup("bank_id", "dim_bank")), "year"),
     _fact("fact_payment_plan", ("amount",),
-          (BRANCH, Lookup("item_id", "dim_item", fallback_sql=_ITEM_OUT))),
+          (BRANCH, Lookup("item_id", "dim_item", fallback_sql=_ITEM_OUT)), forward=True),
     _fact("fact_payment_order", ("amount", "status", "status_date_id"),
           (BRANCH, Lookup("item_id", "dim_item", fallback_sql=_ITEM_OUT),
            Lookup("cp_id", "dim_counterparty", nullable=True),
@@ -175,7 +181,7 @@ _ALL: tuple[Target, ...] = (
           (BRANCH, Lookup("object_id", "dim_object"),
            Lookup("source_id", "dim_source", nullable=True))),
     _fact("fact_loan_schedule", ("principal", "interest", "balance"),
-          (BRANCH, Lookup("loan_id", "dim_loan"))),
+          (BRANCH, Lookup("loan_id", "dim_loan")), forward=True),
     _fact("fact_hr",
           ("headcount_plan", "headcount_fact", "payroll", "hired", "fired", "overtime_hours"),
           (BRANCH, Lookup("pos_id", "dim_position"))),

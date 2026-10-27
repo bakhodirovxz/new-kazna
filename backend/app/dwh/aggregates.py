@@ -160,6 +160,7 @@ plan AS (
   FROM dwh.fact_payment_plan p
   JOIN dwh.dim_date d ON d.date_id = p.date_id
   JOIN months m ON m.month_id = d.month_id
+  WHERE p.doc_type <> 'payment_schedule'
   GROUP BY p.branch_id, d.month_id, p.item_id),
 fact AS (
   SELECT f.branch_id, d.month_id, f.item_id, sum(f.amount) AS amount,

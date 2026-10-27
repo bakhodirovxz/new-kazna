@@ -85,6 +85,8 @@ def test_settings_defaults_and_validation() -> None:
     assert {
         "freshness.max_age_hours", "etl.history_start", "etl.synthetic_cron", "builds.keep",
         "retention.fact_years", "retention.audit_months", "partitions.months_ahead",
+        "kazna.calendar_kinds", "onec.orgs", "onec.income_enabled", "onec.page_limit",
+        "etl.onec_full_cron", "etl.onec_incremental_cron",
     } <= set(DEFAULT_SETTINGS)
 
 

@@ -79,7 +79,7 @@ describe('EntityPage', () => {
     await user.type(within(dialog).getByLabelText(/Дата/), '2026-09-30');
     await user.type(within(dialog).getByLabelText(/Остаток/), '12 345,67');
     await user.click(within(dialog).getByRole('button', { name: 'Отправить на согласование' }));
-    await screen.findByText('Отправлено на согласование');
+    await screen.findByText(/Отправлено на согласование: пакет №/);
     await waitFor(() => expect(client.getMutationCache().getAll()).toHaveLength(0));
     expect(srv.calls.find((c) => c.method === 'POST')?.body).toEqual({
       entity: 'kazna.balance', branch_id: 3, origin: 'form', submit: true, reason: null,
@@ -100,6 +100,7 @@ describe('EntityPage', () => {
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
     const notice = (await screen.findAllByRole('status')).find((n) => n.textContent?.includes('пакет №41'));
     expect(notice).toHaveTextContent('Отправлено на согласование: пакет №41');
+    expect(screen.getAllByText(/Отправлено на согласование/)).toHaveLength(1); // toast qo'shilmaydi
     expect(within(notice as HTMLElement).getByRole('link', { name: 'Мои пакеты' })).toHaveAttribute('href', '#vvod/batches');
     expect(notice).toHaveTextContent('вне выбранного периода');
   });
@@ -135,7 +136,7 @@ describe('EntityPage', () => {
     expect(srv.calls.some((c) => c.method === 'POST')).toBe(false);
     await user.type(within(dialog).getByLabelText(/Причина изменения/), 'Уточнение выписки');
     await user.click(within(dialog).getByRole('button', { name: 'Отправить на согласование' }));
-    await screen.findByText('Отправлено на согласование');
+    await screen.findByText(/Отправлено на согласование: пакет №/);
     const body = srv.calls.find((c) => c.method === 'POST')?.body as { reason: string; items: Array<Record<string, unknown>> };
     expect(body.reason).toBe('Уточнение выписки');
     expect(body.items[0]).toMatchObject({ entry_id: 7, expected_version: 1 });
@@ -177,7 +178,7 @@ describe('EntityPage', () => {
     expect(dialog).toHaveTextContent('…9012 — оставьте пустым, чтобы не менять');
     await user.type(within(dialog).getByLabelText(/Причина изменения/), 'Смена реквизита');
     await user.click(within(dialog).getByRole('button', { name: 'Отправить на согласование' }));
-    await screen.findByText('Отправлено на согласование');
+    await screen.findByText(/Отправлено на согласование: пакет №/);
     const items = (srv.calls.find((c) => c.method === 'POST')?.body as { items: Array<{ values: object }> }).items;
     expect(items[0]?.values).not.toHaveProperty('account_number');
   });

@@ -819,6 +819,178 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/data/entities": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Entities */
+        get: operations["list_entities_api_v1_data_entities_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/data/entities/{entity_id}/records": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Records */
+        get: operations["list_records_api_v1_data_entities__entity_id__records_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/data/entities/{entity_id}/options/{field}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Field Options */
+        get: operations["field_options_api_v1_data_entities__entity_id__options__field__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/data/records/{entry_id}/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Record History */
+        get: operations["record_history_api_v1_data_records__entry_id__history_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/data/batches": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Batches */
+        get: operations["list_batches_api_v1_data_batches_get"];
+        put?: never;
+        /** Create Batch */
+        post: operations["create_batch_api_v1_data_batches_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/data/batches/{batch_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Batch */
+        get: operations["get_batch_api_v1_data_batches__batch_id__get"];
+        /** Update Batch */
+        put: operations["update_batch_api_v1_data_batches__batch_id__put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/data/batches/{batch_id}/submit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Submit Batch */
+        post: operations["submit_batch_api_v1_data_batches__batch_id__submit_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/data/batches/{batch_id}/withdraw": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Withdraw Batch */
+        post: operations["withdraw_batch_api_v1_data_batches__batch_id__withdraw_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/data/batches/{batch_id}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Approve Batch */
+        post: operations["approve_batch_api_v1_data_batches__batch_id__approve_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/data/batches/{batch_id}/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reject Batch */
+        post: operations["reject_batch_api_v1_data_batches__batch_id__reject_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/obzor/excel.xlsx": {
         parameters: {
             query?: never;
@@ -1254,6 +1426,109 @@ export interface components {
             /** Balance */
             balance: number;
         };
+        /** BatchDetailOut */
+        BatchDetailOut: {
+            /** Batch Id */
+            batch_id: number;
+            /** Entity */
+            entity: string;
+            /** Branch Id */
+            branch_id: number;
+            /** Status */
+            status: string;
+            /** Origin */
+            origin: string;
+            /** Rows */
+            rows: number;
+            /** Reason */
+            reason?: string | null;
+            /** Created By */
+            created_by: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Submitted At */
+            submitted_at?: string | null;
+            /** Decided By */
+            decided_by?: number | null;
+            /** Decided At */
+            decided_at?: string | null;
+            /** Decision Comment */
+            decision_comment?: string | null;
+            /** Version */
+            version: number;
+            /** Etl Request Id */
+            etl_request_id?: number | null;
+            /** Items */
+            items: components["schemas"]["ChangeOut"][];
+            publication?: components["schemas"]["PublicationOut"] | null;
+        };
+        /** BatchIn */
+        BatchIn: {
+            /** Entity */
+            entity: string;
+            /** Branch Id */
+            branch_id: number;
+            /**
+             * Origin
+             * @enum {string}
+             */
+            origin: "form" | "grid";
+            /** Items */
+            items: components["schemas"]["ItemIn"][];
+            /**
+             * Submit
+             * @default false
+             */
+            submit: boolean;
+            /** Reason */
+            reason?: string | null;
+        };
+        /** BatchOut */
+        BatchOut: {
+            /** Batch Id */
+            batch_id: number;
+            /** Entity */
+            entity: string;
+            /** Branch Id */
+            branch_id: number;
+            /** Status */
+            status: string;
+            /** Origin */
+            origin: string;
+            /** Rows */
+            rows: number;
+            /** Reason */
+            reason?: string | null;
+            /** Created By */
+            created_by: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Submitted At */
+            submitted_at?: string | null;
+            /** Decided By */
+            decided_by?: number | null;
+            /** Decided At */
+            decided_at?: string | null;
+            /** Decision Comment */
+            decision_comment?: string | null;
+            /** Version */
+            version: number;
+            /** Etl Request Id */
+            etl_request_id?: number | null;
+        };
+        /** BatchUpdateIn */
+        BatchUpdateIn: {
+            /** Expected Version */
+            expected_version: number;
+            /** Items */
+            items: components["schemas"]["ItemIn"][];
+        };
         /** BranchAmountOut */
         BranchAmountOut: {
             /** Branch Id */
@@ -1385,6 +1660,26 @@ export interface components {
             /** Has Data */
             has_data: boolean;
         };
+        /** ChangeOut */
+        ChangeOut: {
+            /** Entry Id */
+            entry_id: number;
+            /** Version */
+            version: number;
+            /**
+             * Op
+             * @enum {string}
+             */
+            op: "add" | "change" | "delete";
+            /** Before */
+            before: {
+                [key: string]: unknown;
+            } | null;
+            /** After */
+            after: {
+                [key: string]: unknown;
+            } | null;
+        };
         /** ContractRowOut */
         ContractRowOut: {
             /** Contract Id */
@@ -1420,6 +1715,13 @@ export interface components {
             payable: number;
             /** Overdue Payable */
             overdue_payable: number;
+        };
+        /** DecisionIn */
+        DecisionIn: {
+            /** Expected Version */
+            expected_version: number;
+            /** Comment */
+            comment?: string | null;
         };
         /** DetailRowOut */
         DetailRowOut: {
@@ -1462,6 +1764,39 @@ export interface components {
             qr_svg_data_uri: string;
             /** Secret */
             secret: string;
+        };
+        /** EntityOut */
+        EntityOut: {
+            /** Id */
+            id: string;
+            /** Section */
+            section: string;
+            /** Section Title */
+            section_title: string;
+            /** Title */
+            title: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "dim" | "fact";
+            /**
+             * Layout
+             * @enum {string}
+             */
+            layout: "form" | "grid";
+            /** Grid */
+            grid?: [
+                string,
+                string,
+                string
+            ] | null;
+            /** Fields */
+            fields: components["schemas"]["FieldOut"][];
+            /** Can Write */
+            can_write: boolean;
+            /** Can Approve */
+            can_approve: boolean;
         };
         /** EtlErrorOut */
         EtlErrorOut: {
@@ -1580,6 +1915,30 @@ export interface components {
             /** Rows */
             rows?: number | null;
         };
+        /** FieldOut */
+        FieldOut: {
+            /** Name */
+            name: string;
+            /** Kind */
+            kind: string;
+            /** Title */
+            title: string;
+            /** Required */
+            required: boolean;
+            /** Lo */
+            lo?: string | null;
+            /** Hi */
+            hi?: string | null;
+            /** Options */
+            options?: components["schemas"]["OptionOut"][];
+            /** Ref */
+            ref?: string | null;
+            /**
+             * Unit
+             * @default
+             */
+            unit: string;
+        };
         /** FinAssumptionItem */
         FinAssumptionItem: {
             /**
@@ -1647,6 +2006,43 @@ export interface components {
         HTTPValidationError: {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
+        };
+        /** HistoryOut */
+        HistoryOut: {
+            /** Versions */
+            versions: components["schemas"]["HistoryVersionOut"][];
+        };
+        /** HistoryVersionOut */
+        HistoryVersionOut: {
+            /** Version */
+            version: number;
+            /** Batch Id */
+            batch_id: number;
+            /** Batch Status */
+            batch_status: string;
+            /** Created By Name */
+            created_by_name: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Decided By Name */
+            decided_by_name?: string | null;
+            /** Decided At */
+            decided_at?: string | null;
+            /** Reason */
+            reason?: string | null;
+            /** Deleted */
+            deleted: boolean;
+            /** Values */
+            values: {
+                [key: string]: unknown;
+            };
+            /** Masks */
+            masks: {
+                [key: string]: string;
+            };
         };
         /** IntegrationCheckOut */
         IntegrationCheckOut: {
@@ -1735,6 +2131,22 @@ export interface components {
             total: number;
             /** Rows */
             rows: components["schemas"]["ItemBranchRowOut"][];
+        };
+        /** ItemIn */
+        ItemIn: {
+            /** Entry Id */
+            entry_id?: number | null;
+            /** Expected Version */
+            expected_version?: number | null;
+            /** Values */
+            values?: {
+                [key: string]: unknown;
+            };
+            /**
+             * Delete
+             * @default false
+             */
+            delete: boolean;
         };
         /** ItemInfoOut */
         ItemInfoOut: {
@@ -1992,6 +2404,13 @@ export interface components {
             /** Stations */
             stations: components["schemas"]["StationOut"][];
         };
+        /** OptionOut */
+        OptionOut: {
+            /** Code */
+            code: string;
+            /** Title */
+            title: string;
+        };
         /** OrderStatusOut */
         OrderStatusOut: {
             /** Status */
@@ -2012,6 +2431,15 @@ export interface components {
             /** Page Size */
             page_size: number;
         };
+        /** Page[BatchOut] */
+        Page_BatchOut_: {
+            /** Items */
+            items: components["schemas"]["BatchOut"][];
+            /** Total */
+            total: number;
+            /** Page */
+            page: number;
+        };
         /** Page[EtlRunOut] */
         Page_EtlRunOut_: {
             /** Items */
@@ -2022,6 +2450,15 @@ export interface components {
             page: number;
             /** Page Size */
             page_size: number;
+        };
+        /** Page[RecordOut] */
+        Page_RecordOut_: {
+            /** Items */
+            items: components["schemas"]["RecordOut"][];
+            /** Total */
+            total: number;
+            /** Page */
+            page: number;
         };
         /** Page[UserOut] */
         Page_UserOut_: {
@@ -2144,11 +2581,47 @@ export interface components {
             /** Is Active */
             is_active?: boolean | null;
         };
+        /** PublicationOut */
+        PublicationOut: {
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "none" | "queued" | "running" | "published" | "failed";
+            /** Build Id */
+            build_id?: number | null;
+        };
         /**
          * Purpose
          * @enum {string}
          */
         Purpose: "pii" | "bank" | "mfa" | "integration_creds" | "audit_meta" | "audit_chain";
+        /** RecordOut */
+        RecordOut: {
+            /** Entry Id */
+            entry_id: number;
+            /** Version */
+            version: number;
+            /** Branch Id */
+            branch_id: number;
+            /** Values */
+            values: {
+                [key: string]: unknown;
+            };
+            /** Masks */
+            masks: {
+                [key: string]: string;
+            };
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "active" | "pending" | "deleted";
+            /** Pending Batch Id */
+            pending_batch_id?: number | null;
+            /** Shadowed By */
+            shadowed_by?: string | null;
+        };
         /** ReportPeriodOut */
         ReportPeriodOut: {
             /** Code */
@@ -2385,6 +2858,13 @@ export interface components {
                 [key: string]: number;
             } | null;
         };
+        /** SubmitIn */
+        SubmitIn: {
+            /** Expected Version */
+            expected_version: number;
+            /** Reason */
+            reason?: string | null;
+        };
         /** TemporaryPassword */
         TemporaryPassword: {
             /** Temporary Password */
@@ -2460,6 +2940,11 @@ export interface components {
             bad_ids: number[];
             /** First Bad Id */
             first_bad_id: number | null;
+        };
+        /** WithdrawIn */
+        WithdrawIn: {
+            /** Expected Version */
+            expected_version: number;
         };
     };
     responses: never;
@@ -4275,6 +4760,481 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["KaznaCelevyeOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_entities_api_v1_data_entities_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                "__Host-ugk_session"?: string | null;
+                "__Host-ugk_csrf"?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntityOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_records_api_v1_data_entities__entity_id__records_get: {
+        parameters: {
+            query?: {
+                status?: ("active" | "pending" | "deleted") | null;
+                page?: number;
+                br?: number | null;
+                per?: string;
+            };
+            header?: {
+                "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
+            };
+            path: {
+                entity_id: string;
+            };
+            cookie?: {
+                "__Host-ugk_session"?: string | null;
+                "__Host-ugk_csrf"?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Page_RecordOut_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    field_options_api_v1_data_entities__entity_id__options__field__get: {
+        parameters: {
+            query?: {
+                q?: string;
+                br?: number | null;
+            };
+            header?: {
+                "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
+            };
+            path: {
+                entity_id: string;
+                field: string;
+            };
+            cookie?: {
+                "__Host-ugk_session"?: string | null;
+                "__Host-ugk_csrf"?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OptionOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    record_history_api_v1_data_records__entry_id__history_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
+            };
+            path: {
+                entry_id: number;
+            };
+            cookie?: {
+                "__Host-ugk_session"?: string | null;
+                "__Host-ugk_csrf"?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HistoryOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_batches_api_v1_data_batches_get: {
+        parameters: {
+            query?: {
+                box?: "mine" | "inbox";
+                status?: ("draft" | "submitted" | "approved" | "rejected" | "withdrawn") | null;
+                page?: number;
+            };
+            header?: {
+                "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                "__Host-ugk_session"?: string | null;
+                "__Host-ugk_csrf"?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Page_BatchOut_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_batch_api_v1_data_batches_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                "__Host-ugk_session"?: string | null;
+                "__Host-ugk_csrf"?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BatchIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BatchOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_batch_api_v1_data_batches__batch_id__get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
+            };
+            path: {
+                batch_id: number;
+            };
+            cookie?: {
+                "__Host-ugk_session"?: string | null;
+                "__Host-ugk_csrf"?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BatchDetailOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_batch_api_v1_data_batches__batch_id__put: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
+            };
+            path: {
+                batch_id: number;
+            };
+            cookie?: {
+                "__Host-ugk_session"?: string | null;
+                "__Host-ugk_csrf"?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BatchUpdateIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BatchOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    submit_batch_api_v1_data_batches__batch_id__submit_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
+            };
+            path: {
+                batch_id: number;
+            };
+            cookie?: {
+                "__Host-ugk_session"?: string | null;
+                "__Host-ugk_csrf"?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SubmitIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BatchOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    withdraw_batch_api_v1_data_batches__batch_id__withdraw_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
+            };
+            path: {
+                batch_id: number;
+            };
+            cookie?: {
+                "__Host-ugk_session"?: string | null;
+                "__Host-ugk_csrf"?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WithdrawIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BatchOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    approve_batch_api_v1_data_batches__batch_id__approve_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
+            };
+            path: {
+                batch_id: number;
+            };
+            cookie?: {
+                "__Host-ugk_session"?: string | null;
+                "__Host-ugk_csrf"?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DecisionIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BatchOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reject_batch_api_v1_data_batches__batch_id__reject_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
+            };
+            path: {
+                batch_id: number;
+            };
+            cookie?: {
+                "__Host-ugk_session"?: string | null;
+                "__Host-ugk_csrf"?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DecisionIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BatchOut"];
                 };
             };
             /** @description Validation Error */

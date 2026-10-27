@@ -35,3 +35,16 @@ it('resolves the real S1 pages and nothing for pages not built yet', () => {
 it('ignores Object.prototype names', () => {
   expect(createRegistry({})('constructor', 'x')).toBeNull();
 });
+
+it('falls back to the section-level _page.tsx only where it exists', async () => {
+  const resolve = createRegistry({
+    './vvod/_page.tsx': () => Promise.resolve({ default: Demo }),
+    './vvod/inbox.tsx': () => Promise.resolve({ default: () => <p>inbox</p> }),
+  });
+  const entity = resolve('vvod', 'kazna-balance');
+  expect(entity).not.toBeNull();
+  expect(resolve('vvod', 'kazna-payment_plan')).toBe(entity);
+  expect(resolve('vvod', 'inbox')).not.toBe(entity);
+  expect(resolve('kazna', 'kazna-balance')).toBeNull();
+  expect(resolveSectionPage('vvod', 'kazna-balance')).not.toBeNull();
+});

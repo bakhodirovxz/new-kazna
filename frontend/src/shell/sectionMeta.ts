@@ -21,6 +21,7 @@ const SECTION_META: Record<string, SectionMeta> = {
   proizvodstvo: { icon: 'bolt', titleKey: 'section.proizvodstvo.title', descKey: 'section.proizvodstvo.desc' },
   investicii: { icon: 'target', titleKey: 'section.investicii.title', descKey: 'section.investicii.desc' },
   kadry: { icon: 'people', titleKey: 'section.kadry.title', descKey: 'section.kadry.desc' },
+  vvod: { icon: 'doc', titleKey: 'section.vvod.title', descKey: 'section.vvod.desc' },
 };
 
 const PAGE_ICONS: Record<string, IconName> = {

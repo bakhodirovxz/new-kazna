@@ -19,9 +19,16 @@ export type SectionPageComponent = LazyExoticComponent<ComponentType<SectionPage
 
 export function createRegistry(modules: Record<string, SectionPageLoader>) {
   const cache = new Map<string, SectionPageComponent>();
-  function resolve(section: string, page: string): SectionPageComponent | null {
+  /** Sahifa fayli yo'q bo'lsa, bo'lim darajasidagi `_page.tsx` zaxirasi («Ввод данных»: obyekt sahifalari). */
+  function keyFor(section: string, page: string): string | null {
     const key = `./${section}/${page}.tsx`;
-    if (!Object.hasOwn(modules, key)) return null;
+    if (Object.hasOwn(modules, key)) return key;
+    const fallback = `./${section}/_page.tsx`;
+    return Object.hasOwn(modules, fallback) ? fallback : null;
+  }
+  function resolve(section: string, page: string): SectionPageComponent | null {
+    const key = keyFor(section, page);
+    if (key === null) return null;
     const loader = modules[key];
     let component = cache.get(key);
     if (!component) {
@@ -31,7 +38,10 @@ export function createRegistry(modules: Record<string, SectionPageLoader>) {
     return component;
   }
   /** «Повторить»: rad etilgan chunk keshda qolmasin, keyingi resolve qayta import qiladi. */
-  resolve.reset = (section: string, page: string) => cache.delete(`./${section}/${page}.tsx`);
+  resolve.reset = (section: string, page: string) => {
+    const key = keyFor(section, page);
+    if (key !== null) cache.delete(key);
+  };
   return resolve;
 }
 

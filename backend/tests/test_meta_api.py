@@ -152,3 +152,19 @@ def test_resolve_period() -> None:
     with pytest.raises(ValidationFailed) as exc:
         resolve_period("m12", date(2026, 9, 24))  # hali kelmagan oy
     assert exc.value.params["fields"] == ["per"]  # T12: uy formati
+
+
+def test_menu_has_vvod_only_with_data_perms() -> None:
+    base = {"section:obzor:view", "section:kazna:view"}
+    assert [g.title for g in build_menu(frozenset(base)).groups] == [None, "Финансы"]
+    maker = build_menu(frozenset(base | {"data:kazna:write"}))
+    assert maker.groups[-1].title == "Данные"
+    vvod = maker.groups[-1].sections[0]
+    assert vvod.id == "vvod" and vvod.title == "Ввод данных"
+    assert [p.id for p in vvod.pages] == [
+        "batches", "kazna-bank_account", "kazna-balance", "kazna-payment_plan"]
+    checker = build_menu(frozenset(base | {"data:kazna:approve"}))
+    assert checker.groups[-1].sections[0].pages[0].id == "inbox"
+    assert "batches" not in [p.id for p in checker.groups[-1].sections[0].pages]
+    admin = build_menu(frozenset(base | {"admin:users"}))
+    assert not any(g.title == "Данные" for g in admin.groups)

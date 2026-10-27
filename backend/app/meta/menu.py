@@ -7,7 +7,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from app.auth.permissions import SECTION_TITLES, Section, section_perm
+from app.auth.permissions import ALL_DATA_PERMS, SECTION_TITLES, Section, data_perm, section_perm
+from app.manual.entities import ENTITIES
 from app.meta.schemas import MenuGroupOut, MenuOut, MenuPageOut, MenuSectionOut
 
 
@@ -27,6 +28,8 @@ class MenuSection:
 P = MenuPage
 SVOD = P("svod", "Сводка")
 GROUP_ORDER: tuple[str | None, ...] = (None, "Финансы", "Обеспечение", "Производство", "Персонал")
+DATA_GROUP = "Данные"
+VVOD_ID, VVOD_TITLE = "vvod", "Ввод данных"
 
 MENU: tuple[MenuSection, ...] = (
     MenuSection(Section.OBZOR, None, (
@@ -57,6 +60,28 @@ MENU: tuple[MenuSection, ...] = (
 )
 
 
+def entity_page_id(entity_id: str) -> str:
+    return entity_id.replace(".", "-")
+
+
+def _vvod_section(permissions: frozenset[str]) -> MenuSectionOut | None:
+    """«Ввод данных»: markaziy bo'lim -- faqat biror `data:*` ruxsati bo'lsa (admin'da yo'q)."""
+    if not any(p in permissions for p in ALL_DATA_PERMS):
+        return None
+    pages: list[MenuPageOut] = []
+    if any(p.endswith(":approve") and p in permissions for p in ALL_DATA_PERMS):
+        pages.append(MenuPageOut(id="inbox", title="На согласовании"))
+    if any(p.endswith(":write") and p in permissions for p in ALL_DATA_PERMS):
+        pages.append(MenuPageOut(id="batches", title="Мои пакеты"))
+    pages += [
+        MenuPageOut(id=entity_page_id(e.id), title=e.title)
+        for e in ENTITIES.values()
+        if data_perm(e.section, "write") in permissions
+        or data_perm(e.section, "approve") in permissions
+    ]
+    return MenuSectionOut(id=VVOD_ID, title=VVOD_TITLE, pages=pages)
+
+
 def build_menu(permissions: frozenset[str]) -> MenuOut:
     groups: list[MenuGroupOut] = []
     for group in GROUP_ORDER:
@@ -71,4 +96,7 @@ def build_menu(permissions: frozenset[str]) -> MenuOut:
         ]
         if sections:
             groups.append(MenuGroupOut(title=group, sections=sections))
+    vvod = _vvod_section(permissions)
+    if vvod is not None:
+        groups.append(MenuGroupOut(title=DATA_GROUP, sections=[vvod]))
     return MenuOut(groups=groups)

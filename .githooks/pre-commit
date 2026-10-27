@@ -3,7 +3,14 @@
 # Ulash: make hooks  (git config core.hooksPath .githooks). Docker ishlab turishi kerak.
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
-docker compose -f deploy/compose.tools.yml run --rm -T gitleaks-staged
+GITLEAKS=(docker compose -f deploy/compose.tools.yml run --rm -T)
+# git worktree: .git — host yo'lli fayl, konteynerda ochilmaydi; umumiy .git ulanib GIT_DIR beriladi.
+if [ -f .git ]; then
+  common="$(cd "$(git rev-parse --git-common-dir)" && { pwd -W 2>/dev/null || pwd; })"
+  GITLEAKS+=(-v "$common:/gitdir:ro" -e "GIT_DIR=/gitdir/worktrees/$(basename "$(git rev-parse --git-dir)")"
+             -e GIT_WORK_TREE=/src)
+fi
+MSYS_NO_PATHCONV=1 "${GITLEAKS[@]}" gitleaks-staged
 mapfile -t PY < <(git diff --cached --name-only --diff-filter=ACMR -- 'backend/*.py' | sed 's#^backend/##')
 if [ "${#PY[@]}" -gt 0 ]; then
   docker compose -f deploy/compose.test.yml run --rm -T --no-deps test ruff check "${PY[@]}"

@@ -18,19 +18,20 @@ from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any
 
+from apscheduler.schedulers.base import BaseScheduler
 from apscheduler.schedulers.blocking import BlockingScheduler
 from apscheduler.triggers.cron import CronTrigger
 from sqlalchemy import text
 
 from app.audit.service import AuditAction, AuditEvent, record
 from app.bootstrap import bootstrap_runtime
+from app.core import sysconfig
 from app.core.config import ConfigError, Settings, get_settings
 from app.core.db import get_engine
 from app.core.logging import configure_logging, get_logger
 from app.dwh import partitions
 from app.dwh.dates import TASHKENT, today_tashkent
 from app.dwh.freshness import freshness
-from app.dwh.reference import current_setting
 from app.etl.connectors import make_connector
 from app.etl.db import etl_transaction
 from app.etl.errors import FILE_FULL_REFUSED, EtlBusyError, safe_error, sqlstate_of
@@ -178,9 +179,9 @@ def process_requests(
 
 def maintain_partitions(today: date) -> dict[str, int]:
     with etl_transaction() as conn:
-        months_ahead = int(current_setting(conn, "partitions.months_ahead"))
-        keep_years = int(current_setting(conn, "retention.fact_years"))
-        audit_months = int(current_setting(conn, "retention.audit_months"))
+        months_ahead = int(sysconfig.current(conn, "partitions.months_ahead"))
+        keep_years = int(sysconfig.current(conn, "retention.fact_years"))
+        audit_months = int(sysconfig.current(conn, "retention.audit_months"))
         created = partitions.ensure_ahead(conn, today, months_ahead)
         dropped = partitions.drop_old(conn, keep_years)
         conn.execute(text("SELECT core.ensure_audit_partitions(3)"))
@@ -226,24 +227,54 @@ def heartbeat(path: Path = HEARTBEAT) -> None:
     path.touch()
 
 
+# job_id -> (sozlama kaliti, qo'llangan cron). S1–S5 cron joblari ham shu orqali qo'shiladi.
+_applied: dict[str, tuple[str, str]] = {}
+
+
+def add_cron_job(scheduler: BaseScheduler, job_id: str, key: str, func: Callable[..., Any], *,
+                 args: tuple[Any, ...] = (), **opts: Any) -> None:
+    with get_engine("app").connect() as conn:
+        cron = str(sysconfig.current(conn, key))
+    scheduler.add_job(func, CronTrigger.from_crontab(cron, timezone=TASHKENT), args=args,
+                      id=job_id, **opts)
+    _applied[job_id] = (key, cron)
+
+
+def sync_schedules(scheduler: BaseScheduler) -> list[str]:
+    """Panelda o'zgargan cron'lar ≤ 60 s ichida qo'llanadi (qayta ishga tushirishsiz)."""
+    changed: list[str] = []
+    with get_engine("app").connect() as conn:
+        for job_id, (key, applied) in list(_applied.items()):
+            cron = str(sysconfig.current(conn, key))
+            if cron == applied or scheduler.get_job(job_id) is None:
+                continue
+            scheduler.reschedule_job(job_id, trigger=CronTrigger.from_crontab(cron,
+                                                                             timezone=TASHKENT))
+            _applied[job_id] = (key, cron)
+            changed.append(job_id)
+    if changed:
+        log.info("schedules_synced", jobs=changed)
+    return changed
+
+
 def build_scheduler(settings: Settings, notifier: Notifier, *,
                     scheduler: BlockingScheduler | None = None) -> BlockingScheduler:
     scheduler = scheduler or BlockingScheduler(timezone=TASHKENT)
+    _applied.clear()
     opts: dict[str, Any] = {"max_instances": 1, "coalesce": True, "misfire_grace_time": 3600}
     if settings.env == "dev":
-        with get_engine("app").connect() as conn:
-            cron = str(current_setting(conn, "etl.synthetic_cron"))
-        scheduler.add_job(run_etl_job, CronTrigger.from_crontab(cron, timezone=TASHKENT),
-                          args=("synthetic", Mode.FULL, notifier), id="etl_synthetic_full",
-                          **opts)
+        add_cron_job(scheduler, "etl_synthetic_full", "etl.synthetic_cron", run_etl_job,
+                     args=("synthetic", Mode.FULL, notifier), **opts)
     scheduler.add_job(_guarded("etl_requests", lambda: process_requests(notifier)),
                       "interval", seconds=30, id="etl_requests", **opts)
     scheduler.add_job(_guarded("integration_checks", process_integration_checks),
                       "interval", seconds=10, id="integration_checks", **opts)
-    scheduler.add_job(_guarded("partitions", lambda: maintain_partitions(today_tashkent())),
-                      CronTrigger(hour=3, minute=30, timezone=TASHKENT), id="partitions", **opts)
-    scheduler.add_job(_guarded("cleanup", cleanup_job),
-                      CronTrigger(hour=4, minute=0, timezone=TASHKENT), id="cleanup", **opts)
+    add_cron_job(scheduler, "partitions", "maintenance.partitions_cron",
+                 _guarded("partitions", lambda: maintain_partitions(today_tashkent())), **opts)
+    add_cron_job(scheduler, "cleanup", "maintenance.cleanup_cron",
+                 _guarded("cleanup", cleanup_job), **opts)
+    scheduler.add_job(_guarded("schedules", lambda: sync_schedules(scheduler)),
+                      "interval", seconds=60, id="schedules", **opts)
     scheduler.add_job(_guarded("freshness", lambda: check_freshness(notifier)),
                       "interval", minutes=30, id="freshness", **opts)
     scheduler.add_job(heartbeat, "interval", seconds=60, id="heartbeat", **opts)

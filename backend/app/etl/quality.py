@@ -50,12 +50,11 @@ from typing import Any
 from sqlalchemy import text
 from sqlalchemy.engine import Connection
 
+from app.core import sysconfig
 from app.etl.types import ControlTotals, Window
 
 CHECK_CODES = ("control_totals", "balance_identity", "mandatory_dims", "capacity_limit",
                "dangling_refs")
-CONTROL_TOLERANCE = Decimal("0.001")
-BALANCE_TOLERANCE = Decimal("0.01")
 SAMPLE = 50
 
 
@@ -66,12 +65,18 @@ class CheckResult:
     detail: dict[str, Any] = field(default_factory=dict)
 
 
+def tolerances(conn: Connection) -> tuple[Decimal, Decimal]:
+    """(nazorat jami nisbiy dopuski, balans dopuski) — paneldan, keyingi yuklashdan."""
+    return (Decimal(str(sysconfig.current(conn, "quality.control_tolerance"))),
+            Decimal(str(sysconfig.current(conn, "quality.balance_tolerance"))))
+
+
 def failed(results: list[CheckResult]) -> list[CheckResult]:
     return [r for r in results if not r.ok]
 
 
 def _control_totals(conn: Connection, source: str, window: Window,
-                    totals: ControlTotals | None) -> CheckResult:
+                    totals: ControlTotals | None, tolerance: Decimal) -> CheckResult:
     if totals is None:
         return CheckResult("control_totals", True, {"skipped": True})
     ours = {
@@ -91,7 +96,7 @@ def _control_totals(conn: Connection, source: str, window: Window,
     for month in sorted((set(ours) | set(totals.cashflow_by_month)) & valid_months):
         expected = Decimal(totals.cashflow_by_month.get(month, Decimal(0)))
         actual = ours.get(month, Decimal(0))
-        if abs(actual - expected) > abs(expected) * CONTROL_TOLERANCE:
+        if abs(actual - expected) > abs(expected) * tolerance:
             mismatches.append({"month": month, "source": str(expected), "dwh": str(actual)})
     return CheckResult("control_totals", not mismatches,
                        {"mismatches": mismatches[:SAMPLE], "ignored_months": ignored_months})
@@ -130,7 +135,8 @@ _UNVERIFIABLE_SQL = text(
 )
 
 
-def _balance_identity(conn: Connection, build_id: int, window: Window) -> CheckResult:
+def _balance_identity(conn: Connection, build_id: int, window: Window,
+                      tolerance: Decimal) -> CheckResult:
     months = window.month_ids()
     unverifiable = [
         {"branch_id": r.branch_id, "month_id": r.month_id}
@@ -145,7 +151,7 @@ def _balance_identity(conn: Connection, build_id: int, window: Window) -> CheckR
              "AND closing_balance IS NOT NULL "
              "AND abs(diff) > greatest(:tol * (inflow + outflow), 0.01) "
              "ORDER BY month_id, branch_id"),
-        {"b": build_id, "mf": months[0], "mt": months[-1], "tol": BALANCE_TOLERANCE},
+        {"b": build_id, "mf": months[0], "mt": months[-1], "tol": tolerance},
     ).all()
     violations = [{"branch_id": r.branch_id, "month_id": r.month_id, "diff": str(r.diff),
                    "turnover": str(r.turnover)} for r in rows
@@ -250,9 +256,10 @@ def run_checks(conn: Connection, *, run_id: int, build_id: int, source: str, win
     missing_branch = _missing_branch_count(conn, run_id)
     missing_dim = errors.get("missing_dim", 0)
     missing_item = warnings.get("missing_item", 0)
+    control_tol, balance_tol = tolerances(conn)
     return [
-        _control_totals(conn, source, window, totals),
-        _balance_identity(conn, build_id, window),
+        _control_totals(conn, source, window, totals, control_tol),
+        _balance_identity(conn, build_id, window, balance_tol),
         CheckResult("mandatory_dims", missing_branch == 0,
                     {"logged_errors": missing_branch, "logged_warnings": missing_item}),
         _capacity(conn, window),

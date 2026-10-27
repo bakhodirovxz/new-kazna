@@ -75,7 +75,6 @@ from app.etl.types import (
 __all__ = ["ETL_LOCK", "EtlBusyError", "RunResult", "Runner", "StepResult", "compute_window"]
 
 ETL_LOCK = "ugk_etl"
-INCREMENTAL_LOOKBACK = timedelta(days=45)
 AGGREGATE_YEARS = 10  # spec 4.7: agregatlar 10 yil saqlanadi
 log = get_logger("ugekazna.etl")
 
@@ -115,13 +114,13 @@ class _StepDetailError(Exception):
 
 
 def compute_window(mode: Mode, *, today: date, history_start: date,
-                   last_watermark: datetime | None) -> Window:
-    """To'liq: tarix boshidan. Inkremental: min(watermark - 45 kun, joriy oy boshi) -- TZ:
-    "последние 45 дней плюс текущий месяц целиком"; eski watermark oraliqni ham qamraydi."""
+                   last_watermark: datetime | None, lookback_days: int = 45) -> Window:
+    """To'liq: tarix boshidan. Inkremental: min(watermark - lookback_days, joriy oy boshi) --
+    TZ: "последние 45 дней плюс текущий месяц целиком" (standart 45)."""
     if mode == Mode.FULL or last_watermark is None:
         return Window(history_start, today)
     wm_day = last_watermark.astimezone(TASHKENT).date()
-    start = min(wm_day - INCREMENTAL_LOOKBACK, month_start(today))
+    start = min(wm_day - timedelta(days=lookback_days), month_start(today))
     return Window(max(start, history_start), today)
 
 
@@ -205,6 +204,7 @@ class Runner:
                 history_start = date.fromisoformat(str(current_setting(conn, "etl.history_start")))
                 keep = int(current_setting(conn, "builds.keep"))
                 fact_years = int(current_setting(conn, "retention.fact_years"))
+                lookback = int(current_setting(conn, "etl.incremental_lookback_days"))
             except (KeyError, ValueError, TypeError) as exc:
                 # I1: bu FAQAT bizning sozlamalarimizni o'qish/talqin qilishdagi dasturiy
                 # xato — xabari faqat kalit/qiymat turi haqida, xavfsiz.
@@ -213,7 +213,7 @@ class Runner:
                 "SELECT watermark FROM core.etl_run WHERE source = :s AND status = 'success' "
                 "AND watermark IS NOT NULL ORDER BY id DESC LIMIT 1"), {"s": source}).scalar()
             window = compute_window(self.mode, today=self.today, history_start=history_start,
-                                    last_watermark=last)
+                                    last_watermark=last, lookback_days=lookback)
             run_id = int(conn.execute(text(
                 "INSERT INTO core.etl_run (source, mode, status, window_from, window_to, "
                 "triggered_by) VALUES (:s, :m, 'running', :f, :t, :u) RETURNING id"),

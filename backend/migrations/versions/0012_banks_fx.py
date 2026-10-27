@@ -51,12 +51,13 @@ STATEMENTS = [
       ELSE true END
     """,
     "GRANT SELECT ON dwh.statement_branches, dwh.cashflow_effective TO ugk_etl",
+    # Kurslar maxfiy emas va filialga bog'liq emas; ugk_app dwh.fx_rate'ga bevosita kira olmaydi
+    # (test_ugk_app_denied_select_on_fx_rate), shuning uchun view egasi (migrator) huquqida ishlaydi.
     """
-    CREATE VIEW pub.fx_rate_latest WITH (security_invoker = true) AS
+    CREATE VIEW pub.fx_rate_latest AS
     SELECT DISTINCT ON (r.currency) r.currency, r.date_id, r.rate
     FROM dwh.fx_rate r ORDER BY r.currency, r.date_id DESC
     """,
-    "GRANT SELECT ON dwh.fx_rate TO ugk_app",
     "GRANT SELECT ON pub.fx_rate_latest TO ugk_app",
 ]
 
@@ -68,7 +69,6 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     op.execute("DROP VIEW pub.fx_rate_latest")
-    op.execute("REVOKE SELECT ON dwh.fx_rate FROM ugk_app")
     op.execute("DROP VIEW dwh.cashflow_effective")
     op.execute("DROP VIEW dwh.statement_branches")
     op.execute("DROP TABLE core.bank_files")

@@ -28,7 +28,8 @@ def sc() -> Iterator[LoanScenario]:
     source = new_source()
     scenario = loan_scenario(source, publish=True)
     yield scenario
-    with get_engine("migrator").begin() as conn:  # chegaralangan rol foydalanuvchisi filialga bog'langan
+    # chegaralangan rol foydalanuvchisi filialga bog'langan
+    with get_engine("migrator").begin() as conn:
         conn.execute(text("DELETE FROM core.position_branches WHERE branch_id IN (:a, :b)"),
                      {"a": scenario.branch_id, "b": scenario.empty_branch_id})
     purge_source(source)

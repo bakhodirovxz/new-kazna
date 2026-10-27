@@ -1,36 +1,43 @@
 import { useId, type KeyboardEvent } from 'react';
-import type { StationOut } from '../../../api/types';
-import { formatMoney } from '../../../dash/money';
-import { t } from '../../../i18n';
-import { formatNumber } from '../../../i18n/format';
-import { cx } from '../../../ui/cx';
+import type { StationOut } from '../../api/types';
+import { t } from '../../i18n';
+import { formatNumber } from '../../i18n/format';
+import { cx } from '../../ui/cx';
+import { formatKwh } from '../energy';
+import { formatPct } from '../money';
 import { HIDDEN_LABELS, inInset, insetXY, LABEL_SIDE, mainXY, markerRadius, UZ_GEO } from './geo';
 import './map.css';
 
-export interface GesMapProps {
-  stations: readonly StationOut[];
+/** Обзор (`StationOut`) va Производство (`MapStationOut`) xaritalari uchun umumiy maydonlar. */
+export type MapPoint = Pick<StationOut, 'branch_id' | 'code' | 'name' | 'short_name' | 'kind' | 'capacity_mw' | 'lat' | 'lon' | 'production'>;
+
+/** TZ 6: «Всплывающая подсказка: название, мощность, выработка, процент плана». */
+export function productionTip(s: MapPoint): string {
+  const capacity = formatNumber(s.capacity_mw ?? 0);
+  const p = s.production;
+  if (!p) return t('map.tipStation', { name: s.name, capacity });
+  return t('map.tipProduction', { name: s.name, capacity, generation: formatKwh(p.generation), plan: formatPct(p.execution, 0) });
+}
+
+export interface GesMapProps<T extends MapPoint> {
+  stations: readonly T[];
   selected: number | null;
   onSelect(id: number | null): void;
+  tip?: (s: T) => string;
 }
 
-function tip(s: StationOut): string {
-  if (s.kind === 'head') return t('obzor.map.tipHq', { name: s.name, balance: formatMoney(s.closing) });
-  return t('obzor.map.tip', { name: s.name, capacity: s.capacity_mw == null ? '—' : formatNumber(s.capacity_mw), outflow: formatMoney(s.outflow) });
-}
-
-function lowPlan(s: StationOut): boolean {
+function lowPlan(s: MapPoint): boolean {
   const execution = s.production?.execution;
-  return execution !== undefined && execution < 0.95;
+  return execution !== undefined && execution !== null && execution < 0.95;
 }
 
-function Marker({ s, x, y, r, on, onSelect }: { s: StationOut; x: number; y: number; r: number; on: boolean; onSelect(id: number | null): void }) {
+function Marker({ s, text, x, y, r, on, onSelect }: { s: MapPoint; text: string; x: number; y: number; r: number; on: boolean; onSelect(id: number | null): void }) {
   const hq = s.kind === 'head';
   const side = LABEL_SIDE[s.code] ?? 'r';
   const off = r + 5;
   const lx = side === 'l' ? x - off : side === 'r' ? x + off : x;
   const ly = side === 't' ? y - off - 2 : side === 'b' ? y + off + 11 : y + 4.5;
   const anchor = side === 'l' ? 'end' : side === 'r' ? 'start' : 'middle';
-  const text = tip(s);
   // WCAG 2.5.3: ko'rinadigan qisqa nom accessible name boshida butun so'z bo'lib turishi shart
   // («Ташкент» ≠ «Ташкентских» — axe so'z bo'yicha solishtiradi).
   const label = `${s.short_name}. ${text}`;
@@ -59,13 +66,14 @@ function Marker({ s, x, y, r, on, onSelect }: { s: StationOut; x: number; y: num
 }
 
 /** TZ 6 «Карта ГЭС»: stansiyalar koordinatalar bo'yicha, Toshkent viloyati — alohida ramkada. */
-export function GesMap({ stations, selected, onSelect }: GesMapProps) {
+export function GesMap<T extends MapPoint>({ stations, selected, onSelect, tip }: GesMapProps<T>) {
   const clipId = `ins${useId().replace(/[^a-zA-Z0-9]/g, '')}`;
   const [ix, iy, iw, ih] = UZ_GEO.inset;
   const [bx0, by0] = mainXY(68.95, 41.75);
   const [bx1, by1] = mainXY(70.15, 40.95);
   const placed = stations.filter((s) => s.lat !== null && s.lon !== null);
   const anyLow = placed.some(lowPlan);
+  const tooltip = (s: T): string => (tip ? tip(s) : productionTip(s));
   return (
     <div className="mapwrap">
       <svg viewBox={`0 0 ${UZ_GEO.W} ${UZ_GEO.H}`} role="group" aria-label={t('obzor.map.aria')}>
@@ -107,7 +115,16 @@ export function GesMap({ stations, selected, onSelect }: GesMapProps) {
           const inset = inInset(lon, lat);
           const [x, y] = inset ? insetXY(lon, lat) : mainXY(lon, lat);
           return (
-            <Marker key={s.branch_id} s={s} x={x} y={y} r={markerRadius(s.capacity_mw, inset, s.kind === 'head')} on={selected === s.branch_id} onSelect={onSelect} />
+            <Marker
+              key={s.branch_id}
+              s={s}
+              text={tooltip(s)}
+              x={x}
+              y={y}
+              r={markerRadius(s.capacity_mw, inset, s.kind === 'head')}
+              on={selected === s.branch_id}
+              onSelect={onSelect}
+            />
           );
         })}
       </svg>

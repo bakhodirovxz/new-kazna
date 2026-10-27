@@ -1,5 +1,10 @@
 /** Backend OpenAPI sxemalari (src/api/schema.d.ts — `npm run gen:api` bilan generatsiya qilinadi). */
 import type { components } from './schema';
+import type { StationProductionOut } from './types.proizvodstvo';
+
+// S3: «Производство» / «Склад» turlari — bo'lim bo'yicha alohida fayllarda (qo'lda, generatsiyagacha).
+export type * from './types.proizvodstvo';
+export type * from './types.sklad';
 
 type Schemas = components['schemas'];
 
@@ -79,12 +84,13 @@ export type ActivityAmountOut = Schemas['ActivityAmountOut'];
 export type BranchCashOut = Schemas['BranchCashOut'];
 export type BranchAmountOut = Schemas['BranchAmountOut'];
 export type BankAmountOut = Schemas['BankAmountOut'];
-export type StationOut = Schemas['StationOut'];
+// S3: `production` — S1'da erkin `dict`, S3'da `StationProductionOut` (qo'lda; generatsiyadan keyin Schemas['StationOut']).
+export type StationOut = Omit<Schemas['StationOut'], 'production'> & { production?: StationProductionOut | null };
 export type SeriesOut = Schemas['SeriesOut'];
 export type DetailRowOut = Schemas['DetailRowOut'];
 export type ItemInfoOut = Schemas['ItemInfoOut'];
 export type ItemBranchRowOut = Schemas['ItemBranchRowOut'];
-export type ObzorSvodOut = Schemas['ObzorSvodOut'];
+export type ObzorSvodOut = Omit<Schemas['ObzorSvodOut'], 'stations'> & { stations: StationOut[] };
 export type ObzorFlowOut = Schemas['ObzorFlowOut'];
 export type ObzorExcelOut = Schemas['ObzorExcelOut'];
 export type ItemBranchesOut = Schemas['ItemBranchesOut'];

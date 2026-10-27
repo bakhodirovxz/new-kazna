@@ -91,13 +91,15 @@ def test_extract_respects_window_and_reports_all_targets() -> None:
         "dim_branch", "dim_item", "dim_counterparty", "dim_bank", "dim_nomenclature",
         "dim_source", "dim_object", "dim_contract", "dim_loan", "dim_position", "fx_rate",
         "fact_cashflow", "fact_balance", "fact_payment_plan", "fact_payment_order", "fact_debt",
-        "fact_target_funds",
+        "fact_target_funds", "fact_loan_schedule",
     }
     assert stats.by_target["dim_branch"] == 16 and stats.by_target["dim_bank"] == 80
     assert stats.rows == len(sink.rows)
     for target, row in sink.rows:
         if target == "fact_balance":
             assert date_id(date(2026, 7, 31)) <= row["date_id"] <= window.to_id
+        elif target == "fact_loan_schedule" or row.get("doc_type") == "payment_schedule":
+            assert row["date_id"] >= window.from_id, (target, row)  # forward: yuqori chegarasiz
         elif target.startswith("fact_") or target == "fx_rate":
             assert window.contains_id(row["date_id"]), (target, row)
     totals = connector.control_totals(window)
@@ -152,8 +154,11 @@ def test_month_rollover_changes_no_closed_period_row() -> None:
     # I1: as_of 24 sentyabr -> 5 oktyabr; oyna yopiq oylar (2024-01-01..2026-06-30) — BARCHA
     # oilalar (o'lchovlar ham: ular as_of'ga bog'liq emas) ayni bir xil bo'lishi shart.
     window = Window(date(2024, 1, 1), date(2026, 6, 30))
-    before = _extract(date(2026, 9, 24), window)
-    after = _extract(date(2026, 10, 5), window)
+    # Forward oilalar (kalendar) as_of'ga bog'liq, oynadan keyin: yopiq davr qatorlari taqqoslanadi.
+    before = [r for r in _extract(date(2026, 9, 24), window)
+              if r[1].get("date_id", 0) <= window.to_id or r[0].startswith("dim_")]
+    after = [r for r in _extract(date(2026, 10, 5), window)
+             if r[1].get("date_id", 0) <= window.to_id or r[0].startswith("dim_")]
     assert {t for t, _ in before} >= {"fact_debt", "fact_payment_order", "fact_balance",
                                       "fact_cashflow", "fx_rate", "dim_contract"}
     assert before == after

@@ -78,6 +78,9 @@ h3 {
   color: var(--muted);
 }
 
+.note { margin: 0; font-size: 0.9rem; color: var(--muted); }
+.note .icon { width: 1rem; height: 1rem; vertical-align: -0.15em; }
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

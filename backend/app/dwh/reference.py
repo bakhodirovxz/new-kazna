@@ -17,6 +17,7 @@ from sqlalchemy import text
 from sqlalchemy.engine import Connection
 
 from app.core import sysconfig
+from app.core.setting_types import CALENDAR_KINDS, OneCOrg  # noqa: F401  (S1 importlari)
 from app.core.sysconfig import REGISTRY
 
 # Taxalluslar: yagona manba — app/core/sysconfig.py reyestri (04b).

@@ -15,7 +15,7 @@
 .card h2 { margin: 0; font-size: 1.2rem; font-weight: 600; }
 .card__sub { margin: 0.2rem 0 0; font-size: 0.92rem; color: var(--muted); }
 .card__actions { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
-.card__exp { position: absolute; top: 0.85rem; right: 0.9rem; z-index: 2; opacity: 0; transition: opacity 0.15s; }
+.card__exp { opacity: 0; transition: opacity 0.15s; } /* в потоке шапки: не перекрывает элементы карточки */
 .card:hover .card__exp, .card:focus-within .card__exp { opacity: 1; }
 @media (hover: none) { .card__exp { opacity: 1; } }
 
@@ -160,7 +160,7 @@
 .empty-state { display: flex; flex-direction: column; align-items: center; gap: 0.6rem; padding: 3rem 1.5rem; text-align: center; color: var(--muted); }
 .empty-state__ic { display: grid; place-items: center; width: 3.5rem; height: 3.5rem; border-radius: 1rem; background: linear-gradient(135deg, #e7f1ff, #dff6fa); color: var(--brand2); }
 .empty-state__ic .icon { width: 1.8rem; height: 1.8rem; }
-.empty-state h2 { margin: 0.4rem 0 0; font-size: 1.3rem; color: var(--ink); }
+.empty-state :is(h2, h3, h4) { margin: 0.4rem 0 0; font-size: 1.3rem; color: var(--ink); }
 .empty-state p { max-width: 34rem; margin: 0; }
 .empty-state__action { margin-top: 0.4rem; }
 

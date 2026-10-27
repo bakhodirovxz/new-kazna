@@ -28,6 +28,7 @@ from app.auth.permissions import Perm
 from app.core.config import get_settings
 from app.core.db import get_engine
 from app.core.logging import get_logger
+from app.core.setting_types import OneCOrg, calendar_kinds, onec_orgs
 from app.dwh.dates import today_tashkent
 
 Kind = Literal["int", "float", "bool", "str", "cron", "date", "list", "json"]
@@ -138,6 +139,22 @@ _DEFS: tuple[SettingDef, ...] = (
              title="Очистка сеансов и промежуточных данных"),
     int_def("etl.incremental_lookback_days", 45, 7, 120, category="etl",
             title="Окно инкрементальной загрузки", unit="дн.", apply="next_run"),
+    # S1: kalendar turlari va 1C (kodda emas, panelda)
+    SettingDef("kazna.calendar_kinds",
+               {"taxes": ["PKM54-O03"], "salary": ["PKM54-O05"], "loans": ["PKM54-O04"]},
+               TypeAdapter(Annotated[dict[str, list[str]], AfterValidator(calendar_kinds)]),
+               "json", category="kazna", title="Статьи платёжного календаря", apply="next_run"),
+    SettingDef("onec.orgs", [],
+               TypeAdapter(Annotated[list[OneCOrg], AfterValidator(onec_orgs)]), "json",
+               category="onec", title="Организации 1С и филиалы", apply="next_run"),
+    bool_def("onec.income_enabled", False, category="onec",
+             title="Загружать поступления (/income)", apply="next_run"),
+    int_def("onec.page_limit", 100000, 1000, 1_000_000, category="onec",
+            title="Размер страницы запроса к 1С", unit="строк", apply="next_run"),
+    cron_def("etl.onec_full_cron", "0 2 * * *", category="etl",
+             title="Расписание полной загрузки 1С"),
+    cron_def("etl.onec_incremental_cron", "0 10,13,16 * * *", category="etl",
+             title="Расписание инкрементальной загрузки 1С"),
     # Sifat va saqlash
     float_def("quality.control_tolerance", 0.001, 0.0, 0.01, category="quality",
               title="Допуск сверки контрольных сумм (доля)", guarded=True, apply="next_run"),

@@ -14,9 +14,10 @@ import { FilterControls } from './FilterControls';
 import { PageBoundary } from './PageBoundary';
 import { PageHeader } from './PageHeader';
 import { SourceBar } from './SourceBar';
-import { flattenMenu, isKnownSection, pageIcon, sectionDesc, sectionIcon } from './sectionMeta';
+import { ATTENTION_PAGE, flattenMenu, isKnownSection, pageIcon, sectionDesc, sectionIcon } from './sectionMeta';
 import type { SideModel } from './SideMenu';
 import { StatusScreen } from './StatusScreen';
+import { useAttentionCount } from './useAttentionCount';
 import { useFilters } from './useFilters';
 
 export interface SectionScreenProps {
@@ -37,6 +38,7 @@ export function SectionScreen({ me, menu, route, tools }: SectionScreenProps) {
   const section = sections.find((s) => s.id === route.section);
   const page = section ? (section.pages.find((p) => p.id === route.page) ?? section.pages[0]) : undefined;
   const filters = useFilters(route, me);
+  const attention = useAttentionCount(route.section === 'obzor' && filters.ready, filters.state);
 
   useEffect(() => {
     if (section && page && route.page !== page.id) navigate({ ...route, page: page.id }, { replace: true });
@@ -54,7 +56,9 @@ export function SectionScreen({ me, menu, route, tools }: SectionScreenProps) {
     desc: sectionDesc(section.id),
     icon: sectionIcon(section.id),
     activeId: page.id,
-    items: section.pages.map((p) => ({ id: p.id, label: p.title, icon: pageIcon(p.id), href: filters.hrefFor(section.id, p.id) })),
+    items: section.pages.map((p) => ({ id: p.id, label: p.title, icon: pageIcon(p.id), href: filters.hrefFor(section.id, p.id),
+      count: section.id === 'obzor' && p.id === ATTENTION_PAGE ? attention : undefined,
+    })),
   };
   const hasPage = resolveSectionPage(section.id, page.id) !== null;
   const navQuery = { br: filters.state.br, per: filters.state.per === filters.defaultPeriod ? null : filters.state.per };
@@ -78,7 +82,7 @@ export function SectionScreen({ me, menu, route, tools }: SectionScreenProps) {
         ) : hasPage ? (
           <PageBoundary key={`${section.id}/${page.id}`} onRetry={() => resolveSectionPage.reset(section.id, page.id)}>
             <Suspense fallback={<PageSkeleton />}>
-              <PageView section={section.id} page={page.id} filters={filters.state} />
+              <PageView section={section.id} page={page.id} filters={filters.state} onBranch={filters.setBranch} />
             </Suspense>
           </PageBoundary>
         ) : (

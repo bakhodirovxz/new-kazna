@@ -46,7 +46,10 @@ PUBLIC = {
     # muhitda) ochiq — shuning uchun bu yerda PUBLIC.
     ("GET", "/api/v1/openapi.json"),
 }
-PREFIX_PERMS = {"/api/v1/admin": "admin:", "/api/v1/audit": "audit:read"}
+PREFIX_PERMS = {"/api/v1/admin": "admin:", "/api/v1/audit": "audit:read",
+                "/api/v1/obzor": "section:obzor:view",
+                "/api/v1/kazna": "section:kazna:view",
+                "/api/v1/exports": "export:csv"}
 # R2-1: `_resolve` yakuniy yozuvi `APIRoute` bo'lmasa, shu yerda ANIQ ro'yxatga kiritilmagan
 # bo'lsa, test yiqiladi. Hozircha bo'sh — hech qanday xom (APIRoute bo'lmagan) route yo'q.
 NON_STANDARD_ROUTE_ALLOWLIST: set[str] = set()
@@ -72,6 +75,21 @@ EXPECTED_ROUTES = frozenset({
     ("GET", "/api/v1/meta/periods"),
     ("GET", "/api/v1/meta/menu"),
     ("GET", "/api/v1/meta/freshness"),
+    ("GET", "/api/v1/kazna/svod"),
+    ("GET", "/api/v1/kazna/platezhi"),
+    ("GET", "/api/v1/kazna/platezhi/items/{item_id}"),
+    ("GET", "/api/v1/kazna/calendar"),
+    ("GET", "/api/v1/kazna/dogovory"),
+    ("GET", "/api/v1/kazna/celevye"),
+    ("GET", "/api/v1/obzor/excel.xlsx"),
+    ("POST", "/api/v1/exports/log"),
+    ("GET", "/api/v1/obzor/vnimanie"),
+    ("GET", "/api/v1/obzor/vnimanie/count"),
+    ("GET", "/api/v1/obzor/svod"),
+    ("GET", "/api/v1/obzor/postup"),
+    ("GET", "/api/v1/obzor/rasxod"),
+    ("GET", "/api/v1/obzor/excel"),
+    ("GET", "/api/v1/obzor/items/{item_id}"),
     ("GET", "/api/v1/admin/etl/runs"),
     ("GET", "/api/v1/admin/etl/runs/{run_id}"),
     ("POST", "/api/v1/admin/etl/run"),
@@ -248,6 +266,7 @@ def test_all_protected_routes_return_401_without_session() -> None:
                 .replace("{purpose}", "mfa").replace("{run_id}", "1")
                 .replace("{code}", "turnover").replace("{key}", "builds.keep")
                 .replace("{name}", "smtp").replace("{check_id}", "1")
+                .replace("{item_id}", "1")
             )
             response = client.request(method, req_path, json={})
             assert response.status_code == 401, f"{method} {req_path}: {response.status_code}"

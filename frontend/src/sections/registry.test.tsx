@@ -20,14 +20,16 @@ it('resolves pages by file name and returns null for missing pages', async () =>
   if (!Page) return;
   render(
     <Suspense fallback="...">
-      <Page section="kazna" page="svod" filters={{ br: null, per: 'ytd' }} />
+      <Page section="kazna" page="svod" filters={{ br: null, per: 'ytd' }} onBranch={() => undefined} />
     </Suspense>,
   );
   expect(await screen.findByText('kazna/svod/ytd')).toBeInTheDocument();
 });
 
-it('has no real section pages yet (they arrive in later plans)', () => {
-  expect(resolveSectionPage('obzor', 'svod')).toBeNull();
+it('resolves the real S1 pages and nothing for pages not built yet', () => {
+  expect(resolveSectionPage('obzor', 'svod')).not.toBeNull();
+  expect(resolveSectionPage('kazna', 'celevye')).not.toBeNull();
+  expect(resolveSectionPage('kredity', 'svod')).toBeNull();
 });
 
 it('ignores Object.prototype names', () => {

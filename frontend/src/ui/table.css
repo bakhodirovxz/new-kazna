@@ -7,6 +7,7 @@
 }
 .tw .tw__sort { display: none; }
 .tw--free { max-height: none; }
+.tw--bare { border: 0; background: transparent; }
 .table { width: 100%; border-collapse: collapse; font-size: 0.98rem; }
 .table th, .table td { padding: 0.65rem 0.85rem; text-align: right; white-space: nowrap; }
 .table .l { text-align: left; }
@@ -88,7 +89,9 @@
   }
   .tw--cards .table td.empty { display: block; text-align: center; }
   .tw--cards .table td.empty::before { content: none; }
-  .tw--cards .table tfoot { display: block; }
+  .tw--cards .table tfoot, .tw--cards .table tfoot tr { display: block; width: 100%; }
+  .tw--cards .table tfoot td { display: flex; justify-content: space-between; gap: 1rem; padding: 0.35rem 0.2rem; white-space: normal; }
+  .tw--cards .table tfoot td::before { content: attr(data-label); flex: none; max-width: 45%; color: var(--muted); font-weight: 500; text-align: left; }
 }
 @media (max-width: 767.98px), (pointer: coarse) {
   .th-sort { min-height: 44px; min-width: 44px; }

@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from app.etl.synthetic.families import cash, debt, dims, funds, fx, payments
+from app.etl.synthetic.families import calendar, cash, debt, dims, funds, fx, loans, payments
 from app.etl.synthetic.model import SynthModel
 from app.etl.types import StagingSink, Window
 
@@ -18,4 +18,6 @@ FAMILIES: list[tuple[str, Family]] = [
     ("payments", payments.generate),
     ("debt", debt.generate),
     ("funds", funds.generate),
+    ("calendar", calendar.generate),
+    ("loans", loans.generate),
 ]

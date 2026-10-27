@@ -16,7 +16,7 @@ export function CategoriesCard({ categories, className }: { categories: HrCatego
       <div title={formula('headcount')}>
         <div className="split" aria-hidden="true">
           {categories.map((c, i) => (
-            <div key={c.name} style={{ flexGrow: c.value ?? 0, background: color(i) }}>
+            <div key={c.name} className={i === 1 || i === 2 ? 'is-dark' : undefined} style={{ flexGrow: c.value ?? 0, background: color(i) }}>
               {total && c.value !== null && c.value / total > 0.12 ? formatPct(c.value / total, 0) : ''}
             </div>
           ))}

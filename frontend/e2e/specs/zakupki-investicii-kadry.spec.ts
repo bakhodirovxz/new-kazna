@@ -38,13 +38,13 @@ test('Закупки: сводка, лоты с фильтром, поставщ
   const csp = watchCsp(page);
   await login(page, adminFor(info.project.name), '#zakupki/svod');
   await expect(page.getByRole('heading', { level: 1, name: 'Закупки: сводка' })).toBeVisible();
-  await expect(page.getByText('Заключено договоров')).toBeVisible();
+  await expect(page.getByText('Заключено договоров', { exact: true })).toBeVisible();
   await expect(page.getByRole('img', { name: 'Заключённые договоры по месяцам' })).toBeVisible();
   await expectNoHorizontalScroll(page);
   await expectNoAxeViolations(page);
 
   await open(page, 'zakupki/loty?per=ytd', 'Лоты');
-  await page.getByRole('button', { name: 'Просроченные' }).click();
+  await page.getByRole('button', { name: 'Просроченные', exact: true }).click();
   await expect(page.getByRole('table', { name: 'Лоты' }).locator('.badge--neg').first()).toBeVisible();
   await open(page, 'zakupki/postavshiki', 'Договоры и поставщики');
   await expect(page.getByRole('table', { name: 'Закупки по филиалам' })).toBeVisible();

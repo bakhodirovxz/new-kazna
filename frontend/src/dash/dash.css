@@ -100,7 +100,7 @@
 .alert-list i.is-critical { background: var(--neg); }
 .alert-list .at { font-size: 1.02rem; font-weight: 500; display: block; }
 .alert-list .am { font-size: 0.88rem; color: var(--muted); }
-.alert-list .ag { font-size: 0.88rem; color: var(--brand2); white-space: nowrap; margin-top: 0.15rem; }
+.alert-list .ag { font-size: 0.88rem; color: var(--brand); white-space: nowrap; margin-top: 0.15rem; }
 .search { border: 1px solid var(--line); background: var(--card); border-radius: 0.45rem; padding: 0.5rem 0.75rem; min-width: 13rem; min-height: 44px; }
 @media (max-width: 767.98px) { .search { width: 100%; min-width: 0; } }
 .yoy--good { color: var(--ok); }

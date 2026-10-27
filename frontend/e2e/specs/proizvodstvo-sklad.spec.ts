@@ -60,7 +60,7 @@ test('Склад: сводка, остатки, минимальный запа�
   await page.goto('/#sklad/svod');
   await signIn(page, adminFor(info.project.name));
   await expect(page.getByRole('heading', { level: 1, name: 'Склад: сводка' })).toBeVisible();
-  await expect(page.getByText('Стоимость запасов')).toBeVisible();
+  await expect(page.getByText('Стоимость запасов', { exact: true })).toBeVisible();
   await expect(page.getByRole('img', { name: 'Движение запасов по месяцам' })).toBeVisible();
   await expectNoHorizontalScroll(page);
   await expectNoAxeViolations(page);

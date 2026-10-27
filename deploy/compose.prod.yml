@@ -149,6 +149,8 @@ services:
     environment:
       <<: *backend-env
       ETL_FILE_DIR: /data/inbox
+      # S2: tashqi so'rovlar (cbu.uz, api.telegram.org) uchun ixtiyoriy korporativ HTTP proksi.
+      EGRESS_PROXY: ${EGRESS_PROXY:-}
       SMTP_HOST: ${SMTP_HOST:-}
       SMTP_PORT: ${SMTP_PORT:-25}
       SMTP_FROM: ${SMTP_FROM:-ugekazna@localhost}
@@ -162,6 +164,9 @@ services:
               session_pepper, smtp_password, tls_cert, onec_ca_bundle]
     volumes:
       - etl_inbox:/data/inbox:ro
+      # Bank ko'chirmalari: inbox - faqat o'qish (bank/SFTP tomoni yozadi), arxiv - worker yozadi.
+      - bank_inbox:/data/import/banks:ro
+      - bank_archive:/data/archive/banks
     tmpfs: ["/tmp:uid=10001,gid=10001,mode=0700"]
     command: ["python", "-m", "app.worker"]
     mem_limit: 1g
@@ -250,6 +255,12 @@ volumes:
   db_data: {}
   pg_run: {}
   etl_inbox: {}
+  bank_inbox:
+    driver: local
+    driver_opts: {type: none, o: bind, device: "${UGK_BANK_INBOX:-/srv/ugekazna/banks/inbox}"}
+  bank_archive:
+    driver: local
+    driver_opts: {type: none, o: bind, device: "${UGK_BANK_ARCHIVE:-/srv/ugekazna/banks/archive}"}
   pgbackrest_repo:
     external: true
     name: ${UGK_BACKUP_VOLUME:-ugk_pgbackrest_repo}

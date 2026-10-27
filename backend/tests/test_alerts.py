@@ -176,10 +176,12 @@ def test_vnimanie_endpoints(sc: Scenario, client_for: Callable[[SeedUser], TestC
     body = boss.get("/api/v1/obzor/vnimanie", params=params).json()
     assert [i["code"] for i in body["items"]] == ["contracts_overdue_90d",
                                                   "payment_plan_execution",
-                                                  "overdue_payables_share"]
+                                                  "overdue_payables_share",
+                                                  "loan_payments_30d",
+                                                  "fx_loans_share"]
     assert body["items"][0]["section"] == "kazna" and body["period"]["code"] == "m09"
     assert boss.get("/api/v1/obzor/vnimanie/count", params=params).json() == {
-        "count": 3, "critical": 1}
+        "count": 5, "critical": 1}
     # Bir xil doira (hammasi), boshqa ruxsatlar: kesh boshqa foydalanuvchining natijasini bermaydi.
     profile = client_for(make_user("profil_sluzhba"))
     assert profile.get("/api/v1/obzor/vnimanie", params=params).json()["items"] == []

@@ -93,6 +93,7 @@ _MONTHS = """months AS (
   FROM dwh.dim_date WHERE date BETWEEN CAST(:date_from AS date) AND CAST(:as_of AS date)
   GROUP BY month_id)"""
 
+# S2 spec 3.4: oqimlar dwh.cashflow_effective'dan — bank ko'chirmasi va 1C ikki marta sanalmaydi.
 _CASH_ITEMS = f"""
 INSERT INTO mart.agg_cash_month (build_id, branch_id, month_id, item_id, inflow, outflow,
                                  inflow_cmp, outflow_cmp, days_in_period)
@@ -105,7 +106,7 @@ FROM (
          CASE WHEN f.direction = 'out' THEN f.amount ELSE 0 END AS outflow,
          CASE WHEN f.direction = 'in' AND d.day <= :cmp_day THEN f.amount ELSE 0 END AS inflow_cmp,
          CASE WHEN f.direction = 'out' AND d.day <= :cmp_day THEN f.amount ELSE 0 END AS outflow_cmp
-  FROM dwh.fact_cashflow f
+  FROM dwh.cashflow_effective f
   JOIN dwh.dim_date d ON d.date_id = f.date_id
   JOIN months m ON m.month_id = d.month_id
   WHERE f.date_id BETWEEN :from_id AND :as_of_id
@@ -171,7 +172,7 @@ plan AS (
 fact AS (
   SELECT f.branch_id, d.month_id, f.item_id, sum(f.amount) AS amount,
          sum(f.amount) FILTER (WHERE d.day <= :cmp_day) AS cmp
-  FROM dwh.fact_cashflow f
+  FROM dwh.cashflow_effective f
   JOIN dwh.dim_date d ON d.date_id = f.date_id
   JOIN months m ON m.month_id = d.month_id
   WHERE f.direction = 'out' AND f.date_id BETWEEN :from_id AND :as_of_id
@@ -194,4 +195,4 @@ CASH_MONTH = register(Aggregate("agg_cash_month", (_CASH_ITEMS, _CASH_TOTALS, _C
 PAYMENTS_MONTH = register(Aggregate("agg_payments_month", (_PAYMENTS,)))
 
 # S1 agregatlari (spec 5): shu modul yuklanganda ro'yxatga qo'shiladi (register allaqachon tayyor).
-from app.dwh import treasury_aggregates  # noqa: E402, F401
+from app.dwh import loan_aggregates, treasury_aggregates  # noqa: E402, F401

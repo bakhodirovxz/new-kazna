@@ -19,7 +19,7 @@ flows AS (
   SELECT f.branch_id, d.month_id, coalesce(b.bank_name, '{NO_BANK}') AS bank_name,
          coalesce(sum(f.amount) FILTER (WHERE f.direction = 'in'), 0) AS inflow,
          coalesce(sum(f.amount) FILTER (WHERE f.direction = 'out'), 0) AS outflow
-  FROM dwh.fact_cashflow f
+  FROM dwh.cashflow_effective f
   JOIN dwh.dim_date d ON d.date_id = f.date_id
   JOIN months m ON m.month_id = d.month_id
   LEFT JOIN dwh.dim_bank b ON b.bank_id = f.bank_id

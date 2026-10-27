@@ -480,6 +480,8 @@ export const ru = {
   'settings.category.notify': 'Оповещения',
   'settings.category.security': 'Вход и сеансы',
   'settings.category.ops': 'Контроль эксплуатации',
+  'settings.category.banks': 'Банки',
+  'settings.category.fx': 'Курсы валют',
   'settings.col.name': 'Настройка',
   'settings.col.value': 'Значение',
   'settings.col.source': 'Источник',

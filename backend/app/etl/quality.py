@@ -150,6 +150,12 @@ def _balance_identity(conn: Connection, build_id: int, window: Window,
              "AND month_id BETWEEN :mf AND :mt AND opening_balance IS NOT NULL "
              "AND closing_balance IS NOT NULL "
              "AND abs(diff) > greatest(:tol * (inflow + outflow), 0.01) "
+             # S2 spec 3.4: bank qoldig'i bor, lekin oqimi 1C'dan (ko'chirma rejimida emas)
+             # filialda «Разница» manbalararo ko'rsatkich, yuklash nuqsoni emas: tekshirilmaydi.
+             "AND (branch_id IN (SELECT sb.branch_id FROM dwh.statement_branches sb) "
+             "     OR NOT EXISTS (SELECT 1 FROM dwh.fact_balance fb "
+             "                    WHERE fb.branch_id = mart.agg_cash_month.branch_id "
+             "                    AND fb.doc_type = 'bank_balance')) "
              "ORDER BY month_id, branch_id"),
         {"b": build_id, "mf": months[0], "mt": months[-1], "tol": tolerance},
     ).all()

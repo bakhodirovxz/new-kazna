@@ -72,6 +72,13 @@ class Settings(BaseSettings):
     etl_file_dir: str = "/data/inbox"
     synthetic_seed: int = 916202617
 
+    # S2: tashqi so'rovlar faqat worker'dan; proksi — ixtiyoriy korporativ HTTP proksi.
+    egress_proxy: str = ""
+    cbu_base_url: str = "https://cbu.uz"
+    bank_inbox_dir: str = "/data/import/banks"
+    bank_archive_dir: str = "/data/archive/banks"
+    telegram_api_base: str = "https://api.telegram.org"
+
     smtp_host: str = ""
     smtp_port: int = 25
     smtp_from: str = "ugekazna@localhost"
@@ -141,6 +148,8 @@ class Settings(BaseSettings):
                 "smtp_password berilgan, lekin na starttls, na ssl yoqilgan "
                 "(parol ochiq matnda yuborilmaydi)"
             )
+        if self.egress_proxy and not self.egress_proxy.startswith(("http://", "https://")):
+            out.append("EGRESS_PROXY http:// yoki https:// bilan boshlanishi kerak")
         if self.env == "prod":
             if not self.base_url.startswith("https://"):
                 out.append("base_url https bo'lishi shart")

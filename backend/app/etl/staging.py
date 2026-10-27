@@ -91,6 +91,17 @@ class DbStagingSink:
             self.conn.execute(_INSERT, self._buffer)
             self._buffer = []
 
+    def error(self, *, target: str, code: str, message: str, src_id: str | None = None,
+              severity: str = "error") -> None:
+        """Konnektor darajasidagi xato (masalan, bank faylidagi buzilgan qator) — step "extract".
+        Chaqiruvchi xabarda maxfiy qiymat (hisob raqami) bo'lmasligini ta'minlaydi."""
+        self.conn.execute(
+            text("INSERT INTO core.etl_error (run_id, step, severity, target, src_id, code, "
+                 "message) VALUES (:r, 'extract', :sev, :t, :s, :c, :m)"),
+            {"r": self.load_id, "sev": severity, "t": target[:64],
+             "s": None if src_id is None else src_id[:128], "c": code[:32], "m": message[:500]},
+        )
+
     def close(self) -> dict[str, int]:
         self.flush()
         for target, count in self.counts.items():

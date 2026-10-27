@@ -12,6 +12,7 @@ from app.etl.notify import (
     Notification,
     build_notifier,
 )
+from app.etl.telegram import TelegramNotifier
 
 
 class FakeSMTP:
@@ -100,7 +101,8 @@ def test_composite_continues_after_failing_notifier() -> None:
 def test_build_notifier_is_live() -> None:
     notifier = build_notifier()
     assert isinstance(notifier, CompositeNotifier)
-    assert [type(n) for n in notifier.notifiers] == [LogNotifier, LiveEmailNotifier]
+    assert [type(n) for n in notifier.notifiers] == [LogNotifier, LiveEmailNotifier,
+                                                    TelegramNotifier]
 
 
 @pytest.mark.parametrize("raw", ["a@uge.uz, b@uge.uz", " a@uge.uz ,b@uge.uz,"])

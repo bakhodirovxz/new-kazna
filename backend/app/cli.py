@@ -10,6 +10,10 @@ etl-run        — ETL yuklash: --source synthetic|file --mode full|incremental 
                [--allow-full-replace] (file + full uchun majburiy)
 onec-orgs      — 1C tashkilotlari ↔ filiallar moslashtirishi (JSON fayldan; faylsiz — ko'rsatish)
 onec-check     — 1C ulanishini tekshirish (0 — OK, 1 — ulanish yo'q, 2 — konfiguratsiya)
+bank-accounts  — bank hisoblari ↔ filiallar (CSV fayldan; faylsiz — ko'rsatish, maskalangan)
+bank-files     — bank fayllari jurnali (oxirgi N ta)
+cbu-backfill   — ЦБ kurslari tarixini to'ldirish (--from/--to, ≤ 800 kun)
+telegram-test  — Telegram sinov xabari (--summary — kundalik hisobotni hozir yuborish)
 rollback-build — aktiv build'ni oldingisiga (yoki --build ID ga) qaytarish
 restore-test-record — tiklash testi natijasini yozish (scripts/restore_test.sh chaqiradi)
 restore-test-status — oxirgi tiklash testi: 0 — joyida, 1 — yo'q/xato/eskirgan
@@ -50,7 +54,7 @@ import sys
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import asdict
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
 from sqlalchemy import select, text
@@ -71,14 +75,17 @@ from app.core.errors import ConflictError
 from app.core.reencrypt import reencrypt, retire_unused
 from app.dwh import builds
 from app.dwh.reference import current_setting, validate_setting
-from app.etl.connectors import make_connector
+from app.etl.banks.admin import bank_accounts_command, bank_files_command
+from app.etl.connectors import cbu_connector, make_connector
 from app.etl.db import etl_transaction
 from app.etl.errors import FILE_FULL_REFUSED, EtlBusyError, safe_error
 from app.etl.notify import Notification, build_notifier
 from app.etl.retry import RETRY_DELAYS
 from app.etl.runner import ETL_LOCK, Runner
+from app.etl.telegram import TelegramError, make_client, telegram_config
 from app.etl.types import Mode
 from app.maintenance import cleanup_sessions, cleanup_staging
+from app.reports.daily import send_daily_summary
 
 MIN_GRACE_MINUTES = 10
 MAX_RESTORE_SECONDS = 7 * 24 * 3600
@@ -361,6 +368,50 @@ def _onec_check() -> int:
     return 0 if health.ok else 1
 
 
+def _cbu_backfill(date_from: date, date_to: date) -> int:
+    """ЦБ kurslari tarixini to'ldirish (S2 spec 3.3): ko'pi bilan 800 kun, bitta yuklash."""
+    if date_to < date_from or (date_to - date_from).days + 1 > 800:
+        _out("Xato: oraliq noto'g'ri yoki 800 kundan uzun")
+        return 1
+    try:
+        connector = cbu_connector(get_settings(), date_from=date_from, date_to=date_to)
+    except ConfigError as exc:
+        _out(f"Konfiguratsiya xatosi: {exc}")
+        return 2
+    try:
+        result = Runner(connector, mode=Mode.FULL).run()
+    except EtlBusyError:
+        _out("Boshqa yuklash bajarilmoqda — keyinroq qayta urining")
+        return 3
+    _out(f"cbu-backfill: status={result.status} run={result.run_id}")
+    return 0 if result.status == "success" else 1
+
+
+def _telegram_test(summary: bool) -> int:
+    """Telegram ulanishini tekshirish: sinov xabari yoki (--summary) kundalik hisobot hozir."""
+    cfg = telegram_config()
+    if cfg is None:
+        _out("Telegram sozlanmagan: Администрирование → Интеграции → Telegram-бот")
+        return 2
+    try:
+        if summary:
+            sent = send_daily_summary()
+        else:
+            client = make_client(cfg)
+            sent = 0
+            for chat in cfg.chats:
+                try:
+                    client.send(chat, "UGEKAZNA: проверка связи с Telegram")
+                    sent += 1
+                except TelegramError as exc:
+                    _out(f"Xato: {exc}")
+    except ConfigError as exc:
+        _out(f"Konfiguratsiya xatosi: {exc}")
+        return 2
+    _out(f"Telegram: yuborildi {sent} / {len(cfg.chats)}")
+    return 0 if sent == len(cfg.chats) else 1
+
+
 def _rollback(build_id: int | None) -> int:
     try:
         with etl_transaction() as conn:
@@ -441,6 +492,15 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("onec-orgs")
     p.add_argument("--file", type=Path, default=None)
     sub.add_parser("onec-check")
+    p = sub.add_parser("bank-accounts")
+    p.add_argument("--file", type=Path, default=None)
+    p = sub.add_parser("bank-files")
+    p.add_argument("--limit", type=int, default=50)
+    p = sub.add_parser("cbu-backfill")
+    p.add_argument("--from", dest="date_from", type=date.fromisoformat, required=True)
+    p.add_argument("--to", dest="date_to", type=date.fromisoformat, required=True)
+    p = sub.add_parser("telegram-test")
+    p.add_argument("--summary", action="store_true")
     p = sub.add_parser("rollback-build")
     p.add_argument("--build", type=int, default=None)
     p = sub.add_parser("restore-test-record")
@@ -477,6 +537,14 @@ def main(argv: list[str] | None = None) -> int:
         return _onec_orgs(args.file)
     if args.command == "onec-check":
         return _onec_check()
+    if args.command == "bank-accounts":
+        return bank_accounts_command(args.file, _out)
+    if args.command == "bank-files":
+        return bank_files_command(args.limit, _out)
+    if args.command == "cbu-backfill":
+        return _cbu_backfill(args.date_from, args.date_to)
+    if args.command == "telegram-test":
+        return _telegram_test(args.summary)
     if args.command == "rollback-build":
         return _rollback(args.build)
     if args.command == "restore-test-record":

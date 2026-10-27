@@ -22,6 +22,8 @@ from app.core.config import get_settings
 from app.core.crypto import Purpose
 
 SecretState = Literal["panel", "env", "none"]
+# Telegram Bot API tokeni: "<bot id>:<30+ belgi>" — formati tekshiriladi, qiymati yozilmaydi.
+TELEGRAM_TOKEN_RE = re.compile(r"^\d{5,12}:[A-Za-z0-9_-]{30,64}$")
 _CONTROL = re.compile(r"[\x00-\x1f\x7f]")
 
 
@@ -61,6 +63,12 @@ _ALL: tuple[IntegrationDef, ...] = (
         endpoint=("onec.base_url",),
         secrets=(SecretDef("onec.username", "Пользователь 1С", max_length=128),
                  SecretDef("onec.password", "Пароль 1С"))),
+    IntegrationDef(
+        "telegram", "Telegram-бот", fields=("telegram.chat_ids",), endpoint=(),
+        secrets=(SecretDef("telegram.bot_token", "Токен бота",
+                           pattern=TELEGRAM_TOKEN_RE.pattern),)),
+    IntegrationDef("cbu", "ЦБ РУз: курсы валют", fields=("cbu.enabled",), endpoint=(),
+                   secrets=()),
 )
 INTEGRATIONS: dict[str, IntegrationDef] = {i.name: i for i in _ALL}
 SECRETS: dict[str, tuple[IntegrationDef, SecretDef]] = {

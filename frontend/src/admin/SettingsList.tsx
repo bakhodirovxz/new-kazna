@@ -27,6 +27,8 @@ const CATEGORIES: Record<string, MessageKey> = {
   notify: 'settings.category.notify',
   security: 'settings.category.security',
   ops: 'settings.category.ops',
+  banks: 'settings.category.banks',
+  fx: 'settings.category.fx',
 };
 const ORDER = Object.keys(CATEGORIES);
 

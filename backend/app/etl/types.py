@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from datetime import date, datetime
 from decimal import Decimal
 from enum import StrEnum
-from typing import Any, Protocol
+from typing import Any, Protocol, runtime_checkable
 
 from app.dwh.dates import add_months, date_id, month_id, month_start
 
@@ -73,6 +73,16 @@ class ControlTotals:
 
 class StagingSink(Protocol):
     def add(self, target: str, row: Mapping[str, Any]) -> None: ...
+
+
+@runtime_checkable
+class ReportingSink(StagingSink, Protocol):
+    """Qator/fayl xatolarini core.etl_error ga yoza oladigan sink (bank fayllari — S2 spec 3.2)."""
+
+    load_id: int
+
+    def error(self, *, target: str, code: str, message: str, src_id: str | None = None,
+              severity: str = "error") -> None: ...
 
 
 class SourceConnector(Protocol):

@@ -3,9 +3,10 @@
 
 from __future__ import annotations
 
+import re
 from typing import Annotated
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import AfterValidator, BaseModel, ConfigDict, Field
 
 CALENDAR_KINDS = ("taxes", "salary", "loans")  # qolgan statyalar — "contracts"
 
@@ -38,3 +39,64 @@ def onec_orgs(value: list[OneCOrg]) -> list[dict[str, str]]:
         if len(set(values)) != len(values):
             raise ValueError(f"onec.orgs: {attr} takrorlangan")
     return [org.model_dump() for org in value]
+
+
+# --- S2: banklar (TZ 8 «Банки»). Katalog nomi = bank kodi: /data/import/banks/<kod>/.
+BANKS: dict[str, str] = {
+    "sqb": "Узпромстройбанк",
+    "nbu": "Национальный банк",
+    "asaka": "Асакабанк",
+    "ipoteka": "Ипотека-банк",
+    "xalq": "Халк банк",
+}
+ADAPTER_NAMES: tuple[str, ...] = ("canonical",)
+ACCOUNT_CODE_PATTERN = r"^BA-[0-9a-f]{16}$"
+
+
+def _known_bank(code: str) -> str:
+    if code not in BANKS:
+        raise ValueError(f"noma'lum bank kodi: {code!r}")
+    return code
+
+
+class BankAccount(BaseModel):
+    """Hisob <-> (bank, filial, valyuta, 1C schyoti) moslashtirishi (`banks.accounts`).
+    Hisob raqami saqlanmaydi — faqat `BA-<HMAC[:16]>` kodi va oxirgi 4 raqam."""
+
+    model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
+    code: Annotated[str, Field(pattern=ACCOUNT_CODE_PATTERN)]
+    bank_code: Annotated[str, AfterValidator(_known_bank)]
+    branch_code: Annotated[str, Field(min_length=1, max_length=32)]
+    currency: Annotated[str, Field(pattern=r"^[A-Z]{3}$")]
+    gl_account: Annotated[str, Field(pattern=r"^\d{4}$")]
+    last4: Annotated[str, Field(pattern=r"^\d{4}$")]
+
+
+def bank_accounts(value: list[BankAccount]) -> list[dict[str, str]]:
+    codes = [a.code for a in value]
+    if len(set(codes)) != len(codes):
+        raise ValueError("banks.accounts: hisob kodi takrorlangan")
+    return [a.model_dump() for a in value]
+
+
+def branch_codes(value: list[str]) -> list[str]:
+    if len(set(value)) != len(value) or any(not c or len(c) > 32 for c in value):
+        raise ValueError("filial kodlari bo'sh, uzun yoki takrorlangan")
+    return list(value)
+
+
+def bank_formats(value: dict[str, str]) -> dict[str, str]:
+    unknown = set(value) - set(BANKS)
+    if unknown:
+        raise ValueError(f"noma'lum bank: {sorted(unknown)}")
+    bad = sorted({v for v in value.values() if v not in ADAPTER_NAMES})
+    if bad:
+        raise ValueError(f"noma'lum format adapteri: {bad}")
+    return dict(value)
+
+
+def currencies(value: list[str]) -> list[str]:
+    if not value or len(set(value)) != len(value) or "UZS" in value \
+            or any(not re.fullmatch(r"[A-Z]{3}", c) for c in value):
+        raise ValueError("fx.currencies: ISO 4217 kodlari (UZS emas), takrorsiz")
+    return list(value)

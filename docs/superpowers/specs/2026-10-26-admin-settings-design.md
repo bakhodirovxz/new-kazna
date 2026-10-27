@@ -1,6 +1,6 @@
 # UGEKAZNA — sozlamalarni admin paneldan boshqarish (04b) — dizayn
 
-Sana: 2026-10-26. Holat: tasdiqlashga. Reja: [../plans/2026-10-26-04b-admin-settings.md](../plans/2026-10-26-04b-admin-settings.md).
+Sana: 2026-10-26. Holat: bajarildi (E2E demo stack'da alohida). Reja: [../plans/2026-10-26-04b-admin-settings.md](../plans/2026-10-26-04b-admin-settings.md).
 
 Talab (foydalanuvchi, so'zma-so'z): «Barcha sozlamalar iloji boricha admin paneldan boshqariladigon qilish kerak».
 

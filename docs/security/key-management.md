@@ -25,7 +25,7 @@ P="docker compose -f deploy/compose.prod.yml --env-file deploy/prod.env --env-fi
 | `db_migrator_password`, `db_app_password`, `db_etl_password` | роли `ugk_migrator`, `ugk_app`, `ugk_etl` | 43 символа | `scripts/gen_secrets.py` | Docker secret | `db_migrator_password` — db, migrate; `db_app_password` — db, migrate, api, worker; `db_etl_password` — db, worker | 12 месяцев (П6) |
 | `redis_password` | Redis ACL | 43 символа | `scripts/gen_secrets.py` | Docker secret | redis, api, worker | 12 месяцев (П7) |
 | `pgbackrest_cipher_pass` | шифрование репозитория копий | 43 символа | `scripts/gen_secrets.py` | Docker secret; копия в сейфе | db, backup | не меняется для существующего репозитория (П11) |
-| `smtp_password` | учётная запись SMTP-релея | по политике почтовой службы | `gen_secrets.py` создаёт пустой файл; значение вносит служба ИТ | Docker secret | worker | по политике организации |
+| `smtp_password` | учётная запись SMTP-релея (начальная настройка) | по политике почтовой службы | служба ИТ | Docker secret; после ввода в панели «Интеграции» — `core.integration_credentials` (AES-256-GCM), файл секрета очищается | worker | по политике организации |
 | `tls_cert.pem`, `tls_key.pem` | HTTPS | PEM | корпоративный УЦ | Docker secret | caddy (ключ и сертификат), worker (только сертификат) | по сроку сертификата (П8) |
 | Ключ LUKS2 | шифрование дисков | TPM2 + пароль восстановления | при установке сервера | TPM2; пароль в сейфе | — | по политике организации |
 

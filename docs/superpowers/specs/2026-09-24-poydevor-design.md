@@ -383,7 +383,8 @@ Sahifada gorizontal skroll yo'q; teginish nishonlari ≥44 px.
 ### 7.6 Sahifalar
 - Auth: Login, 2FA kodi, 2FA ulash (QR + 10 zaxira kod, yuklab olish), majburiy parol almashtirish, Mening sessiyalarim.
 - Admin: Foydalanuvchilar, Lavozimlar va rollar, Требует внимания chegaralari, Финмодель допущения,
-  Состояние обменов (ETL), Buildlar (rollback), Audit jurnali, Kalitlar.
+  Состояние обменов (ETL), Buildlar (rollback), Audit jurnali, Kalitlar, Настройки,
+  Политика безопасности, Интеграции (04b-reja).
 
 ### 7.7 Accessibility va til
 Kontrast ≥4.5:1; ARIA yorliqlari; `prefers-reduced-motion`; to'liq klaviatura boshqaruvi. Interfeys ruscha;

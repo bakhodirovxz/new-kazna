@@ -19,6 +19,8 @@
 | `admin.etl.run_requested`, `etl.run.started`, `etl.run.finished` | запуски загрузок и их результат |
 | `admin.build.rolled_back`, `dwh.partitions.dropped` | откат сборки витрины, удаление устаревших партиций |
 | `admin.alert_rule.updated`, `admin.fin_assumptions.updated`, `admin.setting.updated` | изменение порогов и допущений финмодели, настроек |
+| `admin.integration.updated`, `admin.integration.check_requested` | изменение параметров и учётных данных интеграций (только факт «задан/удалён», без значения), запрос проверки подключения |
+| `auth.step_up.failed` | неверный код 2FA при подтверждении изменения настройки |
 | `audit.exported`, `audit.verified` | выгрузка журнала, проверка цепочки |
 | `ops.restore_test.recorded` | результат ежемесячной проверки восстановления |
 | `security.rls_violation_attempt` | попытка запросить данные вне своей области |

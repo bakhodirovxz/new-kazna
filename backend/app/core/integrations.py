@@ -122,6 +122,15 @@ def clear_secret(conn: Connection, name: str) -> bool:
                              "RETURNING name"), {"n": name}).first() is not None
 
 
+def configured(conn: Connection, name: str) -> bool:
+    """Barcha endpoint maydonlari bo'sh emas va barcha sirlar mavjud (worker joblari shunga qarab
+    "not_configured" bilan o'tkazib yuboradi)."""
+    integ = INTEGRATIONS[name]
+    if any(not sysconfig.current(conn, key) for key in integ.endpoint):
+        return False
+    return all(secret(conn, s.name) for s in integ.secrets)
+
+
 def field_values(conn: Connection, name: str) -> dict[str, Any]:
     return {key: sysconfig.current(conn, key) for key in INTEGRATIONS[name].fields}
 

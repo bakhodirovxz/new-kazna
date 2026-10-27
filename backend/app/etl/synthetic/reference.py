@@ -169,6 +169,20 @@ LOANS: tuple[tuple[str, str, int, str, int, float, int, int], ...] = (
     ("Национальный банк", "Оборудование Чирчикского каскада", 2, "UZS", 260, 0.17, 2026, 2029),
 )
 
+# Prototip «procurement data» PMETH: (usul kodi, og'irlik, tejash diapazoni, davomiylik kunlari).
+METHOD_PROFILES: tuple[tuple[str, float, tuple[float, float], tuple[int, int]], ...] = (
+    ("eshop", 0.35, (0.03, 0.12), (5, 15)),
+    ("contest", 0.20, (0.04, 0.14), (20, 40)),
+    ("tender", 0.12, (0.05, 0.18), (35, 70)),
+    ("exchange", 0.13, (0.02, 0.08), (7, 20)),
+    ("direct", 0.20, (0.0, 0.02), (3, 12)),
+)
+# Prototip PCAT — xarid predmetlari (dim_nomenclature PS-01…07, kategoriya = nom).
+PROCUREMENT_SUBJECTS: tuple[str, ...] = (
+    "Запасные части", "Ремонтные услуги", "Строительно-монтажные работы",
+    "Электротехническое оборудование", "ГСМ и масла", "ИТ и связь", "Спецодежда и СИЗ",
+)
+
 
 def share(branch: BranchRef, hq_share: float) -> float:
     """Prototip `share()`: HQ — o'z ulushi, stansiyalar — qolgani vazn bo'yicha."""

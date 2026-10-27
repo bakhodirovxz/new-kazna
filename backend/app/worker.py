@@ -152,6 +152,38 @@ def run_cbu_job(notifier: Notifier) -> RunResult | None:
     return run_etl_job("cbu", Mode.INCREMENTAL, notifier)
 
 
+
+
+def run_hr_job(notifier: Notifier) -> RunResult | None:
+    """HR API yuklash (U5: job shartsiz, sozlanmagan bo'lsa o'tkazib yuboriladi); faqat xato
+    (warning emas) qatorlar bo'lsa xabar — tashkilot kesimi kelmaguncha kundalik ogohlantirish
+    bilan administratorni bezovta qilmaslik uchun. Xabarda faqat kodlar va sonlar."""
+    with get_engine("etl").connect() as conn:
+        ready = integrations.configured(conn, "hr")
+    if not ready:
+        log.info("hr_skipped", reason="not_configured")
+        return None
+    result = run_etl_job("hr", Mode.INCREMENTAL, notifier)
+    if result is None or result.run_id is None:
+        return result
+    with etl_transaction() as conn:
+        rows = conn.execute(text(
+            "SELECT code, count(*) AS n FROM core.etl_error WHERE run_id = :r "
+            "AND target = 'hr_api' AND severity = 'error' GROUP BY code ORDER BY code"),
+            {"r": result.run_id}).all()
+    if rows:
+        lines = "\n".join(f"{r.code}: {r.n}" for r in rows)
+        try:
+            notifier.notify(Notification(
+                "hr_rows_rejected", "Данные HR API отклонены",
+                f"Запуск №{result.run_id}. Коды ошибок (значения полей не передаются):\n{lines}\n"
+                "Сопоставление организаций — `python -m app.cli hr-orgs`, запрос к разработчикам "
+                "HR — docs/integration/hr-sorov-s4.md."))
+        except Exception as exc:
+            _log_error("hr_notify_failed", exc)
+    return result
+
+
 def _set_request(request_id: int, status: str, run_id: int | None = None,
                  error: str | None = None) -> None:
     with etl_transaction() as conn:
@@ -321,6 +353,8 @@ def build_scheduler(settings: Settings, notifier: Notifier, *,
     add_cron_job(scheduler, "etl_cbu", "etl.cbu_cron", run_cbu_job, args=(notifier,), **opts)
     add_cron_job(scheduler, "telegram_summary", "telegram.summary_cron",
                  _guarded("telegram_summary", send_daily_summary), **opts)
+    # S4: HR API — kuniga bir marta (U5: shartsiz, ichida configured tekshiruvi)
+    add_cron_job(scheduler, "etl_hr", "etl.hr_cron", run_hr_job, args=(notifier,), **opts)
     scheduler.add_job(_guarded("etl_requests", lambda: process_requests(notifier)),
                       "interval", seconds=30, id="etl_requests", **opts)
     scheduler.add_job(_guarded("integration_checks", process_integration_checks),

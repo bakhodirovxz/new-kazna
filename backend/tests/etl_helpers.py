@@ -28,7 +28,8 @@ FULL_WINDOW = Window(date(2024, 1, 1), TEST_AS_OF)
 _PURGE_ORDER = (
     "fact_cashflow", "fact_balance", "fact_payment_plan", "fact_payment_order", "fact_debt",
     "fact_generation", "fact_energy_sales", "fact_procurement", "fact_stock", "fact_stock_move",
-    "fact_investment", "fact_loan_schedule", "fact_hr", "fact_target_funds", "fx_rate",
+    "fact_object_stage", "fact_investment", "fact_loan_schedule", "fact_hr", "fact_target_funds",
+    "fx_rate",
     "dim_contract", "dim_loan", "dim_object", "dim_branch", "dim_item", "dim_counterparty",
     "dim_bank", "dim_nomenclature", "dim_source", "dim_position",
 )

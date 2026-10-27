@@ -18,6 +18,8 @@ rollback-build — aktiv build'ni oldingisiga (yoki --build ID ga) qaytarish
 restore-test-record — tiklash testi natijasini yozish (scripts/restore_test.sh chaqiradi)
 restore-test-status — oxirgi tiklash testi: 0 — joyida, 1 — yo'q/xato/eskirgan
 ops-check      — ekspluatatsiya tekshiruvi: [--json] [--notify] [--tls-cert PATH] [--extra TEXT]
+hr-orgs        — HR tashkilotlari ↔ filiallar (JSON fayldan; faylsiz — ko'rsatish)
+hr-check       — HR API'ga ulanishni tekshirish (0 — OK, 1 — xato, 2 — konfiguratsiya)
 
 `retire-keys` va `rewrap-keys` `wrapped_key` ustunini bo'shatadi/qayta yozadi — bu ustunga
 `ugk_app`ning yozish huquqi yo'q (crypto-shredding'dan himoya, spec 3.5), shuning uchun bu
@@ -79,6 +81,7 @@ from app.etl.banks.admin import bank_accounts_command, bank_files_command
 from app.etl.connectors import cbu_connector, make_connector
 from app.etl.db import etl_transaction
 from app.etl.errors import FILE_FULL_REFUSED, EtlBusyError, safe_error
+from app.etl.hr.admin import hr_orgs_command
 from app.etl.notify import Notification, build_notifier
 from app.etl.retry import RETRY_DELAYS
 from app.etl.runner import ETL_LOCK, Runner
@@ -94,6 +97,17 @@ MAX_RESTORE_SECONDS = 7 * 24 * 3600
 BACKUP_LABEL_RE = re.compile(r"^(none|\d{8}-\d{6}F(_\d{8}-\d{6}[DI])?)$")
 CONTROL_RE = re.compile(r"[\x00-\x08\x0b-\x1f\x7f]")
 MAX_DETAILS = 2000
+
+
+def _hr_check() -> int:
+    try:
+        connector = make_connector("hr")
+    except ConfigError as exc:
+        _out(f"Konfiguratsiya xatosi: {exc}")
+        return 2
+    health = connector.healthcheck()
+    _out(f"HR API: {'OK' if health.ok else 'XATO'} — {health.detail}")
+    return 0 if health.ok else 1
 
 
 def _out(message: str) -> None:
@@ -509,6 +523,9 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--backup", type=_backup_label, required=True)
     p.add_argument("--details", type=_details, default="")
     sub.add_parser("restore-test-status")
+    p = sub.add_parser("hr-orgs")
+    p.add_argument("--file", type=Path, default=None)
+    sub.add_parser("hr-check")
     p = sub.add_parser("ops-check")
     p.add_argument("--json", action="store_true")
     p.add_argument("--notify", action="store_true")
@@ -545,6 +562,10 @@ def main(argv: list[str] | None = None) -> int:
         return _cbu_backfill(args.date_from, args.date_to)
     if args.command == "telegram-test":
         return _telegram_test(args.summary)
+    if args.command == "hr-orgs":
+        return hr_orgs_command(args.file, _out)
+    if args.command == "hr-check":
+        return _hr_check()
     if args.command == "rollback-build":
         return _rollback(args.build)
     if args.command == "restore-test-record":

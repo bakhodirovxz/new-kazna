@@ -179,7 +179,10 @@ _ALL: tuple[Target, ...] = (
           (BRANCH, Lookup("nom_id", "dim_nomenclature")), "year"),
     _fact("fact_investment", ("plan", "fact", "physical_pct", "advance", "advance_date_id"),
           (BRANCH, Lookup("object_id", "dim_object"),
-           Lookup("source_id", "dim_source", nullable=True))),
+           Lookup("source_id", "dim_source", nullable=True)), forward=True),
+    # S4: obyekt bosqichlari — sana = rejadagi tugash (kelajak bo'lishi mumkin).
+    _fact("fact_object_stage", ("stage_no", "stage_name", "fact_date_id"),
+          (BRANCH, Lookup("object_id", "dim_object")), forward=True),
     _fact("fact_loan_schedule", ("principal", "interest", "balance"),
           (BRANCH, Lookup("loan_id", "dim_loan")), forward=True),
     _fact("fact_hr",

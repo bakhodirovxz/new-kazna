@@ -30,13 +30,17 @@ from app.core.db import get_engine
 from app.core.logging import get_logger
 from app.core.setting_types import (
     BANKS,
+    DEFAULT_METHOD_NORMS,
     BankAccount,
+    HrOrg,
     OneCOrg,
     bank_accounts,
     bank_formats,
     branch_codes,
     calendar_kinds,
     currencies,
+    hr_orgs,
+    method_norms,
     onec_orgs,
 )
 from app.dwh.dates import today_tashkent
@@ -190,6 +194,19 @@ _DEFS: tuple[SettingDef, ...] = (
             unit="дн.", apply="next_run"),
     cron_def("telegram.summary_cron", "30 8 * * *", category="notify",
              title="Расписание ежедневной сводки в Telegram"),
+    # S4: xaridlar va kadrlar
+    SettingDef("zakupki.method_norms", dict(DEFAULT_METHOD_NORMS),
+               TypeAdapter(Annotated[dict[str, Annotated[int, Field(strict=True, ge=1, le=365)]],
+                                     AfterValidator(method_norms)]),
+               "json", category="zakupki", title="Нормативные сроки закупок по способам (дни)",
+               apply="next_run"),
+    SettingDef("hr.orgs", [], TypeAdapter(Annotated[list[HrOrg], AfterValidator(hr_orgs)]),
+               "json", category="hr", title="Организации кадровой системы и филиалы",
+               apply="next_run"),
+    cron_def("etl.hr_cron", "30 6 * * *", category="etl",
+             title="Расписание загрузки кадровых данных"),
+    cron_def("etl.onec_zakupki_cron", "40 2 * * *", category="etl",
+             title="Расписание загрузки плана закупок 1С"),
     # Sifat va saqlash
     float_def("quality.control_tolerance", 0.001, 0.0, 0.01, category="quality",
               title="Допуск сверки контрольных сумм (доля)", guarded=True, apply="next_run"),
@@ -257,6 +274,11 @@ _DEFS: tuple[SettingDef, ...] = (
             300, title="Адрес HTTP-сервиса 1С", **_SMTP),
     int_def("onec.max_mb", 64, 1, 256, title="Максимальный размер ответа 1С", unit="МБ",
             **_SMTP),
+    # HR API (S4): manzil faqat https; login/parol — integrations sirlari
+    str_def("hr.base_url", "", r"^(https://[A-Za-z0-9.-]+(:[0-9]{1,5})?(/[A-Za-z0-9._~/-]*)?)?$",
+            300, title="Адрес кадровой системы (HR API)", **_SMTP),
+    str_def("hr.breakdown_path", "/dashboard/employees-by-category", r"^/[A-Za-z0-9/_-]{1,120}$",
+            121, title="Путь выгрузки по категориям", **_SMTP),
 )
 REGISTRY: dict[str, SettingDef] = {d.key: d for d in _DEFS}
 

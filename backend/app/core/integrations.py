@@ -69,6 +69,11 @@ _ALL: tuple[IntegrationDef, ...] = (
                            pattern=TELEGRAM_TOKEN_RE.pattern),)),
     IntegrationDef("cbu", "ЦБ РУз: курсы валют", fields=("cbu.enabled",), endpoint=(),
                    secrets=()),
+    IntegrationDef(
+        "hr", "Кадровая система (HR API)", fields=("hr.base_url", "hr.breakdown_path"),
+        endpoint=("hr.base_url",),
+        secrets=(SecretDef("hr.username", "Пользователь HR", max_length=128),
+                 SecretDef("hr.password", "Пароль HR"))),
 )
 INTEGRATIONS: dict[str, IntegrationDef] = {i.name: i for i in _ALL}
 SECRETS: dict[str, tuple[IntegrationDef, SecretDef]] = {

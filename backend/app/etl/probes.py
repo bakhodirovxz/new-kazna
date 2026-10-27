@@ -11,10 +11,13 @@ from sqlalchemy import text
 
 from app.core.db import get_engine
 from app.core.logging import get_logger
+from app.etl.cbu.client import cbu_probe
 from app.etl.notify import smtp_probe
+from app.etl.telegram import telegram_probe
 
 log = get_logger("ugekazna.probes")
-PROBES: dict[str, Callable[[], str]] = {"smtp": smtp_probe}
+PROBES: dict[str, Callable[[], str]] = {"smtp": smtp_probe, "telegram": telegram_probe,
+                                         "cbu": cbu_probe}
 _BATCH = 5
 
 

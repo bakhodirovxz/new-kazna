@@ -293,4 +293,7 @@ def smtp_probe(loader: Callable[[], SmtpConfig | None] = smtp_config,
 
 
 def build_notifier() -> Notifier:
-    return CompositeNotifier([LogNotifier(), LiveEmailNotifier()])
+    # Aylanma importdan qochish: telegram moduli Notification'ni shu fayldan oladi.
+    from app.etl.telegram import TelegramNotifier
+
+    return CompositeNotifier([LogNotifier(), LiveEmailNotifier(), TelegramNotifier()])

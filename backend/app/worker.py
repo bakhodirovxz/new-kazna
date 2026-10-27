@@ -40,6 +40,7 @@ from app.etl.probes import process_integration_checks
 from app.etl.runner import Runner, RunResult
 from app.etl.types import Mode, SourceConnector
 from app.maintenance import cleanup_sessions, cleanup_staging
+from app.reports.daily import send_daily_summary
 
 log = get_logger("ugekazna.worker")
 HEARTBEAT = Path("/tmp/worker-heartbeat")  # noqa: S108 — tmpfs, faqat healthcheck  # nosec B108
@@ -106,6 +107,44 @@ def run_etl_job(source: str, mode: Mode, notifier: Notifier) -> RunResult | None
     except Exception as exc:  # A14.8
         _log_error("etl_job_failed", exc, source=source)
     return None
+
+
+def notify_bank_errors(run_id: int, notifier: Notifier) -> int:
+    """Bank fayllaridagi rad etilgan qator/fayllar haqida bitta xabar (S2 spec 3.2)."""
+    with etl_transaction() as conn:
+        rows = conn.execute(text(
+            "SELECT code, count(*) AS n FROM core.etl_error WHERE run_id = :r "
+            "AND step = 'extract' AND target = 'bank_file' GROUP BY code ORDER BY code"),
+            {"r": run_id}).all()
+    total = sum(int(r.n) for r in rows)
+    if total:
+        parts = ", ".join(f"{r.code}: {r.n}" for r in rows)
+        notifier.notify(Notification(
+            "bank_rows_rejected", "Строки банковских выписок отклонены",
+            f"Запуск №{run_id}: отклонено {total} ({parts}). "
+            "Подробности — «Состояние обменов» или `python -m app.cli bank-files`."))
+    return total
+
+
+def run_banks_job(notifier: Notifier) -> RunResult | None:
+    with get_engine("app").connect() as conn:
+        accounts = sysconfig.current(conn, "banks.accounts")
+    if not accounts or not Path(get_settings().bank_inbox_dir).is_dir():
+        log.info("banks_skipped", reason="not_configured")
+        return None
+    result = run_etl_job("banks", Mode.INCREMENTAL, notifier)
+    if result is not None and result.run_id is not None:
+        notify_bank_errors(result.run_id, notifier)
+    return result
+
+
+def run_cbu_job(notifier: Notifier) -> RunResult | None:
+    with get_engine("app").connect() as conn:
+        enabled = bool(sysconfig.current(conn, "cbu.enabled"))
+    if not enabled:
+        log.info("cbu_skipped", reason="not_configured")
+        return None
+    return run_etl_job("cbu", Mode.INCREMENTAL, notifier)
 
 
 def _set_request(request_id: int, status: str, run_id: int | None = None,
@@ -265,6 +304,12 @@ def build_scheduler(settings: Settings, notifier: Notifier, *,
     if settings.env == "dev":
         add_cron_job(scheduler, "etl_synthetic_full", "etl.synthetic_cron", run_etl_job,
                      args=("synthetic", Mode.FULL, notifier), **opts)
+    # TZ 8: banklar kuniga 4 marta, ЦБ kurslari har kuni, Telegram hisoboti 08:30; hammasi
+    # shartsiz qo'shiladi, sozlanmagan bo'lsa job tanasi o'tkazib yuboradi (U5).
+    add_cron_job(scheduler, "etl_banks", "etl.banks_cron", run_banks_job, args=(notifier,), **opts)
+    add_cron_job(scheduler, "etl_cbu", "etl.cbu_cron", run_cbu_job, args=(notifier,), **opts)
+    add_cron_job(scheduler, "telegram_summary", "telegram.summary_cron",
+                 _guarded("telegram_summary", send_daily_summary), **opts)
     scheduler.add_job(_guarded("etl_requests", lambda: process_requests(notifier)),
                       "interval", seconds=30, id="etl_requests", **opts)
     scheduler.add_job(_guarded("integration_checks", process_integration_checks),

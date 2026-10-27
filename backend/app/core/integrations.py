@@ -56,6 +56,10 @@ _ALL: tuple[IntegrationDef, ...] = (
         fields=("smtp.host", "smtp.port", "smtp.from", "smtp.user", "smtp.starttls", "smtp.ssl"),
         endpoint=("smtp.host", "smtp.port"),
         secrets=(SecretDef("smtp.password", "Пароль SMTP", env="smtp_password"),)),
+    IntegrationDef(
+        "ai", "AI-анализ (провайдер)",
+        fields=("ai.model", "ai.effort", "ai.max_tokens", "ai.fallbacks"), endpoint=(),
+        secrets=(SecretDef("ai.api_key", "Ключ API", max_length=512),), check_in="api"),
 )
 INTEGRATIONS: dict[str, IntegrationDef] = {i.name: i for i in _ALL}
 SECRETS: dict[str, tuple[IntegrationDef, SecretDef]] = {

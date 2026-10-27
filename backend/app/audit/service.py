@@ -86,6 +86,8 @@ class AuditAction(StrEnum):
     INTEGRATION_CHECK_REQUESTED = "admin.integration.check_requested"
     PARTITIONS_DROPPED = "dwh.partitions.dropped"
     RESTORE_TEST_RECORDED = "ops.restore_test.recorded"
+    AI_REQUEST = "ai.request"
+    AI_JOURNAL_PURGED = "ai.journal.purged"
     RLS_VIOLATION = "security.rls_violation_attempt"
     ACCESS_DENIED = "security.access_denied"
 

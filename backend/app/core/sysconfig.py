@@ -116,6 +116,9 @@ def str_def(key: str, default: str, pattern: str, max_length: int, **kw: Any) ->
 _SEC: dict[str, Any] = {"category": "security", "perm": Perm.ADMIN_SECURITY, "guarded": True}
 _SMTP: dict[str, Any] = {"category": "integrations", "perm": Perm.ADMIN_INTEGRATIONS,
                          "guarded": True}
+_AI: dict[str, Any] = {"category": "ai", "perm": Perm.ADMIN_SECURITY, "guarded": True}
+_AIINT: dict[str, Any] = {"category": "integrations", "perm": Perm.ADMIN_INTEGRATIONS,
+                          "guarded": True}
 _EMAILS: TypeAdapter[Any] = TypeAdapter(Annotated[
     list[Annotated[str, Field(strict=True, pattern=EMAIL_RE, max_length=254)]],
     Field(max_length=20)])
@@ -215,6 +218,17 @@ _DEFS: tuple[SettingDef, ...] = (
             env="smtp_user", **_SMTP),
     bool_def("smtp.starttls", True, title="STARTTLS", env="smtp_starttls", **_SMTP),
     bool_def("smtp.ssl", False, title="SSL/TLS (SMTPS)", env="smtp_ssl", **_SMTP),
+    # S5: AI-анализ standart holatda O'CHIQ — yoqish infosec roziligidan keyin (sabab + TOTP).
+    bool_def("ai.enabled", False, title="AI-анализ включён", **_AI),
+    int_def("ai.user_per_hour", 20, 1, 1000, title="Запросов AI-анализа на пользователя в час",
+            **_AI),
+    int_def("ai.org_per_day", 300, 1, 100_000, title="Запросов AI-анализа на организацию в сутки",
+            **_AI),
+    str_def("ai.model", "claude-opus-5-5", r"^[a-z0-9.-]{1,64}$", 64, title="Модель AI", **_AIINT),
+    SettingDef("ai.effort", "medium", TypeAdapter(Literal["low", "medium", "high"]), "str",
+               title="Глубина рассуждения AI", **_AIINT),
+    int_def("ai.max_tokens", 8000, 1000, 32000, title="Максимум токенов ответа AI", **_AIINT),
+    bool_def("ai.fallbacks", True, title="Резервная модель при отказе", **_AIINT),
 )
 REGISTRY: dict[str, SettingDef] = {d.key: d for d in _DEFS}
 

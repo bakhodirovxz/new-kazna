@@ -17,19 +17,21 @@ from app.auth.context import AuthContext
 from app.auth.models import User
 from app.auth.service import decrypt_totp_secret
 from app.core import ratelimit
-from app.core.errors import ValidationFailed
+from app.core.errors import ForbiddenError, ValidationFailed
 from app.core.request_meta import ClientMeta
 
 
 def require_step_up(db: Session, actor: AuthContext, otp: str | None, meta: ClientMeta) -> None:
-    if not otp:
-        raise ValidationFailed("step_up_required", fields=["otp"])
     # A04b.R1: faqat XATO urinishlar sanaladi (muvaffaqiyatli o'zgarishlar byudjetni yemaydi;
     # qayta ishlatish totp_last_step bilan yopilgan).
     # populate_existing: get_ctx user'ni qulfsiz yuklagan — qulfdan keyin DB qiymati o'qilsin.
     user = db.execute(
         select(User).where(User.id == actor.user_id).with_for_update()
         .execution_options(populate_existing=True)).scalar_one()
+    if not user.totp_enabled:  # 2FA majburiy emas: TOTP'siz bu sozlamalarni o'zgartirib bo'lmaydi
+        raise ForbiddenError("step_up_unavailable")
+    if not otp:
+        raise ValidationFailed("step_up_required", fields=["otp"])
     # peek qulfdan KEYIN: bir foydalanuvchining parallel urinishlari ketma-ketlashadi → aniq 5.
     ratelimit.peek("step_up_user", str(actor.user_id), ratelimit.STEP_UP_PER_USER)
     secret = decrypt_totp_secret(user)

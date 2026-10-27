@@ -79,6 +79,8 @@ test('login → 2FA → navigatsiya → filtrlar → admin → sessiya tugashi',
 
   // Admin → foydalanuvchilar.
   await page.getByRole('button', { name: /Меню пользователя/ }).click();
+  // 2FA уже подключена — пункт «Подключить 2FA» не показывается.
+  await expect(page.getByRole('menuitem', { name: 'Подключить 2FA' })).toHaveCount(0);
   await page.getByRole('menuitem', { name: 'Администрирование' }).click();
   await expect(page).toHaveURL(/#admin\/users$/);
   await page.getByLabel('Поиск', { exact: true }).fill(username);

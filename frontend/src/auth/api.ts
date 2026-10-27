@@ -8,6 +8,7 @@ import type {
   MeOut,
   MfaIn,
   MfaTokenIn,
+  MfaTokenOut,
   PasswordChangeIn,
   SessionOut,
 } from '../api/types';
@@ -45,6 +46,35 @@ export function useVerifyMfa() {
       client.clear(); // oldingi foydalanuvchi keshi yangisiga o'tmasin
       client.setQueryData(meKey, me);
     },
+  });
+}
+
+/** Kirgan foydalanuvchi 2FA'ni keyin ulaydi: challenge ochiladi va mavjud ulash sahifasiga o'tiladi. */
+export function useStartEnrollment() {
+  const flow = useAuthFlow();
+  const me = useMe();
+  const mutation = useMutation({
+    mutationFn: () => api<MfaTokenOut>('/auth/2fa/enroll/begin', { method: 'POST' }),
+    gcTime: 0, // token MutationCache'da qolmasin
+  });
+  return {
+    pending: mutation.isPending,
+    start: () =>
+      mutation.mutate(undefined, {
+        onSuccess: (result) => {
+          flow.begin({ mfaToken: result.mfa_token, step: 'mfa_enroll', username: me.data?.username ?? '', returnTo: null });
+          mutation.reset();
+          navigate({ kind: 'mfaEnroll' });
+        },
+      }),
+  };
+}
+
+export function useDismissMfaOffer() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: () => api<undefined>('/auth/2fa/offer/dismiss', { method: 'POST' }),
+    onSuccess: () => client.setQueryData<MeOut>(meKey, (old) => (old ? { ...old, mfa_offer: false } : old)),
   });
 }
 

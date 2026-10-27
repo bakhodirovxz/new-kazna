@@ -26,6 +26,8 @@ export const ME_ADMIN: MeOut = {
   branch_ids: null,
   must_change_password: false,
   password_min_length: 12,
+  mfa_enabled: true,
+  mfa_offer: false,
 };
 
 export const ME_BRANCH: MeOut = {
@@ -37,6 +39,8 @@ export const ME_BRANCH: MeOut = {
   branch_ids: [3],
   must_change_password: false,
   password_min_length: 12,
+  mfa_enabled: true,
+  mfa_offer: false,
 };
 
 export const ME_AUDITOR: MeOut = {
@@ -48,6 +52,8 @@ export const ME_AUDITOR: MeOut = {
   branch_ids: null,
   must_change_password: false,
   password_min_length: 12,
+  mfa_enabled: true,
+  mfa_offer: false,
 };
 
 const SVOD = { id: 'svod', title: 'Сводка' };

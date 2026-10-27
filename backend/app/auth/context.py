@@ -39,6 +39,7 @@ class AuthContext:
     branch_ids: frozenset[int] | None  # None — barcha filiallar
     session_id: uuid.UUID
     must_change_password: bool = False
+    mfa_enabled: bool = False
 
     def has(self, perm: str) -> bool:
         return perm in self.permissions
@@ -91,6 +92,7 @@ def build_context(db: Session, user: User, session_id: uuid.UUID, now: datetime)
         branch_ids=branches,
         session_id=session_id,
         must_change_password=user.must_change_password or user.password_changed_at + max_age <= now,
+        mfa_enabled=user.totp_enabled,
     )
 
 

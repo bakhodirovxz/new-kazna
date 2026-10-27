@@ -8,6 +8,7 @@ export type LoginIn = Schemas['LoginIn'];
 export type LoginOut = Schemas['LoginOut'];
 export type MfaIn = Schemas['MfaIn'];
 export type MfaTokenIn = Schemas['MfaTokenIn'];
+export type MfaTokenOut = Schemas['MfaTokenOut'];
 export type EnrollStartOut = Schemas['EnrollStartOut'];
 export type EnrollConfirmOut = Schemas['EnrollConfirmOut'];
 export type PasswordChangeIn = Schemas['PasswordChangeIn'];

@@ -18,6 +18,7 @@ from app.auth.schemas import (
     MeOut,
     MfaIn,
     MfaTokenIn,
+    MfaTokenOut,
     PasswordChangeIn,
     SessionOut,
     me_out,
@@ -44,9 +45,14 @@ def _clear_cookies(response: Response) -> None:
 
 
 @router.post("/login")
-def login(body: LoginIn, db: DB, meta: Meta) -> LoginOut:
-    result = service.login(db, body.username, body.password, meta, datetime.now(UTC))
-    return LoginOut(next=result.next, mfa_token=result.mfa_token)
+def login(body: LoginIn, response: Response, db: DB, meta: Meta) -> LoginOut:
+    now = datetime.now(UTC)
+    result = service.login(db, body.username, body.password, meta, now)
+    if result.session is None or result.user is None:
+        return LoginOut(next=result.next, mfa_token=result.mfa_token)
+    _set_session_cookies(response, result.session)
+    ctx = build_context(db, result.user, result.session.id, now)
+    return LoginOut(next="done", user=me_out(ctx, db))
 
 
 @router.post("/2fa/verify")
@@ -54,7 +60,18 @@ def verify(body: MfaIn, response: Response, db: DB, meta: Meta) -> MeOut:
     now = datetime.now(UTC)
     new, user = service.verify_mfa(db, body.mfa_token, body.code, meta, now)
     _set_session_cookies(response, new)
-    return me_out(build_context(db, user, new.id, now))
+    return me_out(build_context(db, user, new.id, now), db)
+
+
+@router.post("/2fa/enroll/begin")
+def enroll_begin(ctx: Ctx, db: DB, meta: Meta) -> MfaTokenOut:
+    return MfaTokenOut(mfa_token=service.enroll_begin(db, ctx, meta, datetime.now(UTC)))
+
+
+@router.post("/2fa/offer/dismiss", status_code=204)
+def dismiss_offer(ctx: Ctx, db: DB, meta: Meta) -> Response:
+    service.dismiss_mfa_offer(db, ctx, meta)
+    return Response(status_code=204)
 
 
 @router.post("/2fa/enroll/start")
@@ -70,7 +87,8 @@ def enroll_confirm(body: MfaIn, response: Response, db: DB, meta: Meta) -> Enrol
     now = datetime.now(UTC)
     new, user, codes = service.enroll_confirm(db, body.mfa_token, body.code, meta, now)
     _set_session_cookies(response, new)
-    return EnrollConfirmOut(user=me_out(build_context(db, user, new.id, now)), backup_codes=codes)
+    me = me_out(build_context(db, user, new.id, now), db)
+    return EnrollConfirmOut(user=me, backup_codes=codes)
 
 
 @router.post("/logout", status_code=204)
@@ -101,8 +119,8 @@ def logout(
 
 
 @router.get("/me")
-def me(ctx: Ctx) -> MeOut:
-    return me_out(ctx)
+def me(ctx: Ctx, db: DB) -> MeOut:
+    return me_out(ctx, db)
 
 
 @router.post("/password/change", status_code=204)

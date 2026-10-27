@@ -53,6 +53,7 @@ class AuditAction(StrEnum):
     MFA_FAIL = "auth.mfa.fail"
     MFA_ENROLLED = "auth.mfa.enrolled"
     STEP_UP_FAILED = "auth.step_up.failed"
+    MFA_OFFER_DISMISSED = "auth.mfa_offer_dismissed"
     BACKUP_CODE_USED = "auth.mfa.backup_code_used"
     LOGOUT = "auth.logout"
     DATA_EXPORTED = "data.exported"

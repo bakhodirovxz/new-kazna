@@ -1,10 +1,5 @@
 /** Backend OpenAPI sxemalari (src/api/schema.d.ts — `npm run gen:api` bilan generatsiya qilinadi). */
 import type { components } from './schema';
-import type { StationProductionOut } from './types.proizvodstvo';
-
-// S3: «Производство» / «Склад» turlari — bo'lim bo'yicha alohida fayllarda (qo'lda, generatsiyagacha).
-export type * from './types.proizvodstvo';
-export type * from './types.sklad';
 
 type Schemas = components['schemas'];
 
@@ -84,8 +79,7 @@ export type ActivityAmountOut = Schemas['ActivityAmountOut'];
 export type BranchCashOut = Schemas['BranchCashOut'];
 export type BranchAmountOut = Schemas['BranchAmountOut'];
 export type BankAmountOut = Schemas['BankAmountOut'];
-// S3: `production` — S1'da erkin `dict`, S3'da `StationProductionOut` (qo'lda; generatsiyadan keyin Schemas['StationOut']).
-export type StationOut = Omit<Schemas['StationOut'], 'production'> & { production?: StationProductionOut | null };
+export type StationOut = Schemas['StationOut'];
 export type SeriesOut = Schemas['SeriesOut'];
 export type DetailRowOut = Schemas['DetailRowOut'];
 export type ItemInfoOut = Schemas['ItemInfoOut'];
@@ -113,123 +107,62 @@ export type AlertOut = Schemas['AlertOut'];
 export type AlertsOut = Schemas['AlertsOut'];
 export type AlertCountOut = Schemas['AlertCountOut'];
 
-/*
- * S2 «Кредиты»: qo'lda yozilgan javob turlari (backend app.sections.loan_schemas bilan bir xil nom/nullability).
- * Backend birlashgach OpenAPI generatsiyasi bilan almashtiriladi: butun blok shu yerda — faqat shu faylni o'zgartirish yetadi.
- * Summalar — mln so'm; `*_cur` — kredit valyutasida (mln birlik); null — ma'lumot yoki kurs yo'q. Sanalar — ISO.
- */
-export interface LoanPaymentOut {
-  day: string;
-  loan_id: number;
-  creditor: string;
-  project: string;
-  branch_name: string;
-  principal: number | null;
-  interest: number | null;
-  total: number | null;
-}
-export interface LoanKpisOut {
-  as_of: string;
-  loans: number;
-  portfolio: number | null;
-  rate: number | null;
-  fx_share: number | null;
-  service: number;
-  paid: number;
-  paid_share: number | null;
-  next_payment: LoanPaymentOut | null;
-  peak_year: number | null;
-  peak_amount: number | null;
-  missing_fx: string[];
-  /** DSCR — Финмодель (S5) ulanmaguncha null. */
-  dscr: number | null;
-}
-export interface LoanYearOut {
-  year: number;
-  principal: number;
-  interest: number;
-}
-export interface NamedAmountOut {
-  name: string;
-  amount: number;
-}
-export interface LoanRowOut {
-  loan_id: number;
-  loan_code: string;
-  creditor: string;
-  project: string;
-  branch_id: number;
-  branch_name: string;
-  currency: string;
-  rate: number;
-  outstanding: number | null;
-  outstanding_cur: number;
-  original_cur: number;
-  repaid_share: number | null;
-  grace_until: string | null;
-  in_grace: boolean;
-  maturity: string;
-}
-export interface KreditySvodOut {
-  period: ReportPeriodOut;
-  has_loans: boolean;
-  kpis: LoanKpisOut;
-  schedule: LoanYearOut[];
-  currencies: NamedAmountOut[];
-  upcoming: LoanPaymentOut[];
-}
-export interface KredityReestrOut {
-  period: ReportPeriodOut;
-  has_loans: boolean;
-  kpis: LoanKpisOut;
-  loans: LoanRowOut[];
-  creditors: NamedAmountOut[];
-  currencies: NamedAmountOut[];
-}
-export interface KredityGrafikOut {
-  period: ReportPeriodOut;
-  has_loans: boolean;
-  schedule: LoanYearOut[];
-  upcoming: LoanPaymentOut[];
-}
-
-
-// S4: backend hali shu shoxda yo'q — qo'lda yozilgan tiplar (bo'lim bo'yicha bitta fayl). Integratsiyada
-// quyidagi 3 qatorni `Schemas['…']` aliaslariga almashtiring (nomlar o'sha).
-export type {
-  ZakKpisOut, ZakMonthOut, ZakMethodOut, ZakLotOut, ZakNamedOut, ZakBranchOut, ZakSvodOut, ZakLotyOut, ZakPostavshikiOut, ZakEkonomiyaOut,
-} from './types.zakupki';
-export type {
-  InvKpisOut, InvObjectOut, InvCumOut, InvSourceOut, InvStageOut, InvObjectStagesOut, InvSvodOut, InvObektyOut, InvIstochnikiOut, InvRiskiOut,
-} from './types.investicii';
-export type {
-  HrKpisOut, HrMonthOut, HrCategoryOut, HrBranchOut, KadrySvodOut, KadryChislennostOut, KadryFotOut, KadryDvizhenieOut,
-} from './types.kadry';
-
-
-/** S5 AI-анализ (backend `app.ai.schemas`). */
-export interface AiStatusOut {
-  enabled: boolean;
-  reason: 'disabled' | 'not_configured' | null;
-  user_per_hour: number;
-  org_per_day: number;
-  used_last_hour: number;
-}
-
-export interface AiRequestOut {
-  id: number;
-  created_at: string;
-  finished_at: string | null;
-  username: string;
-  section: string;
-  page: string;
-  filters: Record<string, unknown>;
-  preset: string | null;
-  question: string | null;
-  status: string;
-  error_code: string | null;
-  context_chars: number;
-  answer_chars: number;
-  model: string;
-  duration_ms: number | null;
-}
+// S2–S5 bo'limlari va AI: generatsiya qilingan sxemalar (qo'lda yozilgan turlar olib tashlandi).
+export type ZakKpisOut = Schemas['ZakKpisOut'];
+export type ZakMonthOut = Schemas['ZakMonthOut'];
+export type ZakMethodOut = Schemas['ZakMethodOut'];
+export type ZakLotOut = Schemas['ZakLotOut'];
+export type ZakNamedOut = Schemas['ZakNamedOut'];
+export type ZakBranchOut = Schemas['ZakBranchOut'];
+export type ZakSvodOut = Schemas['ZakSvodOut'];
+export type ZakLotyOut = Schemas['ZakLotyOut'];
+export type ZakPostavshikiOut = Schemas['ZakPostavshikiOut'];
+export type ZakEkonomiyaOut = Schemas['ZakEkonomiyaOut'];
+export type InvKpisOut = Schemas['InvKpisOut'];
+export type InvObjectOut = Schemas['InvObjectOut'];
+export type InvCumOut = Schemas['InvCumOut'];
+export type InvSourceOut = Schemas['InvSourceOut'];
+export type InvStageOut = Schemas['InvStageOut'];
+export type InvObjectStagesOut = Schemas['InvObjectStagesOut'];
+export type InvSvodOut = Schemas['InvSvodOut'];
+export type InvObektyOut = Schemas['InvObektyOut'];
+export type InvIstochnikiOut = Schemas['InvIstochnikiOut'];
+export type InvRiskiOut = Schemas['InvRiskiOut'];
+export type HrKpisOut = Schemas['HrKpisOut'];
+export type HrMonthOut = Schemas['HrMonthOut'];
+export type HrCategoryOut = Schemas['HrCategoryOut'];
+export type HrBranchOut = Schemas['HrBranchOut'];
+export type KadrySvodOut = Schemas['KadrySvodOut'];
+export type KadryChislennostOut = Schemas['KadryChislennostOut'];
+export type KadryFotOut = Schemas['KadryFotOut'];
+export type KadryDvizhenieOut = Schemas['KadryDvizhenieOut'];
+export type StationProductionOut = Schemas['StationProductionOut'];
+export type ProdKpisOut = Schemas['ProdKpisOut'];
+export type GenMonthOut = Schemas['GenMonthOut'];
+export type SalesMonthOut = Schemas['SalesMonthOut'];
+export type StationGenOut = Schemas['StationGenOut'];
+export type MapStationOut = Schemas['MapStationOut'];
+export type ProizvSvodOut = Schemas['ProizvSvodOut'];
+export type ProizvStanciiOut = Schemas['ProizvStanciiOut'];
+export type ProizvRealizOut = Schemas['ProizvRealizOut'];
+export type PowerStationOut = Schemas['PowerStationOut'];
+export type PowerOut = Schemas['PowerOut'];
+export type NamedAmountOut = Schemas['NamedAmountOut'];
+export type StockKpisOut = Schemas['StockKpisOut'];
+export type StockMonthOut = Schemas['StockMonthOut'];
+export type StockBranchOut = Schemas['StockBranchOut'];
+export type StockPositionOut = Schemas['StockPositionOut'];
+export type AgeBucketOut = Schemas['AgeBucketOut'];
+export type SkladSvodOut = Schemas['SkladSvodOut'];
+export type SkladOstatkiOut = Schemas['SkladOstatkiOut'];
+export type SkladMinimumOut = Schemas['SkladMinimumOut'];
+export type SkladNelikvidOut = Schemas['SkladNelikvidOut'];
+export type LoanPaymentOut = Schemas['LoanPaymentOut'];
+export type LoanKpisOut = Schemas['LoanKpisOut'];
+export type LoanYearOut = Schemas['LoanYearOut'];
+export type LoanRowOut = Schemas['LoanRowOut'];
+export type KreditySvodOut = Schemas['KreditySvodOut'];
+export type KredityReestrOut = Schemas['KredityReestrOut'];
+export type KredityGrafikOut = Schemas['KredityGrafikOut'];
+export type AiStatusOut = Schemas['AiStatusOut'];
+export type AiRequestOut = Schemas['AiRequestOut'];

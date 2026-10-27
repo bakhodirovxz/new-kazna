@@ -19,8 +19,8 @@ export function TurnoverTable({ rows, ctx, filters, onBranch, className }: { row
   const headers = [t('kad.br.branch'), t('kad.turn.hired'), t('kad.turn.fired'), t('kad.turn.rate'), t('kad.turn.fact')];
   const columns: Column<HrBranchOut>[] = [
     { key: 'name', header: headers[0] ?? '', cell: (b) => b.name, sortValue: (b) => b.name, wrap: true },
-    { key: 'hired', header: headers[1] ?? '', cell: (b) => formatNumber(b.hired), sortValue: (b) => b.hired, align: 'right' },
-    { key: 'fired', header: headers[2] ?? '', cell: (b) => formatNumber(b.fired), sortValue: (b) => b.fired, align: 'right' },
+    { key: 'hired', header: headers[1] ?? '', cell: (b) => (b.hired === null ? t('kad.suppressed') : formatNumber(b.hired)), sortValue: (b) => b.hired, align: 'right' },
+    { key: 'fired', header: headers[2] ?? '', cell: (b) => (b.fired === null ? t('kad.suppressed') : formatNumber(b.fired)), sortValue: (b) => b.fired, align: 'right' },
     {
       key: 'rate',
       header: headers[3] ?? '',

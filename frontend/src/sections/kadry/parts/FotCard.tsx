@@ -20,7 +20,7 @@ export function FotCard({ months, ctx, className }: { months: HrMonthOut[]; ctx:
       barConfig({
         labels: months.map((m) => monthShort(m.month_id)),
         series: [
-          { label: t('kad.fot.payroll'), data: months.map((m) => m.payroll), color: bar },
+          { label: t('kad.fot.payroll'), data: months.map((m) => m.payroll ?? Number.NaN), color: bar },
           { label: t('kad.fot.avg'), data: months.map((m) => m.avg_salary ?? Number.NaN), color: line, type: 'line', axis: 'right' },
         ],
         rightFormat: (v, d) => formatNumber(v, d),

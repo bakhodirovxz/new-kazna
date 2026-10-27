@@ -26,6 +26,7 @@ function tone(status: string): BadgeTone {
 }
 
 /** TZ 7 «Журнал»: дата, пользователь, раздел, фильтры, вопрос, длина ответа (90 kun). `audit:read`. */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- admin sahifa shartnomasi (me), bu sahifada kerak emas
 export default function AiJournalPage(_props: AdminPageProps) {
   const [page, setPage] = useState(1);
   const query = useQuery({

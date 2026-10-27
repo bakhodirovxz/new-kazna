@@ -115,15 +115,15 @@ export const INV_NONE: InvSvodOut = { period: PERIOD_M08_S4, kpis: NO_OBJECTS, c
 
 export const HR_KPIS: HrKpisOut = {
   has_data: true, snap_month: 202608, plan: 100, fact: 90, vacancies: 10, vacancy_share: 0.1, fill: 0.9, payroll: 180, outflow: 600,
-  payroll_share: 0.3, avg_salary: 2, hired: 3, fired: 3, turnover: 0.033333, overtime: 420, overtime_per_employee: 4.666667,
+  payroll_share: 0.3, avg_salary: 2, hired: 3, fired: 3, turnover: 0.033333, overtime: 420, overtime_per_employee: 4.666667, suppressed: false,
 };
 export const HR_MONTHS: HrMonthOut[] = Array.from({ length: 9 }, (_, i) => ({
-  month_id: 202601 + i, payroll: 160 + i * 3, fact: 90, avg_salary: (160 + i * 3) / 90, hired: i % 3, fired: (i + 1) % 3, overtime: 300 + i * 10,
+  month_id: 202601 + i, payroll: 160 + i * 3, fact: 90, avg_salary: (160 + i * 3) / 90, hired: i % 3, fired: (i + 1) % 3, overtime: 300 + i * 10, suppressed: false,
 }));
-export const HR_CATEGORIES: HrCategoryOut[] = [{ name: 'Оперативный персонал', value: 81 }, { name: 'Руководители', value: 9 }];
+export const HR_CATEGORIES: HrCategoryOut[] = [{ name: 'Оперативный персонал', value: 81, suppressed: false }, { name: 'Руководители', value: 9, suppressed: false }];
 export const HR_BRANCHES: HrBranchOut[] = [
-  { branch_id: 3, name: 'Каскад Чирчикских ГЭС', plan: 100, fact: 90, vacancies: 10, fill: 0.9, payroll: 180, avg_salary: 2, hired: 3, fired: 3, turnover: 0.033333, overtime: 420, overtime_per_employee: 4.666667 },
-  { branch_id: 2, name: 'Чарвакская ГЭС', plan: 150, fact: 120, vacancies: 30, fill: 0.8, payroll: 250, avg_salary: 2.083333, hired: 1, fired: 12, turnover: 0.1, overtime: 3000, overtime_per_employee: 25 },
+  { branch_id: 3, name: 'Каскад Чирчикских ГЭС', plan: 100, fact: 90, vacancies: 10, fill: 0.9, payroll: 180, avg_salary: 2, hired: 3, fired: 3, turnover: 0.033333, overtime: 420, overtime_per_employee: 4.666667, suppressed: false },
+  { branch_id: 2, name: 'Чарвакская ГЭС', plan: 150, fact: 120, vacancies: 30, fill: 0.8, payroll: 250, avg_salary: 2.083333, hired: 1, fired: 12, turnover: 0.1, overtime: 3000, overtime_per_employee: 25, suppressed: false },
 ];
 export const KADRY_SVOD: KadrySvodOut = { period: PERIOD_M08_S4, kpis: HR_KPIS, months: HR_MONTHS, categories: HR_CATEGORIES, branches: HR_BRANCHES };
 export const KADRY_CHISL: KadryChislennostOut = { period: PERIOD_M08_S4, kpis: HR_KPIS, branches: HR_BRANCHES, categories: HR_CATEGORIES };

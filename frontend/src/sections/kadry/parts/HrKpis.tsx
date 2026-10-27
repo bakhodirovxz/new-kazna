@@ -14,7 +14,7 @@ function num(value: number | null, digits = 0): string {
 
 /** Prototip `kpisHr`: штат, факт, вакансии, ФОТ, средняя зарплата, текучесть. Faqat agregatlar. */
 export function HrKpis({ kpis }: { kpis: HrKpisOut }) {
-  const payroll = moneyParts(kpis.payroll);
+  const payroll = kpis.payroll === null ? { value: t('dash.noValue'), unit: '' } : moneyParts(kpis.payroll);
   const staff = kpis.has_data;
   return (
     <KpiGrid>
@@ -33,7 +33,7 @@ export function HrKpis({ kpis }: { kpis: HrKpisOut }) {
         icon="net"
         label={t('kad.kpi.turnover')}
         value={<span className={kpis.turnover !== null && kpis.turnover > TURN_HIGH ? 'neg' : undefined}>{formatPct(kpis.turnover, 1)}</span>}
-        delta={t('kad.kpi.turnoverNote', { hired: kpis.hired, fired: kpis.fired })}
+        delta={t('kad.kpi.turnoverNote', { hired: kpis.hired ?? t('kad.suppressed'), fired: kpis.fired ?? t('kad.suppressed') })}
         hint={formula('staffTurnover')}
       />
     </KpiGrid>

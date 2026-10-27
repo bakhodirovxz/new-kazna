@@ -29,6 +29,13 @@ const CATEGORIES: Record<string, MessageKey> = {
   ops: 'settings.category.ops',
   banks: 'settings.category.banks',
   fx: 'settings.category.fx',
+  onec: 'settings.category.onec',
+  askue: 'settings.category.askue',
+  sklad: 'settings.category.sklad',
+  zakupki: 'settings.category.zakupki',
+  hr: 'settings.category.hr',
+  kazna: 'settings.category.kazna',
+  ai: 'settings.category.ai',
 };
 const ORDER = Object.keys(CATEGORIES);
 

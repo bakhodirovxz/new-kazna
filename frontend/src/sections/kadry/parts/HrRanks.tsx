@@ -51,7 +51,10 @@ export function AvgSalaryRank({ rows, filters, onBranch, className }: RankProps)
 /** Prototip «ФОТ по филиалам»: выплаты за период. */
 export function PayrollRank({ rows, filters, onBranch, className }: RankProps) {
   const title = t('kad.pay.title');
-  const items = [...rows].sort((a, b) => b.payroll - a.payroll).map((b) => ({ id: b.branch_id, name: b.name, value: b.payroll }));
+  const items = rows
+    .filter((b) => b.payroll !== null)
+    .sort((a, b) => (b.payroll ?? 0) - (a.payroll ?? 0))
+    .map((b) => ({ id: b.branch_id, name: b.name, value: b.payroll ?? 0 }));
   return (
     <Card className={className} title={title} sub={t('kad.pay.sub')}>
       <Rank label={title} items={items} onSelect={(id) => toggleBranch(filters, Number(id), onBranch)} activeId={filters.br} />
@@ -79,9 +82,9 @@ export function PayrollShareCard({ kpis, className }: { kpis: HrKpisOut; classNa
 export function OvertimeCard({ kpis, rows, filters, onBranch, className }: RankProps & { kpis: HrKpisOut }) {
   const title = t('kad.ot.title');
   const items = rows
-    .filter((b) => b.overtime > 0)
-    .sort((a, b) => b.overtime - a.overtime)
-    .map((b) => ({ id: b.branch_id, name: b.name, value: b.overtime, note: t('kad.ot.perBranch', { hours: formatNumber(b.overtime_per_employee ?? 0, 1) }) }));
+    .filter((b) => (b.overtime ?? 0) > 0)
+    .sort((a, b) => (b.overtime ?? 0) - (a.overtime ?? 0))
+    .map((b) => ({ id: b.branch_id, name: b.name, value: b.overtime ?? 0, note: t('kad.ot.perBranch', { hours: formatNumber(b.overtime_per_employee ?? 0, 1) }) }));
   return (
     <Card className={className} title={title} sub={t('kad.ot.sub')}>
       <div className="bigline" title={formula('overtime')}>

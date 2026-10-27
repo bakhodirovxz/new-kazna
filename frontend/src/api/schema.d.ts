@@ -819,6 +819,401 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/kredity/svod": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Svod */
+        get: operations["svod_api_v1_kredity_svod_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/kredity/reestr": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Reestr */
+        get: operations["reestr_api_v1_kredity_reestr_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/kredity/grafik": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Grafik */
+        get: operations["grafik_api_v1_kredity_grafik_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/zakupki/svod": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Svod */
+        get: operations["svod_api_v1_zakupki_svod_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/zakupki/loty": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Loty */
+        get: operations["loty_api_v1_zakupki_loty_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/zakupki/postavshiki": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Postavshiki */
+        get: operations["postavshiki_api_v1_zakupki_postavshiki_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/zakupki/ekonomiya": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Ekonomiya */
+        get: operations["ekonomiya_api_v1_zakupki_ekonomiya_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/investicii/svod": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Svod */
+        get: operations["svod_api_v1_investicii_svod_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/investicii/obekty": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Obekty */
+        get: operations["obekty_api_v1_investicii_obekty_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/investicii/istochniki": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Istochniki */
+        get: operations["istochniki_api_v1_investicii_istochniki_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/investicii/riski": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Riski */
+        get: operations["riski_api_v1_investicii_riski_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/kadry/svod": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Svod */
+        get: operations["svod_api_v1_kadry_svod_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/kadry/chislennost": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Chislennost */
+        get: operations["chislennost_api_v1_kadry_chislennost_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/kadry/fot": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Fot */
+        get: operations["fot_api_v1_kadry_fot_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/kadry/dvizhenie": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Dvizhenie */
+        get: operations["dvizhenie_api_v1_kadry_dvizhenie_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/proizvodstvo/svod": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Svod */
+        get: operations["svod_api_v1_proizvodstvo_svod_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/proizvodstvo/stancii": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Stancii */
+        get: operations["stancii_api_v1_proizvodstvo_stancii_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/proizvodstvo/realiz": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Realiz */
+        get: operations["realiz_api_v1_proizvodstvo_realiz_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/proizvodstvo/moshchnost": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Moshchnost
+         * @description Jonli quvvat (treplex.uz): build'ga bog'liq emas — kesh kalitiga oxirgi snapshot vaqti va
+         *     eskirganlik kiradi (yangi snapshot yoki eskirish — yangi javob).
+         */
+        get: operations["moshchnost_api_v1_proizvodstvo_moshchnost_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sklad/svod": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Svod */
+        get: operations["svod_api_v1_sklad_svod_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sklad/ostatki": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Ostatki */
+        get: operations["ostatki_api_v1_sklad_ostatki_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sklad/minimum": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Minimum */
+        get: operations["minimum_api_v1_sklad_minimum_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sklad/nelikvid": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Nelikvid */
+        get: operations["nelikvid_api_v1_sklad_nelikvid_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/obzor/excel.xlsx": {
         parameters: {
             query?: never;
@@ -847,6 +1242,57 @@ export interface paths {
         put?: never;
         /** Export Log */
         post: operations["export_log_api_v1_exports_log_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ai/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Status */
+        get: operations["status_api_v1_ai_status_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ai/analyze": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Analyze */
+        post: operations["analyze_api_v1_ai_analyze_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/audit/ai-requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Ai Requests */
+        get: operations["ai_requests_api_v1_audit_ai_requests_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1136,6 +1582,88 @@ export interface components {
             activity: string;
             /** Amount */
             amount: number;
+        };
+        /** AgeBucketOut */
+        AgeBucketOut: {
+            /** Key */
+            key: string;
+            /** Value */
+            value: number;
+        };
+        /** AiAnalyzeIn */
+        AiAnalyzeIn: {
+            /** Section */
+            section: string;
+            /** Page */
+            page: string;
+            /** Br */
+            br?: number | null;
+            /**
+             * Per
+             * @default ytd
+             */
+            per: string;
+            /**
+             * Scen
+             * @default base
+             * @enum {string}
+             */
+            scen: "base" | "water" | "tariff" | "fx";
+            /** Preset */
+            preset?: ("yoy" | "risks" | "priorities" | "plan") | null;
+            /** Question */
+            question?: string | null;
+        };
+        /** AiRequestOut */
+        AiRequestOut: {
+            /** Id */
+            id: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Finished At */
+            finished_at: string | null;
+            /** Username */
+            username: string;
+            /** Section */
+            section: string;
+            /** Page */
+            page: string;
+            /** Filters */
+            filters: {
+                [key: string]: unknown;
+            };
+            /** Preset */
+            preset: string | null;
+            /** Question */
+            question: string | null;
+            /** Status */
+            status: string;
+            /** Error Code */
+            error_code: string | null;
+            /** Context Chars */
+            context_chars: number;
+            /** Answer Chars */
+            answer_chars: number;
+            /** Model */
+            model: string;
+            /** Duration Ms */
+            duration_ms: number | null;
+        };
+        /** AiStatusOut */
+        AiStatusOut: {
+            /** Enabled */
+            enabled: boolean;
+            /** Reason */
+            reason: ("disabled" | "not_configured") | null;
+            /** User Per Hour */
+            user_per_hour: number;
+            /** Org Per Day */
+            org_per_day: number;
+            /** Used Last Hour */
+            used_last_hour: number;
         };
         /** AlertCountOut */
         AlertCountOut: {
@@ -1643,10 +2171,137 @@ export interface components {
             /** Share */
             share: number | null;
         };
+        /** GenMonthOut */
+        GenMonthOut: {
+            /** Month Id */
+            month_id: number;
+            /** Generation */
+            generation: number;
+            /** Plan */
+            plan: number;
+            /** Generation Prev */
+            generation_prev: number;
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
+        };
+        /** HrBranchOut */
+        HrBranchOut: {
+            /** Branch Id */
+            branch_id: number;
+            /** Name */
+            name: string;
+            /** Plan */
+            plan: number;
+            /** Fact */
+            fact: number;
+            /** Vacancies */
+            vacancies: number | null;
+            /** Fill */
+            fill: number | null;
+            /** Payroll */
+            payroll: number | null;
+            /** Avg Salary */
+            avg_salary: number | null;
+            /** Hired */
+            hired: number | null;
+            /** Fired */
+            fired: number | null;
+            /** Turnover */
+            turnover: number | null;
+            /** Overtime */
+            overtime: number | null;
+            /** Overtime Per Employee */
+            overtime_per_employee: number | null;
+            /**
+             * Suppressed
+             * @default false
+             */
+            suppressed: boolean;
+            /** Suppressed Reason */
+            suppressed_reason?: string | null;
+        };
+        /** HrCategoryOut */
+        HrCategoryOut: {
+            /** Name */
+            name: string;
+            /** Value */
+            value: number | null;
+            /**
+             * Suppressed
+             * @default false
+             */
+            suppressed: boolean;
+            /** Suppressed Reason */
+            suppressed_reason?: string | null;
+        };
+        /** HrKpisOut */
+        HrKpisOut: {
+            /** Has Data */
+            has_data: boolean;
+            /** Snap Month */
+            snap_month: number | null;
+            /** Plan */
+            plan: number;
+            /** Fact */
+            fact: number;
+            /** Vacancies */
+            vacancies: number | null;
+            /** Vacancy Share */
+            vacancy_share: number | null;
+            /** Fill */
+            fill: number | null;
+            /** Payroll */
+            payroll: number | null;
+            /** Outflow */
+            outflow: number;
+            /** Payroll Share */
+            payroll_share: number | null;
+            /** Avg Salary */
+            avg_salary: number | null;
+            /** Hired */
+            hired: number | null;
+            /** Fired */
+            fired: number | null;
+            /** Turnover */
+            turnover: number | null;
+            /** Overtime */
+            overtime: number | null;
+            /** Overtime Per Employee */
+            overtime_per_employee: number | null;
+            /**
+             * Suppressed
+             * @default false
+             */
+            suppressed: boolean;
+            /** Suppressed Reason */
+            suppressed_reason?: string | null;
+        };
+        /** HrMonthOut */
+        HrMonthOut: {
+            /** Month Id */
+            month_id: number;
+            /** Payroll */
+            payroll: number | null;
+            /** Fact */
+            fact: number;
+            /** Avg Salary */
+            avg_salary: number | null;
+            /** Hired */
+            hired: number | null;
+            /** Fired */
+            fired: number | null;
+            /** Overtime */
+            overtime: number | null;
+            /**
+             * Suppressed
+             * @default false
+             */
+            suppressed: boolean;
+            /** Suppressed Reason */
+            suppressed_reason?: string | null;
         };
         /** IntegrationCheckOut */
         IntegrationCheckOut: {
@@ -1703,6 +2358,171 @@ export interface components {
             /** Otp */
             otp?: string | null;
         };
+        /** InvCumOut */
+        InvCumOut: {
+            /** Month Id */
+            month_id: number;
+            /** Plan */
+            plan: number;
+            /** Fact */
+            fact: number | null;
+        };
+        /** InvIstochnikiOut */
+        InvIstochnikiOut: {
+            period: components["schemas"]["ReportPeriodOut"];
+            kpis: components["schemas"]["InvKpisOut"];
+            /** Sources */
+            sources: components["schemas"]["InvSourceOut"][];
+            /** Objects */
+            objects: components["schemas"]["InvObjectOut"][];
+            /** Cumulative */
+            cumulative: components["schemas"]["InvCumOut"][];
+        };
+        /** InvKpisOut */
+        InvKpisOut: {
+            /** Has Objects */
+            has_objects: boolean;
+            /** Objects */
+            objects: number;
+            /** Total Cost */
+            total_cost: number;
+            /** Program */
+            program: number;
+            /** Plan To Date */
+            plan_to_date: number;
+            /** Fact Ytd */
+            fact_ytd: number;
+            /** Execution */
+            execution: number | null;
+            /** Fact Period */
+            fact_period: number;
+            /** Lagging */
+            lagging: number;
+            /** Threatened */
+            threatened: number;
+            /** Commissioning */
+            commissioning: number;
+            /** Year */
+            year: number;
+        };
+        /** InvObektyOut */
+        InvObektyOut: {
+            period: components["schemas"]["ReportPeriodOut"];
+            kpis: components["schemas"]["InvKpisOut"];
+            /** Objects */
+            objects: components["schemas"]["InvObjectOut"][];
+        };
+        /** InvObjectOut */
+        InvObjectOut: {
+            /** Object Id */
+            object_id: number;
+            /** Object Code */
+            object_code: string;
+            /** Name */
+            name: string;
+            /** Program Code */
+            program_code: string | null;
+            /** Work Type */
+            work_type: string;
+            /** Source Name */
+            source_name: string;
+            /** Commissioning Year */
+            commissioning_year: number | null;
+            /** Total Cost */
+            total_cost: number | null;
+            /** Branch Id */
+            branch_id: number;
+            /** Branch Name */
+            branch_name: string;
+            /** Plan Year */
+            plan_year: number;
+            /** Plan To Date */
+            plan_to_date: number;
+            /** Fact Ytd */
+            fact_ytd: number;
+            /** Fact Period */
+            fact_period: number;
+            /** Execution */
+            execution: number | null;
+            /** Status */
+            status: string | null;
+            /** Financial */
+            financial: number | null;
+            /** Physical */
+            physical: number | null;
+            /** Gap Pp */
+            gap_pp: number | null;
+            /** Advance */
+            advance: number;
+            /** Advance Days */
+            advance_days: number | null;
+        };
+        /** InvObjectStagesOut */
+        InvObjectStagesOut: {
+            /** Object Id */
+            object_id: number;
+            /** Name */
+            name: string;
+            /** Branch Id */
+            branch_id: number;
+            /** Late */
+            late: number;
+            /** Stages */
+            stages: components["schemas"]["InvStageOut"][];
+        };
+        /** InvRiskiOut */
+        InvRiskiOut: {
+            period: components["schemas"]["ReportPeriodOut"];
+            kpis: components["schemas"]["InvKpisOut"];
+            /** Lagging */
+            lagging: components["schemas"]["InvObjectOut"][];
+            /** Gaps */
+            gaps: components["schemas"]["InvObjectOut"][];
+            /** Stages */
+            stages: components["schemas"]["InvObjectStagesOut"][];
+            /** Advances */
+            advances: components["schemas"]["InvObjectOut"][];
+        };
+        /** InvSourceOut */
+        InvSourceOut: {
+            /** Name */
+            name: string;
+            /** Plan Year */
+            plan_year: number;
+            /** Fact Ytd */
+            fact_ytd: number;
+            /** Share */
+            share: number | null;
+        };
+        /** InvStageOut */
+        InvStageOut: {
+            /** Stage No */
+            stage_no: number;
+            /** Name */
+            name: string;
+            /**
+             * Plan Date
+             * Format: date
+             */
+            plan_date: string;
+            /** Fact Date */
+            fact_date: string | null;
+            /** Done */
+            done: boolean;
+            /** Late */
+            late: boolean;
+        };
+        /** InvSvodOut */
+        InvSvodOut: {
+            period: components["schemas"]["ReportPeriodOut"];
+            kpis: components["schemas"]["InvKpisOut"];
+            /** Cumulative */
+            cumulative: components["schemas"]["InvCumOut"][];
+            /** Sources */
+            sources: components["schemas"]["InvSourceOut"][];
+            /** Objects */
+            objects: components["schemas"]["InvObjectOut"][];
+        };
         /** ItemAmountOut */
         ItemAmountOut: {
             /** Item Id */
@@ -1748,6 +2568,44 @@ export interface components {
             activity: string;
             /** Direction */
             direction: string;
+        };
+        /** KadryChislennostOut */
+        KadryChislennostOut: {
+            period: components["schemas"]["ReportPeriodOut"];
+            kpis: components["schemas"]["HrKpisOut"];
+            /** Branches */
+            branches: components["schemas"]["HrBranchOut"][];
+            /** Categories */
+            categories: components["schemas"]["HrCategoryOut"][];
+        };
+        /** KadryDvizhenieOut */
+        KadryDvizhenieOut: {
+            period: components["schemas"]["ReportPeriodOut"];
+            kpis: components["schemas"]["HrKpisOut"];
+            /** Months */
+            months: components["schemas"]["HrMonthOut"][];
+            /** Branches */
+            branches: components["schemas"]["HrBranchOut"][];
+        };
+        /** KadryFotOut */
+        KadryFotOut: {
+            period: components["schemas"]["ReportPeriodOut"];
+            kpis: components["schemas"]["HrKpisOut"];
+            /** Months */
+            months: components["schemas"]["HrMonthOut"][];
+            /** Branches */
+            branches: components["schemas"]["HrBranchOut"][];
+        };
+        /** KadrySvodOut */
+        KadrySvodOut: {
+            period: components["schemas"]["ReportPeriodOut"];
+            kpis: components["schemas"]["HrKpisOut"];
+            /** Months */
+            months: components["schemas"]["HrMonthOut"][];
+            /** Categories */
+            categories: components["schemas"]["HrCategoryOut"][];
+            /** Branches */
+            branches: components["schemas"]["HrBranchOut"][];
         };
         /** KaznaCalendarOut */
         KaznaCalendarOut: {
@@ -1846,6 +2704,140 @@ export interface components {
             /** Retired At */
             retired_at: string | null;
         };
+        /** KredityGrafikOut */
+        KredityGrafikOut: {
+            period: components["schemas"]["ReportPeriodOut"];
+            /** Has Loans */
+            has_loans: boolean;
+            /** Schedule */
+            schedule: components["schemas"]["LoanYearOut"][];
+            /** Upcoming */
+            upcoming: components["schemas"]["LoanPaymentOut"][];
+        };
+        /** KredityReestrOut */
+        KredityReestrOut: {
+            period: components["schemas"]["ReportPeriodOut"];
+            /** Has Loans */
+            has_loans: boolean;
+            kpis: components["schemas"]["LoanKpisOut"];
+            /** Loans */
+            loans: components["schemas"]["LoanRowOut"][];
+            /** Creditors */
+            creditors: components["schemas"]["NamedAmountOut"][];
+            /** Currencies */
+            currencies: components["schemas"]["NamedAmountOut"][];
+        };
+        /** KreditySvodOut */
+        KreditySvodOut: {
+            period: components["schemas"]["ReportPeriodOut"];
+            /** Has Loans */
+            has_loans: boolean;
+            kpis: components["schemas"]["LoanKpisOut"];
+            /** Schedule */
+            schedule: components["schemas"]["LoanYearOut"][];
+            /** Currencies */
+            currencies: components["schemas"]["NamedAmountOut"][];
+            /** Upcoming */
+            upcoming: components["schemas"]["LoanPaymentOut"][];
+        };
+        /** LoanKpisOut */
+        LoanKpisOut: {
+            /**
+             * As Of
+             * Format: date
+             */
+            as_of: string;
+            /** Loans */
+            loans: number;
+            /** Portfolio */
+            portfolio: number | null;
+            /** Rate */
+            rate: number | null;
+            /** Fx Share */
+            fx_share: number | null;
+            /** Service */
+            service: number;
+            /** Paid */
+            paid: number;
+            /** Paid Share */
+            paid_share: number | null;
+            next_payment: components["schemas"]["LoanPaymentOut"] | null;
+            /** Peak Year */
+            peak_year: number | null;
+            /** Peak Amount */
+            peak_amount: number | null;
+            /** Missing Fx */
+            missing_fx: string[];
+            /** Dscr */
+            dscr: number | null;
+        };
+        /** LoanPaymentOut */
+        LoanPaymentOut: {
+            /**
+             * Day
+             * Format: date
+             */
+            day: string;
+            /** Loan Id */
+            loan_id: number;
+            /** Creditor */
+            creditor: string;
+            /** Project */
+            project: string;
+            /** Branch Name */
+            branch_name: string;
+            /** Principal */
+            principal: number | null;
+            /** Interest */
+            interest: number | null;
+            /** Total */
+            total: number | null;
+        };
+        /** LoanRowOut */
+        LoanRowOut: {
+            /** Loan Id */
+            loan_id: number;
+            /** Loan Code */
+            loan_code: string;
+            /** Creditor */
+            creditor: string;
+            /** Project */
+            project: string;
+            /** Branch Id */
+            branch_id: number;
+            /** Branch Name */
+            branch_name: string;
+            /** Currency */
+            currency: string;
+            /** Rate */
+            rate: number;
+            /** Outstanding */
+            outstanding: number | null;
+            /** Outstanding Cur */
+            outstanding_cur: number;
+            /** Original Cur */
+            original_cur: number;
+            /** Repaid Share */
+            repaid_share: number | null;
+            /** Grace Until */
+            grace_until: string | null;
+            /** In Grace */
+            in_grace: boolean;
+            /**
+             * Maturity
+             * Format: date
+             */
+            maturity: string;
+        };
+        /** LoanYearOut */
+        LoanYearOut: {
+            /** Year */
+            year: number;
+            /** Principal */
+            principal: number;
+            /** Interest */
+            interest: number;
+        };
         /** LoginIn */
         LoginIn: {
             /** Username */
@@ -1867,6 +2859,26 @@ export interface components {
             /** Mfa Token */
             mfa_token?: string | null;
             user?: components["schemas"]["MeOut"] | null;
+        };
+        /** MapStationOut */
+        MapStationOut: {
+            /** Branch Id */
+            branch_id: number;
+            /** Code */
+            code: string;
+            /** Name */
+            name: string;
+            /** Short Name */
+            short_name: string;
+            /** Kind */
+            kind: string;
+            /** Capacity Mw */
+            capacity_mw: number | null;
+            /** Lat */
+            lat: number | null;
+            /** Lon */
+            lon: number | null;
+            production: components["schemas"]["StationProductionOut"] | null;
         };
         /** MeOut */
         MeOut: {
@@ -1946,6 +2958,13 @@ export interface components {
             /** Outflow Prev */
             outflow_prev: number;
         };
+        /** NamedAmountOut */
+        NamedAmountOut: {
+            /** Name */
+            name: string;
+            /** Amount */
+            amount: number;
+        };
         /** ObzorExcelOut */
         ObzorExcelOut: {
             period: components["schemas"]["ReportPeriodOut"];
@@ -2000,6 +3019,17 @@ export interface components {
             count: number;
             /** Amount */
             amount: number;
+        };
+        /** Page[AiRequestOut] */
+        Page_AiRequestOut_: {
+            /** Items */
+            items: components["schemas"]["AiRequestOut"][];
+            /** Total */
+            total: number;
+            /** Page */
+            page: number;
+            /** Page Size */
+            page_size: number;
         };
         /** Page[AuditOut] */
         Page_AuditOut_: {
@@ -2144,6 +3174,112 @@ export interface components {
             /** Is Active */
             is_active?: boolean | null;
         };
+        /** PowerOut */
+        PowerOut: {
+            /** Has Source */
+            has_source: boolean;
+            /** Snap At */
+            snap_at: string | null;
+            /** Source Date */
+            source_date: string | null;
+            /** Stale */
+            stale: boolean;
+            /** Total Mw */
+            total_mw: number;
+            /** Units Working */
+            units_working: number;
+            /** Units Reserve */
+            units_reserve: number;
+            /** Units Repair */
+            units_repair: number;
+            /** Stations */
+            stations: components["schemas"]["PowerStationOut"][];
+        };
+        /** PowerStationOut */
+        PowerStationOut: {
+            /** Branch Id */
+            branch_id: number;
+            /** Branch Name */
+            branch_name: string;
+            /** Station */
+            station: string;
+            /** Station Name */
+            station_name: string;
+            /** Cascade Name */
+            cascade_name: string;
+            /** Power Mw */
+            power_mw: number;
+            /** Units Working */
+            units_working: number;
+            /** Units Reserve */
+            units_reserve: number;
+            /** Units Repair */
+            units_repair: number;
+        };
+        /** ProdKpisOut */
+        ProdKpisOut: {
+            /** Has Data */
+            has_data: boolean;
+            /** Generation */
+            generation: number;
+            /** Generation Prev */
+            generation_prev: number;
+            /** Plan */
+            plan: number;
+            /** Execution */
+            execution: number | null;
+            /** Capacity Mw */
+            capacity_mw: number | null;
+            /** Stations */
+            stations: number;
+            /** Kium */
+            kium: number | null;
+            /** Own Needs */
+            own_needs: number;
+            /** Own Share */
+            own_share: number | null;
+            /** Supply */
+            supply: number;
+            /** Accrued */
+            accrued: number;
+            /** Paid */
+            paid: number;
+            /** Payment Level */
+            payment_level: number | null;
+        };
+        /** ProizvRealizOut */
+        ProizvRealizOut: {
+            period: components["schemas"]["ReportPeriodOut"];
+            /** Has Stations */
+            has_stations: boolean;
+            kpis: components["schemas"]["ProdKpisOut"];
+            /** Months */
+            months: components["schemas"]["SalesMonthOut"][];
+            /** Stations */
+            stations: components["schemas"]["StationGenOut"][];
+        };
+        /** ProizvStanciiOut */
+        ProizvStanciiOut: {
+            period: components["schemas"]["ReportPeriodOut"];
+            /** Has Stations */
+            has_stations: boolean;
+            kpis: components["schemas"]["ProdKpisOut"];
+            /** Stations */
+            stations: components["schemas"]["StationGenOut"][];
+        };
+        /** ProizvSvodOut */
+        ProizvSvodOut: {
+            period: components["schemas"]["ReportPeriodOut"];
+            /** Has Stations */
+            has_stations: boolean;
+            kpis: components["schemas"]["ProdKpisOut"];
+            /** Months */
+            months: components["schemas"]["GenMonthOut"][];
+            /** Stations */
+            stations: components["schemas"]["StationGenOut"][];
+            /** Map */
+            map: components["schemas"]["MapStationOut"][];
+        };
         /**
          * Purpose
          * @enum {string}
@@ -2227,6 +3363,15 @@ export interface components {
             version: number;
             /** Reencrypted */
             reencrypted: number;
+        };
+        /** SalesMonthOut */
+        SalesMonthOut: {
+            /** Month Id */
+            month_id: number;
+            /** Accrued */
+            accrued: number;
+            /** Paid */
+            paid: number;
         };
         /** SecretStatusOut */
         SecretStatusOut: {
@@ -2350,6 +3495,73 @@ export interface components {
              */
             updated_at: string;
         };
+        /** SkladMinimumOut */
+        SkladMinimumOut: {
+            period: components["schemas"]["ReportPeriodOut"];
+            kpis: components["schemas"]["StockKpisOut"];
+            /** Below */
+            below: components["schemas"]["StockPositionOut"][];
+        };
+        /** SkladNelikvidOut */
+        SkladNelikvidOut: {
+            period: components["schemas"]["ReportPeriodOut"];
+            kpis: components["schemas"]["StockKpisOut"];
+            /** Ages */
+            ages: components["schemas"]["AgeBucketOut"][];
+            /** Illiquid */
+            illiquid: components["schemas"]["StockPositionOut"][];
+        };
+        /** SkladOstatkiOut */
+        SkladOstatkiOut: {
+            period: components["schemas"]["ReportPeriodOut"];
+            kpis: components["schemas"]["StockKpisOut"];
+            /** Branches */
+            branches: components["schemas"]["StockBranchOut"][];
+            /** Categories */
+            categories: components["schemas"]["NamedAmountOut"][];
+        };
+        /** SkladSvodOut */
+        SkladSvodOut: {
+            period: components["schemas"]["ReportPeriodOut"];
+            kpis: components["schemas"]["StockKpisOut"];
+            /** Months */
+            months: components["schemas"]["StockMonthOut"][];
+            /** Categories */
+            categories: components["schemas"]["NamedAmountOut"][];
+            /** Below */
+            below: components["schemas"]["StockPositionOut"][];
+        };
+        /** StationGenOut */
+        StationGenOut: {
+            /** Branch Id */
+            branch_id: number;
+            /** Name */
+            name: string;
+            /** Short Name */
+            short_name: string;
+            /** Capacity Mw */
+            capacity_mw: number | null;
+            /** Generation */
+            generation: number;
+            /** Generation Prev */
+            generation_prev: number;
+            /** Plan */
+            plan: number;
+            /** Execution */
+            execution: number | null;
+            /** Kium */
+            kium: number | null;
+            /** Supply */
+            supply: number;
+            /** Own Share */
+            own_share: number | null;
+            /** Accrued */
+            accrued: number;
+            /** Paid */
+            paid: number;
+            /** Payment Level */
+            payment_level: number | null;
+        };
         /** StationOut */
         StationOut: {
             /** Branch Id */
@@ -2380,10 +3592,104 @@ export interface components {
             payable: number | null;
             /** Overdue Payable */
             overdue_payable: number | null;
-            /** Production */
-            production?: {
-                [key: string]: number;
-            } | null;
+            production?: components["schemas"]["StationProductionOut"] | null;
+        };
+        /**
+         * StationProductionOut
+         * @description Xarita va stansiya paneli uchun ishlab chiqarish (S3): mln kVt·soat, ulushlar 0..1.
+         */
+        StationProductionOut: {
+            /** Generation */
+            generation: number;
+            /** Plan */
+            plan: number;
+            /** Execution */
+            execution: number | null;
+            /** Kium */
+            kium: number | null;
+            /** Payment Level */
+            payment_level: number | null;
+        };
+        /** StockBranchOut */
+        StockBranchOut: {
+            /** Branch Id */
+            branch_id: number;
+            /** Name */
+            name: string;
+            /** Value */
+            value: number;
+            /** Positions */
+            positions: number;
+            /** Below Min */
+            below_min: number;
+            /** Idle Value */
+            idle_value: number;
+        };
+        /** StockKpisOut */
+        StockKpisOut: {
+            /**
+             * As Of
+             * Format: date
+             */
+            as_of: string;
+            /** Has Data */
+            has_data: boolean;
+            /** Value */
+            value: number;
+            /** Turnover Days */
+            turnover_days: number | null;
+            /** Positions */
+            positions: number;
+            /** Below Min */
+            below_min: number;
+            /** Has Minimum */
+            has_minimum: boolean;
+            /** Idle Value */
+            idle_value: number;
+            /** Idle Share */
+            idle_share: number | null;
+            /** Has Age */
+            has_age: boolean;
+            /** Inflow */
+            inflow: number;
+            /** Outflow */
+            outflow: number;
+        };
+        /** StockMonthOut */
+        StockMonthOut: {
+            /** Month Id */
+            month_id: number;
+            /** Inflow */
+            inflow: number;
+            /** Outflow */
+            outflow: number;
+        };
+        /** StockPositionOut */
+        StockPositionOut: {
+            /** Branch Id */
+            branch_id: number;
+            /** Branch Name */
+            branch_name: string;
+            /** Warehouse */
+            warehouse: string;
+            /** Nom Code */
+            nom_code: string;
+            /** Name */
+            name: string;
+            /** Category */
+            category: string;
+            /** Unit */
+            unit: string;
+            /** Qty */
+            qty: number;
+            /** Min Qty */
+            min_qty: number | null;
+            /** Coverage */
+            coverage: number | null;
+            /** Value */
+            value: number;
+            /** Age Days */
+            age_days: number | null;
         };
         /** TemporaryPassword */
         TemporaryPassword: {
@@ -2460,6 +3766,173 @@ export interface components {
             bad_ids: number[];
             /** First Bad Id */
             first_bad_id: number | null;
+        };
+        /** ZakBranchOut */
+        ZakBranchOut: {
+            /** Branch Id */
+            branch_id: number;
+            /** Name */
+            name: string;
+            /** Plan */
+            plan: number;
+            /** Ytd */
+            ytd: number;
+            /** Execution */
+            execution: number | null;
+            /** Savings */
+            savings: number;
+        };
+        /** ZakEkonomiyaOut */
+        ZakEkonomiyaOut: {
+            period: components["schemas"]["ReportPeriodOut"];
+            kpis: components["schemas"]["ZakKpisOut"];
+            /** Methods */
+            methods: components["schemas"]["ZakMethodOut"][];
+            /** Cancelled */
+            cancelled: components["schemas"]["ZakLotOut"][];
+        };
+        /** ZakKpisOut */
+        ZakKpisOut: {
+            /** Has Data */
+            has_data: boolean;
+            /** Contracted */
+            contracted: number;
+            /** Contracts */
+            contracts: number;
+            /** Start Contracted */
+            start_contracted: number;
+            /** Savings */
+            savings: number;
+            /** Savings Share */
+            savings_share: number | null;
+            /** Ytd */
+            ytd: number;
+            /** Plan */
+            plan: number;
+            /** Plan Execution */
+            plan_execution: number | null;
+            /** In Work */
+            in_work: number;
+            /** In Work Start */
+            in_work_start: number;
+            /** Overdue */
+            overdue: number;
+            /** Overdue Start */
+            overdue_start: number;
+            /** Direct */
+            direct: number;
+            /** Direct Share */
+            direct_share: number | null;
+            /** Avg Days */
+            avg_days: number | null;
+            /** Cancelled */
+            cancelled: number;
+            /** Cancelled Start */
+            cancelled_start: number;
+        };
+        /** ZakLotOut */
+        ZakLotOut: {
+            /** Lot No */
+            lot_no: string;
+            /** Branch Id */
+            branch_id: number;
+            /** Branch Name */
+            branch_name: string;
+            /**
+             * Date
+             * Format: date
+             */
+            date: string;
+            /** Method */
+            method: string;
+            /** Method Title */
+            method_title: string;
+            /** Subject */
+            subject: string;
+            /** Status */
+            status: string;
+            /** Kind */
+            kind: string;
+            /** Start Price */
+            start_price: number;
+            /** Contract Price */
+            contract_price: number | null;
+            /** Days */
+            days: number | null;
+            /** Norm Days */
+            norm_days: number | null;
+            /** Overdue */
+            overdue: boolean;
+            /** Supplier */
+            supplier: string | null;
+        };
+        /** ZakLotyOut */
+        ZakLotyOut: {
+            period: components["schemas"]["ReportPeriodOut"];
+            kpis: components["schemas"]["ZakKpisOut"];
+            /** Lots */
+            lots: components["schemas"]["ZakLotOut"][];
+            /** Truncated */
+            truncated: boolean;
+        };
+        /** ZakMethodOut */
+        ZakMethodOut: {
+            /** Method */
+            method: string;
+            /** Title */
+            title: string;
+            /** Lots */
+            lots: number;
+            /** Start */
+            start: number;
+            /** Contracted */
+            contracted: number;
+            /** Savings */
+            savings: number;
+            /** Savings Share */
+            savings_share: number | null;
+            /** Avg Days */
+            avg_days: number | null;
+            /** Norm Days */
+            norm_days: number | null;
+        };
+        /** ZakMonthOut */
+        ZakMonthOut: {
+            /** Month Id */
+            month_id: number;
+            /** Contracted */
+            contracted: number;
+        };
+        /** ZakNamedOut */
+        ZakNamedOut: {
+            /** Name */
+            name: string;
+            /** Amount */
+            amount: number;
+            /** Count */
+            count: number;
+        };
+        /** ZakPostavshikiOut */
+        ZakPostavshikiOut: {
+            period: components["schemas"]["ReportPeriodOut"];
+            kpis: components["schemas"]["ZakKpisOut"];
+            /** Suppliers */
+            suppliers: components["schemas"]["ZakNamedOut"][];
+            /** Subjects */
+            subjects: components["schemas"]["ZakNamedOut"][];
+            /** Branches */
+            branches: components["schemas"]["ZakBranchOut"][];
+        };
+        /** ZakSvodOut */
+        ZakSvodOut: {
+            period: components["schemas"]["ReportPeriodOut"];
+            kpis: components["schemas"]["ZakKpisOut"];
+            /** Months */
+            months: components["schemas"]["ZakMonthOut"][];
+            /** Methods */
+            methods: components["schemas"]["ZakMethodOut"][];
+            /** Lots */
+            lots: components["schemas"]["ZakLotOut"][];
         };
     };
     responses: never;
@@ -4288,6 +5761,880 @@ export interface operations {
             };
         };
     };
+    svod_api_v1_kredity_svod_get: {
+        parameters: {
+            query?: {
+                br?: number | null;
+                per?: string;
+            };
+            header?: {
+                "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                "__Host-ugk_session"?: string | null;
+                "__Host-ugk_csrf"?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KreditySvodOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reestr_api_v1_kredity_reestr_get: {
+        parameters: {
+            query?: {
+                br?: number | null;
+                per?: string;
+            };
+            header?: {
+                "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                "__Host-ugk_session"?: string | null;
+                "__Host-ugk_csrf"?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KredityReestrOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    grafik_api_v1_kredity_grafik_get: {
+        parameters: {
+            query?: {
+                br?: number | null;
+                per?: string;
+            };
+            header?: {
+                "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                "__Host-ugk_session"?: string | null;
+                "__Host-ugk_csrf"?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KredityGrafikOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    svod_api_v1_zakupki_svod_get: {
+        parameters: {
+            query?: {
+                br?: number | null;
+                per?: string;
+            };
+            header?: {
+                "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                "__Host-ugk_session"?: string | null;
+                "__Host-ugk_csrf"?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ZakSvodOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    loty_api_v1_zakupki_loty_get: {
+        parameters: {
+            query?: {
+                br?: number | null;
+                per?: string;
+            };
+            header?: {
+                "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                "__Host-ugk_session"?: string | null;
+                "__Host-ugk_csrf"?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ZakLotyOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    postavshiki_api_v1_zakupki_postavshiki_get: {
+        parameters: {
+            query?: {
+                br?: number | null;
+                per?: string;
+            };
+            header?: {
+                "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                "__Host-ugk_session"?: string | null;
+                "__Host-ugk_csrf"?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ZakPostavshikiOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    ekonomiya_api_v1_zakupki_ekonomiya_get: {
+        parameters: {
+            query?: {
+                br?: number | null;
+                per?: string;
+            };
+            header?: {
+                "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                "__Host-ugk_session"?: string | null;
+                "__Host-ugk_csrf"?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ZakEkonomiyaOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    svod_api_v1_investicii_svod_get: {
+        parameters: {
+            query?: {
+                br?: number | null;
+                per?: string;
+            };
+            header?: {
+                "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                "__Host-ugk_session"?: string | null;
+                "__Host-ugk_csrf"?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InvSvodOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    obekty_api_v1_investicii_obekty_get: {
+        parameters: {
+            query?: {
+                br?: number | null;
+                per?: string;
+            };
+            header?: {
+                "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                "__Host-ugk_session"?: string | null;
+                "__Host-ugk_csrf"?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InvObektyOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    istochniki_api_v1_investicii_istochniki_get: {
+        parameters: {
+            query?: {
+                br?: number | null;
+                per?: string;
+            };
+            header?: {
+                "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                "__Host-ugk_session"?: string | null;
+                "__Host-ugk_csrf"?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InvIstochnikiOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    riski_api_v1_investicii_riski_get: {
+        parameters: {
+            query?: {
+                br?: number | null;
+                per?: string;
+            };
+            header?: {
+                "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                "__Host-ugk_session"?: string | null;
+                "__Host-ugk_csrf"?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InvRiskiOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    svod_api_v1_kadry_svod_get: {
+        parameters: {
+            query?: {
+                br?: number | null;
+                per?: string;
+            };
+            header?: {
+                "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                "__Host-ugk_session"?: string | null;
+                "__Host-ugk_csrf"?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KadrySvodOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    chislennost_api_v1_kadry_chislennost_get: {
+        parameters: {
+            query?: {
+                br?: number | null;
+                per?: string;
+            };
+            header?: {
+                "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                "__Host-ugk_session"?: string | null;
+                "__Host-ugk_csrf"?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KadryChislennostOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    fot_api_v1_kadry_fot_get: {
+        parameters: {
+            query?: {
+                br?: number | null;
+                per?: string;
+            };
+            header?: {
+                "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                "__Host-ugk_session"?: string | null;
+                "__Host-ugk_csrf"?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KadryFotOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    dvizhenie_api_v1_kadry_dvizhenie_get: {
+        parameters: {
+            query?: {
+                br?: number | null;
+                per?: string;
+            };
+            header?: {
+                "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                "__Host-ugk_session"?: string | null;
+                "__Host-ugk_csrf"?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KadryDvizhenieOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    svod_api_v1_proizvodstvo_svod_get: {
+        parameters: {
+            query?: {
+                br?: number | null;
+                per?: string;
+            };
+            header?: {
+                "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                "__Host-ugk_session"?: string | null;
+                "__Host-ugk_csrf"?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProizvSvodOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    stancii_api_v1_proizvodstvo_stancii_get: {
+        parameters: {
+            query?: {
+                br?: number | null;
+                per?: string;
+            };
+            header?: {
+                "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                "__Host-ugk_session"?: string | null;
+                "__Host-ugk_csrf"?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProizvStanciiOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    realiz_api_v1_proizvodstvo_realiz_get: {
+        parameters: {
+            query?: {
+                br?: number | null;
+                per?: string;
+            };
+            header?: {
+                "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                "__Host-ugk_session"?: string | null;
+                "__Host-ugk_csrf"?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProizvRealizOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    moshchnost_api_v1_proizvodstvo_moshchnost_get: {
+        parameters: {
+            query?: {
+                br?: number | null;
+                per?: string;
+            };
+            header?: {
+                "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                "__Host-ugk_session"?: string | null;
+                "__Host-ugk_csrf"?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PowerOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    svod_api_v1_sklad_svod_get: {
+        parameters: {
+            query?: {
+                br?: number | null;
+                per?: string;
+            };
+            header?: {
+                "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                "__Host-ugk_session"?: string | null;
+                "__Host-ugk_csrf"?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SkladSvodOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    ostatki_api_v1_sklad_ostatki_get: {
+        parameters: {
+            query?: {
+                br?: number | null;
+                per?: string;
+            };
+            header?: {
+                "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                "__Host-ugk_session"?: string | null;
+                "__Host-ugk_csrf"?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SkladOstatkiOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    minimum_api_v1_sklad_minimum_get: {
+        parameters: {
+            query?: {
+                br?: number | null;
+                per?: string;
+            };
+            header?: {
+                "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                "__Host-ugk_session"?: string | null;
+                "__Host-ugk_csrf"?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SkladMinimumOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    nelikvid_api_v1_sklad_nelikvid_get: {
+        parameters: {
+            query?: {
+                br?: number | null;
+                per?: string;
+            };
+            header?: {
+                "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                "__Host-ugk_session"?: string | null;
+                "__Host-ugk_csrf"?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SkladNelikvidOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     excel_xlsx_api_v1_obzor_excel_xlsx_get: {
         parameters: {
             query?: {
@@ -4351,6 +6698,118 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    status_api_v1_ai_status_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                "__Host-ugk_session"?: string | null;
+                "__Host-ugk_csrf"?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AiStatusOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    analyze_api_v1_ai_analyze_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                "__Host-ugk_session"?: string | null;
+                "__Host-ugk_csrf"?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AiAnalyzeIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/event-stream": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    ai_requests_api_v1_audit_ai_requests_get: {
+        parameters: {
+            query?: {
+                page?: number;
+                page_size?: number;
+            };
+            header?: {
+                "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                "__Host-ugk_session"?: string | null;
+                "__Host-ugk_csrf"?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Page_AiRequestOut_"];
+                };
             };
             /** @description Validation Error */
             422: {

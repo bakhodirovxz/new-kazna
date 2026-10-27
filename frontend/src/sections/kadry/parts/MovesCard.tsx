@@ -20,8 +20,8 @@ export function MovesCard({ months, ctx, className }: { months: HrMonthOut[]; ct
       barConfig({
         labels: months.map((m) => monthShort(m.month_id)),
         series: [
-          { label: t('kad.mov.hired'), data: months.map((m) => m.hired), color: hired },
-          { label: t('kad.mov.fired'), data: months.map((m) => m.fired), color: fired },
+          { label: t('kad.mov.hired'), data: months.map((m) => m.hired ?? Number.NaN), color: hired },
+          { label: t('kad.mov.fired'), data: months.map((m) => m.fired ?? Number.NaN), color: fired },
         ],
         format: (v) => formatPeople(v),
       }),

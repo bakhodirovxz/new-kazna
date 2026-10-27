@@ -144,7 +144,7 @@ plan AS (
   FROM dwh.fact_payment_plan p
   JOIN item_kind ik ON ik.item_id = p.item_id
   JOIN days d ON d.date_id = p.date_id
-  WHERE p.doc_type = 'payment_schedule'
+  WHERE p.doc_type = :schedule_doc_type
   GROUP BY p.branch_id, p.date_id, ik.kind),
 loan AS (
   SELECT s.branch_id, s.date_id,

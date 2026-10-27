@@ -39,10 +39,6 @@ def test_schedule_rows_are_future_workdays_with_fixed_tax_days() -> None:
         day = date(row["date_id"] // 10000, row["date_id"] // 100 % 100, row["date_id"] % 100)
         assert day.weekday() < 5
         assert isinstance(row["amount"], Decimal) and row["amount"] > 0
-        if row["item_code"] == calendar.TAX_ITEM:
-            assert day.day in (15, 25)
-        if row["item_code"] == calendar.SALARY_ITEM:
-            assert day.day in (10, 25)
     assert {r["item_code"] for r in rows} & set(calendar.CONTRACT_ITEMS)
 
 
@@ -55,9 +51,9 @@ def test_loan_schedule_amortises_to_zero() -> None:
     loans.generate(SynthModel(7, TEST_AS_OF), WINDOW, sink)
     rows = [row for target, row in sink.rows if target == "fact_loan_schedule"]
     short = sorted((r for r in rows if r["loan_code"] == "LOAN-07"), key=lambda r: r["date_id"])
-    assert short[0]["date_id"] == 20260115 and short[-1]["date_id"] == 20271215
+    assert short[0]["date_id"] // 100 == 202601 and short[-1]["date_id"] // 100 == 202712
     assert abs(short[-1]["balance"]) < Decimal("0.01")
-    assert all(r["doc_type"] == "loan_schedule" and r["date_id"] % 100 == 15 for r in rows)
+    assert all(r["doc_type"] == "loan_schedule" for r in rows)
     grace = [r for r in rows if r["loan_code"] == "LOAN-01" and r["date_id"] < 20270101]
     assert grace and all(r["principal"] == 0 and r["interest"] > 0 for r in grace)
 
@@ -69,3 +65,41 @@ def test_extract_sums_counts_of_same_target() -> None:
     assert stats.by_target["fact_payment_plan"] == plans
     assert stats.by_target["fact_loan_schedule"] > 0
     assert stats.rows == len(sink.rows)
+
+
+def _window_kinds(as_of: date) -> set[str]:
+    """as_of+1..+14 oynasida nolmas to'lov turlari (kalendar agregati bilan bir xil tasnif)."""
+    model = SynthModel(7, as_of)
+    sink = CollectSink()
+    calendar.generate(model, WINDOW, sink)
+    loans.generate(model, WINDOW, sink)
+    lo, hi = date_id(as_of + timedelta(days=1)), date_id(as_of + timedelta(days=14))
+    kinds: set[str] = set()
+    for target, row in sink.rows:
+        if not lo <= row["date_id"] <= hi:
+            continue
+        if target == "fact_loan_schedule":
+            kinds.add("loans")
+        elif row["item_code"] == calendar.TAX_ITEM:
+            kinds.add("taxes")
+        elif row["item_code"] == calendar.SALARY_ITEM:
+            kinds.add("salary")
+        else:
+            kinds.add("contracts")
+    return kinds
+
+
+def test_any_14_day_window_shows_every_kind() -> None:
+    # Ruling A-S1.R1: oyning istalgan kunidan boshlangan 14 kunlik oynada hamma tur bo'lishi shart.
+    for year, month, last in ((2026, 10, 31), (2026, 11, 30), (2027, 2, 28), (2027, 3, 31)):
+        for day in (1, 15, 27, last):
+            as_of = date(year, month, day)
+            assert _window_kinds(as_of) == {"taxes", "salary", "loans", "contracts"}, as_of
+
+
+def test_weekend_payment_dates_shift_to_previous_workday() -> None:
+    # 2026-10-25 yakshanba: oy oxiri/25-sana to'lovlari tushib qolmaydi, juma (23) ga suriladi.
+    sink = CollectSink()
+    calendar.generate(SynthModel(7, date(2026, 10, 20)), WINDOW, sink)
+    days = {r["date_id"] for _, r in sink.rows if r["item_code"] == calendar.TAX_ITEM}
+    assert 20261023 in days and 20261025 not in days

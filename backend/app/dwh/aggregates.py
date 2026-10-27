@@ -20,6 +20,7 @@ from sqlalchemy.engine import Connection
 
 from app.core import sysconfig
 from app.dwh.dates import date_id, month_id, month_start
+from app.dwh.targets import SCHEDULE_DOC_TYPE
 
 
 @dataclass(frozen=True, slots=True)
@@ -73,6 +74,7 @@ _CARRY_FORWARD = (
 def build_all(conn: Connection, build_id: int, params: BuildParams) -> dict[str, int]:
     bound = params.bind(build_id)
     # Kalendar turlari: panel > standart (reyestr); SQL jsonb parametr sifatida oladi.
+    bound["schedule_doc_type"] = SCHEDULE_DOC_TYPE
     bound["calendar_kinds"] = json.dumps(sysconfig.current(conn, "kazna.calendar_kinds"))
     out: dict[str, int] = {}
     for aggregate in AGGREGATES:
@@ -164,7 +166,7 @@ plan AS (
   FROM dwh.fact_payment_plan p
   JOIN dwh.dim_date d ON d.date_id = p.date_id
   JOIN months m ON m.month_id = d.month_id
-  WHERE p.doc_type <> 'payment_schedule'
+  WHERE p.doc_type <> :schedule_doc_type
   GROUP BY p.branch_id, d.month_id, p.item_id),
 fact AS (
   SELECT f.branch_id, d.month_id, f.item_id, sum(f.amount) AS amount,

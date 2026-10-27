@@ -363,6 +363,11 @@ def test_branch_zero_totals_equal_sum_of_branches(source: str) -> None:
     assert tuple(float(v) for v in total) == tuple(float(v) for v in summed)
 
 
+# S2: ЦБ kurslari ochiq ma'lumot, RLS yo'q; ugk_app dwh.fx_rate'ga kira olmaydi (alohida test),
+# shuning uchun view egasi huquqida ishlaydi (0012_banks_fx).
+OWNER_RIGHTS_VIEWS = frozenset({"fx_rate_latest"})
+
+
 def test_all_pub_views_are_security_invoker() -> None:
     """M7: strukturaviy tekshiruv — `pub` sxemasidagi HAR BIR view `security_invoker=true`
     bilan yaratilgan (keyingi vazifalar yangi `pub` view qo'shganda ham unutib qo'yilmasin)."""
@@ -375,6 +380,8 @@ def test_all_pub_views_are_security_invoker() -> None:
     assert rows, "pub sxemasida view topilmadi"
     for name, options in rows:
         opts = list(options or ())
+        if name in OWNER_RIGHTS_VIEWS:
+            continue
         assert "security_invoker=true" in opts, f"pub.{name}: security_invoker=true emas"
 
 

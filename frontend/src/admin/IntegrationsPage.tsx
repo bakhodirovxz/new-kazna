@@ -19,7 +19,7 @@ import { displaySetting, formatSetting, parseSetting } from './settingValue';
 import { FieldEditor, SourceBadge } from './SettingsList';
 import { useFocusFirstInvalid } from './useFocusFirstInvalid';
 
-const CODES = ['ok', 'auth_failed', 'tls_failed', 'timeout', 'connect_failed', 'protocol_error', 'not_configured', 'insecure_refused', 'not_supported', 'error'];
+const CODES = ['ok', 'auth_failed', 'tls_failed', 'timeout', 'connect_failed', 'protocol_error', 'http_error', 'not_configured', 'insecure_refused', 'not_supported', 'error'];
 
 function checkText(check: IntegrationCheckOut): string {
   if (check.status === 'pending' || check.status === 'running') return t('integrations.checking');
@@ -66,11 +66,9 @@ function IntegrationCard({ integration, onEdit }: { integration: IntegrationOut;
       title={integration.title}
       actions={
         <>
-          {integration.check_in === 'worker' ? (
-            <Button variant="secondary" loading={request.isPending} onClick={() => request.mutate(integration.name, { onSuccess: (c) => setCheckId(c.id) })}>
-              {t('integrations.check')}
-            </Button>
-          ) : null}
+          <Button variant="secondary" loading={request.isPending} onClick={() => request.mutate(integration.name, { onSuccess: (c) => setCheckId(c.id) })}>
+            {t('integrations.check')}
+          </Button>
           <Button onClick={onEdit}>{t('integrations.edit')}</Button>
         </>
       }

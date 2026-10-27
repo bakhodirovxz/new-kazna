@@ -106,3 +106,30 @@ export type KaznaCelevyeOut = Schemas['KaznaCelevyeOut'];
 export type AlertOut = Schemas['AlertOut'];
 export type AlertsOut = Schemas['AlertsOut'];
 export type AlertCountOut = Schemas['AlertCountOut'];
+
+/** S5 AI-анализ (backend `app.ai.schemas`). */
+export interface AiStatusOut {
+  enabled: boolean;
+  reason: 'disabled' | 'not_configured' | null;
+  user_per_hour: number;
+  org_per_day: number;
+  used_last_hour: number;
+}
+
+export interface AiRequestOut {
+  id: number;
+  created_at: string;
+  finished_at: string | null;
+  username: string;
+  section: string;
+  page: string;
+  filters: Record<string, unknown>;
+  preset: string | null;
+  question: string | null;
+  status: string;
+  error_code: string | null;
+  context_chars: number;
+  answer_chars: number;
+  model: string;
+  duration_ms: number | null;
+}

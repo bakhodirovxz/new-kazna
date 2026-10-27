@@ -34,7 +34,7 @@ describe('AdminScreen', () => {
     });
     renderWithProviders(<Harness me={ME_ADMIN} menu={MENU_FULL} />, { hash: '#admin/users' });
     const side = await screen.findByRole('complementary', { name: 'Администрирование' });
-    expect(within(side).getAllByRole('link')).toHaveLength(11);
+    expect(within(side).getAllByRole('link')).toHaveLength(12);
     expect(within(side).getByRole('link', { name: 'Пользователи' })).toHaveAttribute('aria-current', 'page');
     expect(await screen.findByRole('heading', { level: 1, name: 'Пользователи' })).toBeInTheDocument();
     expect(document.title).toBe('Пользователи | Администрирование | UGEKAZNA');
@@ -45,7 +45,7 @@ describe('AdminScreen', () => {
     renderWithProviders(<Harness me={ME_AUDITOR} menu={MENU_AUDITOR} />, { hash: '#admin' });
     await waitFor(() => expect(window.location.hash).toBe('#admin/audit'));
     const side = await screen.findByRole('complementary', { name: 'Администрирование' });
-    expect(within(side).getAllByRole('link').map((l) => l.textContent)).toEqual(['Журнал аудита']);
+    expect(within(side).getAllByRole('link').map((l) => l.textContent)).toEqual(['Журнал аудита', 'Журнал AI-анализа']);
   });
 
   it('shows an error banner instead of a blank page when a lazy admin chunk fails', async () => {

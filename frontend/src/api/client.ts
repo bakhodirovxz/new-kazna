@@ -4,6 +4,17 @@ export const API_PREFIX = '/api/v1';
 export const CSRF_COOKIE = '__Host-ugk_csrf';
 export const CSRF_HEADER = 'X-CSRF-Token';
 export const BACKGROUND_HEADER = 'X-UGK-Background';
+let backgroundMode = false;
+
+/** S5: «Экран» (kiosk) rejimi — barcha so'rovlar fon: server sessiyaning idle muddatini uzaytirmaydi. */
+export function setBackgroundMode(on: boolean): void {
+  backgroundMode = on;
+}
+
+export function backgroundHeaders(): Record<string, string> {
+  return backgroundMode ? { [BACKGROUND_HEADER]: '1' } : {};
+}
+
 /** Backend imzolangan double-submit: GET/HEAD/OPTIONS dan boshqa har bir so'rovda cookie qiymati sarlavhada. */
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 
@@ -92,7 +103,7 @@ export function toApiError(response: Response, payload: unknown): ApiError {
 
 export async function api<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const method = options.method ?? 'GET';
-  const headers: Record<string, string> = { Accept: 'application/json' };
+  const headers: Record<string, string> = { Accept: 'application/json', ...backgroundHeaders() };
   if (options.body !== undefined) headers['Content-Type'] = 'application/json';
   if (options.background) headers[BACKGROUND_HEADER] = '1';
   if (!SAFE_METHODS.has(method)) {

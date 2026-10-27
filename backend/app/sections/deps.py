@@ -10,10 +10,10 @@ from fastapi import Depends, Query
 
 from app.auth.context import Ctx
 from app.dwh.dates import today_tashkent
-from app.sections.period import ReportPeriod, resolve_period
+from app.sections.period import ReportPeriod, normalize_per, resolve_period
 from app.sections.scope import BranchSel
 
-PER_PATTERN = r"^(ytd|q[1-4]|m(0[1-9]|1[0-2]))$"
+PER_PATTERN = r"^(ytd|q[1-4]|m(0[1-9]|1[0-2])|0[1-9]|1[0-2])$"  # oxirgi ikkitasi — `05` alias
 
 
 def get_today() -> date:
@@ -48,6 +48,7 @@ def section_query(
     br: Annotated[int | None, Query(ge=1)] = None,
     per: Annotated[str, Query(pattern=PER_PATTERN)] = "ytd",
 ) -> SectionQuery:
+    per = normalize_per(per)
     ctx.assert_branch(br)  # doiradan tashqari → 403 scope_violation + audit (1-qavat RLS)
     resolve_period(per, today)  # joriy yilda yo'q davr → 422
     return SectionQuery(br, per, today, ctx.branch_ids)

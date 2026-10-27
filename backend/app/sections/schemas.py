@@ -322,3 +322,24 @@ class KaznaCelevyeOut(_Out):
     period: ReportPeriodOut
     sources: list[FundRowOut]
     branches: list[FundRowOut]
+
+
+class AlertOut(_Out):
+    code: str
+    level: str
+    title: str
+    message: str
+    section: str
+    page: str
+    value: float | None
+
+
+class AlertsOut(_Out):
+    period: ReportPeriodOut
+    items: list[AlertOut]
+    checked: list[str]
+
+
+class AlertCountOut(_Out):
+    count: int
+    critical: int

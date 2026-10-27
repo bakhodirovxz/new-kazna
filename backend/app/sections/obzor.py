@@ -12,7 +12,7 @@ from fastapi import APIRouter, Depends, Path, Response
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from app.auth.context import require_perm
+from app.auth.context import Ctx, require_perm
 from app.auth.permissions import Section, section_perm
 from app.core.cache import Cache
 from app.core.db import DB
@@ -22,6 +22,8 @@ from app.sections.queries import cash, debt
 from app.sections.queries.cash import ACTIVITIES
 from app.sections.schemas import (
     ActivityAmountOut,
+    AlertCountOut,
+    AlertsOut,
     BankAmountOut,
     BranchAmountOut,
     BranchCashOut,
@@ -187,3 +189,26 @@ def excel(cache: Cache, db: DB, q: SQ) -> Response:
 def item(cache: Cache, db: DB, q: SQ, item_id: Annotated[int, Path(ge=1)]) -> Response:
     return cache.respond("obzor.item", {**q.cache_filters, "item": item_id},
                          lambda: build_item(db, q, item_id))
+
+
+def _alert_filters(q: SectionQuery, permissions: frozenset[str]) -> dict[str, object]:
+    from app.alerts.engine import allowed_sections
+
+    # Natija ruxsatlarga bog'liq — bir xil doiradagi boshqa rol keshini olmasligi uchun.
+    return {**q.cache_filters, "sections": allowed_sections(permissions)}
+
+
+@router.get("/vnimanie", response_model=AlertsOut)
+def vnimanie(cache: Cache, db: DB, q: SQ, ctx: Ctx) -> Response:
+    from app.alerts.engine import build_alerts
+
+    return cache.respond("obzor.vnimanie", _alert_filters(q, ctx.permissions),
+                         lambda: build_alerts(db, q, ctx.permissions))
+
+
+@router.get("/vnimanie/count", response_model=AlertCountOut)
+def vnimanie_count(cache: Cache, db: DB, q: SQ, ctx: Ctx) -> Response:
+    from app.alerts.engine import build_count
+
+    return cache.respond("obzor.vnimanie_count", _alert_filters(q, ctx.permissions),
+                         lambda: build_count(db, q, ctx.permissions))

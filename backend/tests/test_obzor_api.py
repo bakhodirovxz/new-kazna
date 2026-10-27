@@ -176,3 +176,13 @@ def test_new_pub_views_rls_direct_sql(published_synthetic: int) -> None:
     with new_session() as s:
         for view in NEW_VIEWS:
             assert s.execute(text(f"SELECT count(*) FROM pub.{view}")).scalar_one() == 0, view
+
+
+def test_numeric_per_alias(app_factory: Callable[[], TestClient],
+                           make_user: Callable[..., SeedUser], published_synthetic: int) -> None:
+    client = _as(app_factory, make_user("rukovodstvo"))
+    alias = client.get("/api/v1/obzor/svod", params={"per": "08"})
+    full = client.get("/api/v1/obzor/svod", params={"per": "m08"})
+    assert alias.status_code == 200 and alias.json()["period"]["code"] == "m08"
+    assert alias.headers["ETag"] == full.headers["ETag"]
+    assert client.get("/api/v1/obzor/svod", params={"per": "13"}).status_code == 422

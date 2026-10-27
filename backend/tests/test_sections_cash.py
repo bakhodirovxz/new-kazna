@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from app.core.db import apply_rls, new_session
 from app.core.errors import ValidationFailed
 from app.sections.fmt import fmt_money, fmt_pct
-from app.sections.period import resolve_period
+from app.sections.period import normalize_per, resolve_period
 from app.sections.queries import cash
 from app.sections.scope import BranchSel
 from tests.etl_helpers import TEST_AS_OF, new_source, purge_source
@@ -121,3 +121,11 @@ def test_multi_branch_scope_sums_only_own_rows(sc: Scenario) -> None:
         t = cash.cash_totals(s, BranchSel(None, all_scope=False),
                              resolve_period("m08", TEST_AS_OF))
     assert (t.inflow, t.outflow, t.opening, t.closing) == (100.0, 40.0, 1000.0, 1060.0)
+
+
+def test_numeric_month_alias() -> None:
+    # TZ xatcho'plari: per=05 == per=m05; kesh kaliti ham normallashgan bo'lishi kerak.
+    assert resolve_period("05", TEST_AS_OF).code == "m05"
+    assert normalize_per("05") == "m05" and normalize_per("ytd") == "ytd"
+    with pytest.raises(ValidationFailed):
+        resolve_period("13", TEST_AS_OF)

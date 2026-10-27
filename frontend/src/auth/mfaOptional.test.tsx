@@ -8,7 +8,6 @@ import { renderWithProviders } from '../test/render';
 import { LoginPage } from './LoginPage';
 import { EnrollLink } from './EnrollLink';
 
-const TOKEN = 't'.repeat(32);
 const ME_OFFER = { ...ME_ADMIN, mfa_enabled: false, mfa_offer: true };
 
 describe('2FA необязательна', () => {
@@ -50,15 +49,45 @@ describe('2FA необязательна', () => {
     expect(server.calls.some((c) => c.method === 'POST' && c.path === '/auth/2fa/offer/dismiss')).toBe(true);
   });
 
-  it('"Подключить" opens a challenge and goes to the enroll flow', async () => {
-    mockApi({
+  it('"Подключить" asks for the current password, then shows the QR and finishes bound to the session', async () => {
+    const server = mockApi({
       ...shellRoutes(),
       'GET /auth/me': json(ME_OFFER),
-      'POST /auth/2fa/enroll/begin': json({ mfa_token: TOKEN }),
+      'POST /auth/2fa/enroll/begin': json({ otpauth_uri: 'otpauth://totp/x', qr_svg_data_uri: 'data:image/svg+xml;base64,PHN2Zy8+', secret: 'JBSWY3DPEHPK3PXP' }),
+      'POST /auth/2fa/enroll/finish': json({ user: { ...ME_ADMIN, mfa_enabled: true }, backup_codes: ['AAAA-BBBB-CCCC'] }),
     });
     const { user } = renderWithProviders(<Routes />, { hash: '#obzor/svod' });
     await user.click(await screen.findByRole('button', { name: 'Подключить' }));
     await waitFor(() => expect(window.location.hash).toBe('#2fa/setup'));
+    await user.type(await screen.findByLabelText('Текущий пароль'), 'Secret-Parol-1');
+    await user.click(screen.getByRole('button', { name: 'Продолжить' }));
+    expect(await screen.findByTestId('totp-secret')).toBeInTheDocument();
+    await user.type(screen.getByLabelText('Код из приложения'), '123456');
+    await user.click(screen.getByRole('button', { name: 'Подтвердить' }));
+    expect(await screen.findByText('AAAA-BBBB-CCCC')).toBeInTheDocument();
+    expect(server.calls.find((c) => c.path === '/auth/2fa/enroll/begin')?.body).toEqual({ password: 'Secret-Parol-1' });
+    expect(server.calls.find((c) => c.path === '/auth/2fa/enroll/finish')?.body).toEqual({ code: '123456' });
+  });
+
+  it('shows a wrong current password inline and cancelling returns to the app, not to login', async () => {
+    mockApi({
+      ...shellRoutes(),
+      'GET /auth/me': json(ME_OFFER),
+      'POST /auth/2fa/enroll/begin': apiError(422, 'invalid_current_password', 'Текущий пароль указан неверно'),
+    });
+    const { user } = renderWithProviders(<Routes />, { hash: '#obzor/svod' });
+    await user.click(await screen.findByRole('button', { name: 'Подключить' }));
+    await user.type(await screen.findByLabelText('Текущий пароль'), 'Wrong-Parol-1');
+    await user.click(screen.getByRole('button', { name: 'Продолжить' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Текущий пароль указан неверно');
+    await user.click(screen.getByRole('button', { name: 'Отмена' }));
+    await waitFor(() => expect(window.location.hash).not.toMatch(/login|2fa/));
+  });
+
+  it('reloading the enroll page for a signed-in user returns to the app', async () => {
+    mockApi({ ...shellRoutes() });
+    renderWithProviders(<Routes />, { hash: '#2fa/setup' });
+    await waitFor(() => expect(window.location.hash).not.toMatch(/login|2fa/));
   });
 
   it('user menu offers «Подключить 2FA» only without 2FA', async () => {
@@ -77,7 +106,7 @@ describe('2FA необязательна', () => {
   });
 
   it('EnrollLink starts enrollment', async () => {
-    mockApi({ 'GET /auth/me': json(ME_ADMIN), 'POST /auth/2fa/enroll/begin': json({ mfa_token: TOKEN }) });
+    mockApi({ 'GET /auth/me': json(ME_ADMIN) });
     const { user } = renderWithProviders(<EnrollLink />, { hash: '#admin/security' });
     await user.click(screen.getByRole('button', { name: 'Подключить 2FA' }));
     await waitFor(() => expect(window.location.hash).toBe('#2fa/setup'));

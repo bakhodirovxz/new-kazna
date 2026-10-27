@@ -109,7 +109,7 @@ ocha olmay yiqiladi).
 ## Xavfsizlik asoslari
 
 - Sirlar faqat Docker secrets orqali (`deploy/secrets.example/README.md`).
-- Parollar Argon2id; hamma uchun majburiy TOTP 2FA.
+- Parollar Argon2id; TOTP 2FA ixtiyoriy (1-kirishda taklif qilinadi; `security.mfa_required` uni majburiy qiladi).
 - Sezgir ustunlar AES-256-GCM (envelope, KEK → DEK), kalit rotatsiyasi: `python -m app.cli rotate-key --purpose mfa`.
 - Audit jurnali faqat qo'shishga ochiq, hash-chain: `python -m app.cli audit-verify`.
 

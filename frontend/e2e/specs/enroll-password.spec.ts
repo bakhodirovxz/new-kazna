@@ -4,7 +4,7 @@ import { totp } from '../totp';
 
 /** 2FA majburiy emas (qaror 27.10.2026): parol to'g'ri bo'lsa sessiya ochiladi, 2FA esa taklif qilinadi. */
 test('yangi xodim: majburiy parol almashtirish → 2FA taklifi → ulash → zaxira kodlar', async ({ page }, info) => {
-  test.skip(info.project.name !== 'desktop-1440', 'oqim kenglikka bog'liq emas — bir marta yetarli');
+  test.skip(info.project.name !== 'desktop-1440', 'oqim kenglikka bog\'liq emas — bir marta yetarli');
 
   await page.goto('/');
   await expect(page).toHaveURL(/#login$/);
@@ -26,7 +26,10 @@ test('yangi xodim: majburiy parol almashtirish → 2FA taklifi → ulash → zax
   await expectNoAxeViolations(page);
   await page.getByRole('button', { name: 'Подключить', exact: true }).click();
 
+  // Kirgan foydalanuvchi ulashdan oldin joriy parolni tasdiqlaydi.
   await expect(page).toHaveURL(/#2fa\/setup$/);
+  await page.getByLabel('Текущий пароль', { exact: true }).fill(NEW_PASSWORD);
+  await page.getByRole('button', { name: 'Продолжить' }).click();
   await expect(page.getByRole('heading', { name: 'Подключение двухфакторной аутентификации' })).toBeVisible();
   await expect(page.getByRole('img', { name: /QR-код/ })).toBeVisible();
   await expect(page.getByText('Время подтверждения истекло')).toHaveCount(0);
@@ -52,7 +55,7 @@ test('yangi xodim: majburiy parol almashtirish → 2FA taklifi → ulash → zax
 });
 
 test('2FA можно пропустить: «Позже» открывает приложение, пункт меню остаётся', async ({ page }, info) => {
-  test.skip(info.project.name !== 'desktop-1440', 'oqim kenglikka bog'liq emas — bir marta yetarli');
+  test.skip(info.project.name !== 'desktop-1440', 'oqim kenglikka bog\'liq emas — bir marta yetarli');
 
   await page.goto('/');
   await page.getByLabel('Логин', { exact: true }).fill('e2e_skip');

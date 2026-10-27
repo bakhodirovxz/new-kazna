@@ -89,6 +89,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/2fa/enroll/finish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Enroll Finish */
+        post: operations["enroll_finish_api_v1_auth_2fa_enroll_finish_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/2fa/offer/dismiss": {
         parameters: {
             query?: never;
@@ -1421,11 +1438,21 @@ export interface components {
             /** Amount */
             amount: number;
         };
+        /** EnrollBeginIn */
+        EnrollBeginIn: {
+            /** Password */
+            password: string;
+        };
         /** EnrollConfirmOut */
         EnrollConfirmOut: {
             user: components["schemas"]["MeOut"];
             /** Backup Codes */
             backup_codes: string[];
+        };
+        /** EnrollFinishIn */
+        EnrollFinishIn: {
+            /** Code */
+            code: string;
         };
         /** EnrollStartOut */
         EnrollStartOut: {
@@ -1901,11 +1928,6 @@ export interface components {
         };
         /** MfaTokenIn */
         MfaTokenIn: {
-            /** Mfa Token */
-            mfa_token: string;
-        };
-        /** MfaTokenOut */
-        MfaTokenOut: {
             /** Mfa Token */
             mfa_token: string;
         };
@@ -2569,7 +2591,11 @@ export interface operations {
                 "__Host-ugk_csrf"?: string | null;
             };
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EnrollBeginIn"];
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {
@@ -2577,7 +2603,46 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["MfaTokenOut"];
+                    "application/json": components["schemas"]["EnrollStartOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    enroll_finish_api_v1_auth_2fa_enroll_finish_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                "__Host-ugk_session"?: string | null;
+                "__Host-ugk_csrf"?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EnrollFinishIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnrollConfirmOut"];
                 };
             };
             /** @description Validation Error */

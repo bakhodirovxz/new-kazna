@@ -123,6 +123,7 @@ def login(
         # TOTP'si yo'q — sessiya shu yerda; majburiy parol almashtirish `build_context`da qoladi.
         user.failed_logins = 0
         user.last_login_at = now
+        _close_open_challenges(db, user.id, now)  # eski oqimdagidek: eskirgan challenge'lar o'chadi
         new = sessions.create(db, user.id, meta.ip, meta.ua, now)
         log_event(meta, AuditAction.PASSWORD_OK, user_id=user.id)
         log_event(meta, AuditAction.LOGIN_OK, user_id=user.id, details={"method": "password"})
@@ -140,11 +141,7 @@ def _open_challenge(
     # I3: yangi challenge ochilganda foydalanuvchining boshqa ochiq challenge'lari
     # o'chiriladi (bir vaqtda faqat bitta challenge tirik bo'lsin). Kutilayotgan enroll
     # siri ham tozalanadi (fix r2 — o'lik challenge'da shifrlangan sir qolib ketmasin).
-    db.execute(
-        update(MfaChallenge)
-        .where(MfaChallenge.user_id == user.id, MfaChallenge.used_at.is_(None))
-        .values(used_at=now, pending_secret_enc=None)
-    )
+    _close_open_challenges(db, user.id, now)
     db.add(
         MfaChallenge(
             token_hmac=_challenge_hmac(token),
@@ -158,16 +155,86 @@ def _open_challenge(
     return token
 
 
-def enroll_begin(db: Session, ctx: AuthContext, meta: ClientMeta, now: datetime) -> str:
-    """Kirgan foydalanuvchi 2FA'ni keyinroq ulaydi: enroll challenge ochadi, keyin mavjud
-    `enroll/start` + `enroll/confirm` ishlaydi."""
-    ratelimit.check("mfa_ip", meta.ip or "unknown", ratelimit.mfa_per_ip())
+def _close_open_challenges(db: Session, user_id: int, now: datetime) -> None:
+    db.execute(
+        update(MfaChallenge)
+        .where(MfaChallenge.user_id == user_id, MfaChallenge.used_at.is_(None))
+        .values(used_at=now, pending_secret_enc=None)
+    )
+
+
+def _session_challenge_hmac(session_id: uuid.UUID) -> bytes:
+    """Kirgan foydalanuvchining enroll challenge'i SESSIYAGA bog'langan: token yo'q, kalit
+    sessiya id'sidan chiqariladi — boshqa sessiya (yoki token) bu challenge'ni ocholmaydi."""
+    # C1 (r2): ALOHIDA yorliq — "mfa|<token>" bilan kesishmaydi; mijoz yuborgan token orqali bu
+    # kalitni yasab bo'lmaydi (token endpointlari esa qat'iy ^[A-Za-z0-9_-]{43}$ ni qabul qiladi).
+    return keyed_hash(keystore.pepper(), "mfa-session", str(session_id))
+
+
+def _check_current_password(
+    db: Session, ctx: AuthContext, current: str, meta: ClientMeta, now: datetime
+) -> User:
+    """Joriy parolni tekshiradi (change_password va enroll_begin uchun umumiy): maxsus limit,
+    xato urinish umumiy hisoblagichga qo'shiladi, chegarada bloklash + barcha sessiyalar bekor."""
+    # I4: shifrlangan-parol "oracle"ni cheklaydigan maxsus limit — tekshiruvdan OLDIN.
+    ratelimit.check("password_change_user", str(ctx.user_id), ratelimit.password_change_per_user())
     user = db.get(User, ctx.user_id, with_for_update=True, populate_existing=True)
     if user is None or not user.is_active:
         raise AuthError("session_expired")
+    if not passwords.verify_password(current, user.password_hash):
+        # I4: noto'g'ri joriy parol ham umumiy hisoblagichga qo'shiladi; chegaraga
+        # yetganda hisob bloklanadi VA barcha sessiyalar bekor qilinadi (o'g'irlangan
+        # sessiya orqali "oracle" bilan parolni taxmin qilishning oldini olish uchun).
+        user.failed_logins += 1
+        locked_now = False
+        if user.failed_logins >= int(sysconfig.value("security.login_max_failures")):
+            user.locked_until = now + _lockout()
+            user.failed_logins = 0
+            locked_now = True
+            sessions.revoke_all(db, user.id, "password_change_lockout", now)
+        db.commit()
+        log_event(meta, AuditAction.PASSWORD_CHANGE_FAIL, user_id=user.id, result="fail",
+                  details={"locked": locked_now})
+        raise ValidationFailed("invalid_current_password")
+    return user
+
+
+def enroll_begin(
+    db: Session, ctx: AuthContext, password: str, meta: ClientMeta, now: datetime
+) -> EnrollStart:
+    """Kirgan foydalanuvchi 2FA'ni keyinroq ulaydi. Joriy parol talab qilinadi (qayta
+    autentifikatsiya); challenge sessiyaga bog'langan, mijozga hech qanday token berilmaydi."""
+    ratelimit.check("mfa_ip", meta.ip or "unknown", ratelimit.mfa_per_ip())
+    user = _check_current_password(db, ctx, password, meta, now)
     if user.totp_enabled:
         raise ConflictError("mfa_already_enabled")
-    return _open_challenge(db, user, "enroll", now)
+    _close_open_challenges(db, user.id, now)
+    token_hmac = _session_challenge_hmac(ctx.session_id)
+    db.execute(delete(MfaChallenge).where(MfaChallenge.token_hmac == token_hmac))
+    challenge = MfaChallenge(
+        token_hmac=token_hmac, user_id=user.id, kind="enroll", created_at=now,
+        expires_at=now + MFA_CHALLENGE_TTL,
+    )
+    db.add(challenge)
+    db.flush()
+    return _begin_secret(challenge, user)
+
+
+def enroll_finish(
+    db: Session, ctx: AuthContext, code: str, meta: ClientMeta, now: datetime
+) -> tuple[sessions.NewSession, User, list[str]]:
+    """Sessiyaga bog'langan ulashni tasdiqlaydi. Sessiya aylantiriladi (barchasi bekor, yangisi
+    ASL absolyut muddat bilan) — yangi 12 soatlik sessiya BERILMAYDI."""
+    ratelimit.check("mfa_ip", meta.ip or "unknown", ratelimit.mfa_per_ip())
+    challenge, user = _load_challenge_by_hmac(
+        db, _session_challenge_hmac(ctx.session_id), "enroll", now, owner_id=ctx.user_id
+    )
+    codes = _confirm_enrollment(db, challenge, user, code, meta, now)
+    old_session = db.get(UserSession, ctx.session_id)
+    old_absolute = old_session.absolute_expires_at if old_session is not None else None
+    sessions.revoke_all(db, user.id, "mfa_enrolled", now)
+    new = sessions.create(db, user.id, meta.ip, meta.ua, now, absolute_expires_at=old_absolute)
+    return new, user, codes
 
 
 def dismiss_mfa_offer(db: Session, ctx: AuthContext, meta: ClientMeta) -> None:
@@ -188,11 +255,17 @@ def _load_challenge(
     challenge'ni qulflab HAMMA narsani QAYTA tekshiramiz — qulfsiz o'qishdan keyin holat
     o'zgargan (masalan boshqa tranzaksiya uni bekor qilgan) bo'lishi mumkin.
     """
-    token_hmac = _challenge_hmac(token)
+    return _load_challenge_by_hmac(db, _challenge_hmac(token), kind, now)
+
+
+def _load_challenge_by_hmac(
+    db: Session, token_hmac: bytes, kind: str, now: datetime, owner_id: int | None = None
+) -> tuple[MfaChallenge, User]:
+    expected_owner = owner_id
     owner_id = db.execute(
         select(MfaChallenge.user_id).where(MfaChallenge.token_hmac == token_hmac)
     ).scalar_one_or_none()
-    if owner_id is None:
+    if owner_id is None or (expected_owner is not None and owner_id != expected_owner):
         raise AuthError("mfa_expired")
     # I2: foydalanuvchi qatori qulflanadi — parallel `verify`/`enroll` urinishlari
     # (masalan, bir xil TOTP kodi bilan) `totp_last_step`/`failed_logins` ustida
@@ -311,6 +384,10 @@ def enroll_start(db: Session, token: str, meta: ClientMeta, now: datetime) -> En
     challenge, user = _load_challenge(db, token, "enroll", now)
     if user.totp_enabled:
         raise ConflictError("mfa_already_enabled")
+    return _begin_secret(challenge, user)
+
+
+def _begin_secret(challenge: MfaChallenge, user: User) -> EnrollStart:
     secret = totp.new_secret()
     # M7: sir foydalanuvchiga emas, shu challenge'ga bog'lab saqlanadi (AAD challenge
     # token_hmac'idan chiqariladi) — parallel enroll challenge'lar bir-birining sirini
@@ -327,6 +404,16 @@ def enroll_confirm(
 ) -> tuple[sessions.NewSession, User, list[str]]:
     ratelimit.check("mfa_ip", meta.ip or "unknown", ratelimit.mfa_per_ip())
     challenge, user = _load_challenge(db, token, "enroll", now)
+    codes = _confirm_enrollment(db, challenge, user, code, meta, now)
+    user.last_login_at = now
+    new = sessions.create(db, user.id, meta.ip, meta.ua, now)
+    log_event(meta, AuditAction.LOGIN_OK, user_id=user.id, details={"method": "totp_enroll"})
+    return new, user, codes
+
+
+def _confirm_enrollment(
+    db: Session, challenge: MfaChallenge, user: User, code: str, meta: ClientMeta, now: datetime
+) -> list[str]:
     if user.totp_enabled:
         raise ConflictError("mfa_already_enabled")
     if challenge.pending_secret_enc is None:
@@ -349,36 +436,14 @@ def enroll_confirm(
     codes = issue_backup_codes(db, user.id)
     challenge.used_at = now
     challenge.pending_secret_enc = None  # fix r2: vaqtinchalik shifrlangan sir endi kerak emas
-    user.last_login_at = now
-    new = sessions.create(db, user.id, meta.ip, meta.ua, now)
     log_event(meta, AuditAction.MFA_ENROLLED, user_id=user.id)
-    log_event(meta, AuditAction.LOGIN_OK, user_id=user.id, details={"method": "totp_enroll"})
-    return new, user, codes
+    return codes
 
 
 def change_password(
     db: Session, ctx: AuthContext, current: str, new: str, meta: ClientMeta, now: datetime
 ) -> sessions.NewSession:
-    # I4: shifrlangan-parol "oracle"ni cheklaydigan maxsus limit — tekshiruvdan OLDIN.
-    ratelimit.check("password_change_user", str(ctx.user_id), ratelimit.password_change_per_user())
-    user = db.get(User, ctx.user_id, with_for_update=True)
-    if user is None:
-        raise AuthError("session_expired")
-    if not passwords.verify_password(current, user.password_hash):
-        # I4: noto'g'ri joriy parol ham umumiy hisoblagichga qo'shiladi; chegaraga
-        # yetganda hisob bloklanadi VA barcha sessiyalar bekor qilinadi (o'g'irlangan
-        # sessiya orqali "oracle" bilan parolni taxmin qilishning oldini olish uchun).
-        user.failed_logins += 1
-        locked_now = False
-        if user.failed_logins >= int(sysconfig.value("security.login_max_failures")):
-            user.locked_until = now + _lockout()
-            user.failed_logins = 0
-            locked_now = True
-            sessions.revoke_all(db, user.id, "password_change_lockout", now)
-        db.commit()
-        log_event(meta, AuditAction.PASSWORD_CHANGE_FAIL, user_id=user.id, result="fail",
-                  details={"locked": locked_now})
-        raise ValidationFailed("invalid_current_password")
+    user = _check_current_password(db, ctx, current, meta, now)
     history = [
         user.password_hash,
         *db.execute(
@@ -428,6 +493,7 @@ def logout(
     db: Session, session_id: uuid.UUID, user_id: int, meta: ClientMeta, now: datetime
 ) -> None:
     sessions.revoke(db, session_id, "logout", now)
+    _close_open_challenges(db, user_id, now)
     log_event(meta, AuditAction.LOGOUT, user_id=user_id)
 
 

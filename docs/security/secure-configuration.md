@@ -107,7 +107,6 @@
 | Попыток входа и 2FA с IP в минуту, запросов API пользователя | 10, 20, 300 | не выше значений по умолчанию | `admin:security` |
 | Хранение журнала аудита / фактов | 12 мес. / 5 лет | ≥ 12 мес. / ≥ 5 лет | `admin:security` / `admin:settings` |
 | Проверка восстановления не реже, чем раз в | 40 дн. | 1–40 | `admin:security` |
-
 | Обязательная двухфакторная аутентификация (`security.mfa_required`) | выкл. | вкл./выкл. | `admin:security` |
 
 `security.mfa_required` — исключение из правила «только ужесточать»: 2FA необязательна по решению
@@ -202,7 +201,7 @@ UGEKAZNA исключает их по конструкции, и чем это �
 | Поиск секретов во всей истории репозитория | `make check` → `scripts/check_repo.sh` → gitleaks в режиме `git` по всем коммитам (`deploy/compose.tools.yml`); CI клонирует полную историю (`fetch-depth: 0`) | `scripts/tests/gitleaks_selftest.sh` (реальный токен находится, открытые тестовые значения — нет) |
 | Поиск секретов до коммита | `.githooks/pre-commit` → gitleaks по staged-изменениям (`make hooks`) | `scripts/tests/hook_selftest.sh` |
 | Исключения gitleaks — только точные значения, перечисленные в реестре | `.gitleaks.toml`, [sast-exceptions.md](sast-exceptions.md) | `scripts/tests/gitleaks_selftest.sh` |
-| Нет учётной записи по умолчанию | Миграции не создают пользователей; первого администратора создаёт оператор командой `create-admin` (`backend/app/cli.py`): индивидуальный логин, временный пароль из CSPRNG показывается один раз, смена пароля и подключение TOTP-2FA обязательны при первом входе | `test_cli_create_admin_and_audit_verify`, `test_create_user_and_first_login_requires_enroll` |
+| Нет учётной записи по умолчанию | Миграции не создают пользователей; первого администратора создаёт оператор командой `create-admin` (`backend/app/cli.py`): индивидуальный логин, временный пароль из CSPRNG показывается один раз, смена пароля обязательна при первом входе, 2FA предлагается (необязательна, см. R18 в [threat-model.md](threat-model.md)) | `test_cli_create_admin_and_audit_verify`, `test_create_user_and_first_login_requires_enroll` |
 | Пароли пользователей не хранятся в открытом виде | Argon2id (64 МиБ, 3 итерации, параллелизм 4), уникальная соль | `test_standard_params_match_spec`, `test_hash_and_verify` |
 | Секреты не в коде, образах и переменных окружения | Docker secrets; `scripts/gen_secrets.py` создаёт случайные значения (256 бит); файлы `0440`, каталог `0750` (`scripts/secrets_perms.sh`) | `test_generates_all_secrets_once`, `test_no_secrets_in_environment`, `test_secrets_are_scoped`, `test_dockerignore_excludes_secrets` (контекст сборки образа СУБД не содержит `deploy/secrets`) |
 | Приложение не запускается в prod с тестовыми ключами | `Settings.problems()`, `ENV` по умолчанию — prod | `test_prod_rejects_test_keys_http_and_fast_hash`, `test_env_defaults_to_prod_when_unset` |

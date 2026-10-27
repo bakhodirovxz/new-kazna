@@ -3,9 +3,9 @@ import { useStartEnrollment } from './api';
 
 /** «Подключить 2FA» — кнопка-ссылка в сообщении «нужна двухфакторная аутентификация» (шаг подтверждения). */
 export function EnrollLink() {
-  const { start, pending } = useStartEnrollment();
+  const start = useStartEnrollment();
   return (
-    <button type="button" className="linkbtn" disabled={pending} onClick={start}>
+    <button type="button" className="linkbtn" onClick={start}>
       {t('user.mfa')}
     </button>
   );

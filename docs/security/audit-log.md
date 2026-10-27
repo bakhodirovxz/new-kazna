@@ -7,8 +7,9 @@
 
 | Код | Событие |
 |---|---|
-| `auth.login.ok` / `auth.login.fail` | успешный / неуспешный вход |
-| `auth.password.ok` | пароль принят, запрошен второй фактор |
+| `auth.login.ok` / `auth.login.fail` | успешный / неуспешный вход; у `auth.login.ok` поле `details.method`: `totp`, `backup_code`, `totp_enroll` или `password` (вход без второго фактора — для выявления в SIEM) |
+| `auth.password.ok` | пароль принят (запрошен второй фактор или, без 2FA, открыт сеанс) |
+| `auth.mfa_offer_dismissed` | пользователь отказался подключать 2FA («Позже») |
 | `auth.mfa.fail`, `auth.mfa.enrolled`, `auth.mfa.backup_code_used` | ошибка второго фактора, подключение 2FA, использование резервного кода |
 | `auth.logout`, `auth.session.revoked` | выход, завершение сеанса |
 | `auth.password.changed`, `auth.password.change_fail` | смена пароля, неуспешная попытка |

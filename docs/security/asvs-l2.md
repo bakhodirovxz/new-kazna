@@ -24,7 +24,7 @@ userns-remap) и организационные процедуры в репоз
 | 1.1.7 | Контрольный список безопасной разработки | Выполнено | [secure-configuration.md](secure-configuration.md), раздел 10 | — |
 | 1.2.1 | Отдельные низкопривилегированные учётные записи компонентов | Выполнено | UID 10001 (api, worker, migrate, caddy), 70 (db, backup), 999 (redis); `cap_drop: ALL`; userns-remap — требование к хосту ([../ops/host-hardening.md](../ops/host-hardening.md)) | `test_every_service_is_hardened` |
 | 1.2.2 | Аутентификация между компонентами с минимальными правами | Выполнено | Роли СУБД `ugk_app`, `ugk_etl`, `ugk_migrator` (SCRAM-SHA-256), пароль и ACL Redis | `test_pg_hba_only_scram_and_reject`, `test_app_role_cannot_create_tables` |
-| 1.2.3 | Единый проверенный механизм аутентификации | Выполнено | `backend/app/auth/service.py`: пароль (Argon2id) + TOTP | `test_full_login_sets_hardened_cookies` |
+| 1.2.3 | Единый проверенный механизм аутентификации | Выполнено | `backend/app/auth/service.py`: пароль (Argon2id), при подключённой 2FA — и TOTP (см. 1.2.4) | `test_full_login_sets_hardened_cookies` |
 | 1.2.4 | Все пути аутентификации одинаковой стойкости | Отклонение (обосновано) | 2FA необязательна по решению заказчика (27.10.2026); включается настройкой `security.mfa_required`: без TOTP вход возможен по одному паролю (риск R18); с TOTP второй фактор не обходится; API-ключей нет | `test_totp_user_always_verifies`, `test_no_totp_login_creates_session_and_offers` |
 | 1.4.1 | Контроль доступа в доверенной точке | Выполнено | Только сервер (зависимости FastAPI, RLS СУБД); фронтенд лишь скрывает элементы | `test_admin_and_audit_routes_require_matching_permission` |
 | 1.4.4 | Единый механизм контроля доступа | Выполнено | `require_perm`, `AuthContext.assert_branch`, RLS | `test_permission_required` |
@@ -116,13 +116,13 @@ userns-remap) и организационные процедуры в репоз
 | ID | Требование | Статус | Реализация / обоснование | Проверка |
 |---|---|---|---|---|
 | 3.1.1 | Токен сессии не передаётся в URL | Выполнено | Только cookie `__Host-ugk_session` | `test_full_login_sets_hardened_cookies` |
-| 3.2.1 | Новый токен при аутентификации | Выполнено | Сессия создаётся только после второго фактора | `test_full_login_sets_hardened_cookies` |
+| 3.2.1 | Новый токен при аутентификации | Выполнено | Сессия создаётся только после полной аутентификации: пароль, а при подключённой 2FA (или включённой `security.mfa_required`) — и второй фактор; при выходе и смене пароля старый токен недействителен | `test_full_login_sets_hardened_cookies` |
 | 3.2.2 | Не менее 64 бит энтропии | Выполнено | 256 бит | `test_stored_token_hmac_matches_and_never_the_raw_token` |
 | 3.2.3 | Безопасное хранение в браузере | Выполнено | cookie `HttpOnly; Secure; SameSite=Strict` | `test_full_login_sets_hardened_cookies` |
 | 3.2.4 | Генерация одобренным алгоритмом | Выполнено | `secrets.token_urlsafe(32)`; в БД только HMAC | `test_stored_token_hmac_matches_and_never_the_raw_token` |
 | 3.3.1 | Выход и истечение аннулируют сессию | Выполнено | Отзыв на сервере, cookie удаляются | `test_me_and_logout`, `test_expired_or_revoked_session_is_401` |
 | 3.3.2 | Повторная аутентификация (L2: 12 ч или 30 мин простоя) | Выполнено | Простой 30 мин, абсолютный срок 12 ч | `test_session_slides_idle_expiry`, `test_slide_never_exceeds_absolute_expiry` |
-| 3.3.3 | Завершение других сессий после смены пароля | Выполнено | Смена пароля пользователем завершает все его прежние сеансы и выдаёт новый; то же — сброс пароля и 2FA администратором, блокировка, смена должности (роли, филиалов). Изменение набора прав роли применяется со следующего запроса (права читаются при каждом запросе), сеансы не завершаются | `test_block_revokes_sessions`, `test_change_position_revokes_sessions` |
+| 3.3.3 | Завершение других сессий после смены пароля | Выполнено | Смена пароля пользователем и подключение 2FA (`enroll/finish`, `test_later_enrollment_is_session_bound_and_keeps_absolute_expiry`) завершают все его прежние сеансы и выдают новый с прежним абсолютным сроком; то же — сброс пароля и 2FA администратором, блокировка, смена должности (роли, филиалов). Изменение набора прав роли применяется со следующего запроса (права читаются при каждом запросе), сеансы не завершаются | `test_block_revokes_sessions`, `test_change_position_revokes_sessions` |
 | 3.3.4 | Просмотр и завершение своих сессий | Частично | «Мои сеансы» (`GET/DELETE /api/v1/auth/sessions`); повторный ввод пароля не требуется | `test_sessions_list_and_revoke`, `test_cannot_revoke_foreign_session` |
 | 3.4.1 | Атрибут Secure | Выполнено | cookie сессии и CSRF (`_set_session_cookies`); тест проверяет атрибут у cookie сессии, у CSRF-cookie — только код | `test_full_login_sets_hardened_cookies` |
 | 3.4.2 | Атрибут HttpOnly | Выполнено | cookie сессии; CSRF-cookie читается скриптом по схеме double-submit и подписана | `test_full_login_sets_hardened_cookies` |
@@ -132,7 +132,7 @@ userns-remap) и организационные процедуры в репоз
 | 3.5.1 | Отзыв OAuth-токенов | Н/П | OAuth не используется | — |
 | 3.5.2 | Сессионные токены вместо статических ключей | Выполнено | API-ключей нет, только серверные сессии | — |
 | 3.5.3 | Подписанные stateless-токены | Н/П | Используются серверные сессии | — |
-| 3.7.1 | Проверка перед чувствительными операциями | Частично | Смена пароля требует текущий пароль; изменение настроек безопасности и интеграций — причина и текущий код 2FA; прочие административные операции — в сессии с пройденной 2FA | `test_forced_password_change`, `test_guarded_key_needs_reason_and_fresh_totp` |
+| 3.7.1 | Проверка перед чувствительными операциями | Частично | Смена пароля и подключение 2FA в сеансе (`enroll/begin`) требуют текущий пароль, подключение привязано к сеансу и сохраняет его абсолютный срок; изменение настроек безопасности и интеграций — причина и текущий код 2FA; прочие административные операции — в сессии с пройденной 2FA | `test_forced_password_change`, `test_guarded_key_needs_reason_and_fresh_totp`, `test_enroll_begin_requires_current_password_and_counts_toward_lockout` |
 
 ## V4. Контроль доступа
 

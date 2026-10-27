@@ -112,13 +112,15 @@ release: ## reliz paketi: make release VERSION=1.0.0
 	scripts/release.sh $(VERSION)
 
 # ── Deploy testlari ──────────────────────────────────────────────────────────
-.PHONY: prod-config test-caddy db-smoke backup-selftest load-test
+.PHONY: prod-config test-caddy db-smoke backup-selftest load-test e2e-gate-selftest
 prod-config: ## compose.prod.yml sintaksisi (docker compose config)
 	scripts/prod_config.sh
 test-caddy: ## Caddyfile.prod xatti-harakati (probe'lar, TLS, sarlavhalar, 1 MB, SPA)
 	scripts/tests/caddy_prod_test.sh
 db-smoke: ## DB image smoke-testi (profil, kengaytmalar, rollar, pgBackRest)
 	scripts/tests/db_image_smoke.sh
+e2e-gate-selftest: ## e2e tsc darvozasi buzilgan spec'ni to'xtatishini tekshiradi
+	scripts/tests/e2e_gate_selftest.sh
 backup-selftest: ## zaxira/tiklash avtotesti Docker'da (sekin, 10–25 daqiqa)
 	scripts/backup_selftest.sh
 load-test: ## k6 yuklama testi: dev stack + sintetik ma'lumot (UGK_LOAD_DURATION=20s — tez)

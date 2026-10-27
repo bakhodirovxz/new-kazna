@@ -76,6 +76,7 @@ def build_all(conn: Connection, build_id: int, params: BuildParams) -> dict[str,
     # Kalendar turlari: panel > standart (reyestr); SQL jsonb parametr sifatida oladi.
     bound["schedule_doc_type"] = SCHEDULE_DOC_TYPE
     bound["calendar_kinds"] = json.dumps(sysconfig.current(conn, "kazna.calendar_kinds"))
+    bound["method_norms"] = json.dumps(sysconfig.current(conn, "zakupki.method_norms"))
     out: dict[str, int] = {}
     for aggregate in AGGREGATES:
         # nosemgrep: avoid-sqlalchemy-text
@@ -194,4 +195,4 @@ CASH_MONTH = register(Aggregate("agg_cash_month", (_CASH_ITEMS, _CASH_TOTALS, _C
 PAYMENTS_MONTH = register(Aggregate("agg_payments_month", (_PAYMENTS,)))
 
 # S1 agregatlari (spec 5): shu modul yuklanganda ro'yxatga qo'shiladi (register allaqachon tayyor).
-from app.dwh import treasury_aggregates  # noqa: E402, F401
+from app.dwh import procurement_aggregates, treasury_aggregates  # noqa: E402, F401

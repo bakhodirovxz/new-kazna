@@ -1,4 +1,5 @@
 import { t, type MessageKey } from '../i18n';
+import { formatDate, formatNumber } from '../i18n/format';
 import { ru } from '../i18n/ru';
 import type { EntryField } from './api';
 
@@ -19,6 +20,30 @@ export function toInput(field: Pick<EntryField, 'kind'>, value: unknown): string
       return String(Number((Number(text) * 100).toFixed(3))).replace('.', ',');
     case 'month':
       return text.slice(0, 7);
+    default:
+      return text;
+  }
+}
+
+/** Serverdan kelgan qiymat -> ko'rsatish matni (ДД.ММ.ГГГГ, «1 234,50»); tahrirlash uchun `toInput`. */
+export function displayValue(field: Pick<EntryField, 'kind'>, value: unknown): string {
+  if (value === null || value === undefined || value === '') return '';
+  const text = String(value);
+  const num = Number(text);
+  switch (field.kind) {
+    case 'money':
+      return Number.isFinite(num) ? formatNumber(num, 2) : text;
+    case 'volume':
+    case 'decimal':
+      return Number.isFinite(num) ? formatNumber(num, 3) : text;
+    case 'int':
+      return Number.isFinite(num) ? formatNumber(num, 0) : text;
+    case 'pct':
+      return Number.isFinite(num) ? `${formatNumber(num * 100, 1)}%` : text;
+    case 'date':
+      return /^\d{4}-\d{2}-\d{2}$/.test(text) ? formatDate(text) : text;
+    case 'month':
+      return /^\d{4}-\d{2}/.test(text) ? `${text.slice(5, 7)}.${text.slice(0, 4)}` : text;
     default:
       return text;
   }

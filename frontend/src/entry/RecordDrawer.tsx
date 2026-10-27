@@ -9,7 +9,7 @@ import { FormError, TextInput } from '../ui/Field';
 import { Select } from '../ui/Select';
 import { useToast } from '../ui/Toast';
 import { useFocusFirstInvalid } from '../admin/useFocusFirstInvalid';
-import { useCreateBatch, useOptions, type EntryEntity, type EntryField, type EntryRecord } from './api';
+import { useCreateBatch, useOptions, type EntryBatch, type EntryEntity, type EntryField, type EntryRecord } from './api';
 import { fromInput, serverErrorText, toInput, unitLabel } from './fields';
 
 export interface RecordDrawerProps {
@@ -18,6 +18,8 @@ export interface RecordDrawerProps {
   /** Tanlangan filial id (filtr) — yangi yozuv uchun boshlang'ich qiymat. */
   branch: number | null;
   onClose(): void;
+  /** Saqlash/yuborish muvaffaqiyatli: sahifa doimiy tasdiq xabarini ko'rsatadi. */
+  onSaved?(batch: EntryBatch, sent: boolean): void;
   onOpenExisting(entryId: number): void;
 }
 
@@ -65,7 +67,7 @@ function BranchField({ value, onChange, error }: { value: string; onChange(v: st
   );
 }
 
-export function RecordDrawer({ entity, record, branch, onClose, onOpenExisting }: RecordDrawerProps) {
+export function RecordDrawer({ entity, record, branch, onClose, onSaved, onOpenExisting }: RecordDrawerProps) {
   const toast = useToast();
   const branches = useBranches();
   const create = useCreateBatch();
@@ -125,8 +127,9 @@ export function RecordDrawer({ entity, record, branch, onClose, onOpenExisting }
         ],
       },
       {
-        onSuccess: () => {
+        onSuccess: (batch) => {
           toast.show(send ? t('entry.submitted') : t('entry.saved'), 'success');
+          onSaved?.(batch, send);
           onClose();
         },
         onError: (error) => {

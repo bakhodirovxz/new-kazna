@@ -3,17 +3,22 @@ obyekt/bo'lim ruxsati va filial doirasi servisda tekshiriladi (deny-by-default).
 
 from __future__ import annotations
 
+import hashlib
 from typing import Annotated, Any, Literal
+from urllib.parse import unquote
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request, Response
 from sqlalchemy import text
+from starlette.concurrency import run_in_threadpool
 
+from app.audit.service import AuditAction, log_event
 from app.auth.context import AuthContext, Ctx, require_perm
 from app.auth.permissions import ALL_DATA_PERMS, SECTION_TITLES, Perm, data_perm
+from app.core import ratelimit
 from app.core.db import DB
-from app.core.errors import ForbiddenError, NotFoundError
+from app.core.errors import ForbiddenError, NotFoundError, ValidationFailed
 from app.core.request_meta import Meta
-from app.manual import approval, store
+from app.manual import approval, imports, store
 from app.manual.entities import ENTITIES, FieldDef, ManualEntity
 from app.manual.schemas import (
     BatchDetailOut,
@@ -25,6 +30,7 @@ from app.manual.schemas import (
     FieldOut,
     HistoryOut,
     HistoryVersionOut,
+    ItemIn,
     OptionOut,
     Page,
     RecordOut,
@@ -233,3 +239,69 @@ def get_batch(batch_id: int, ctx: Ctx, db: DB) -> BatchDetailOut:
     out.publication = approval.publication_status(db, out)
     return out
 
+
+
+# --- shablon va fayldan import -------------------------------------------------------------
+
+
+
+def _writable(ctx: AuthContext, entity_id: str) -> ManualEntity:
+    entity = store.entity_or_404(entity_id)
+    store.need(ctx, entity, "write")
+    return entity
+
+
+def _download(body: bytes, media: str, name: str) -> Response:
+    return Response(body, media_type=media, headers={
+        "Content-Disposition": f'attachment; filename="{name}"', "Cache-Control": "no-store"})
+
+
+@router.get("/entities/{entity_id}/template.csv")
+def template_csv(entity_id: str, ctx: Ctx) -> Response:
+    entity = _writable(ctx, entity_id)
+    return _download(imports.template_csv(entity), "text/csv; charset=utf-8",
+                     f"{entity.id}.csv")
+
+
+@router.get("/entities/{entity_id}/template.xlsx")
+def template_xlsx(entity_id: str, ctx: Ctx) -> Response:
+    entity = _writable(ctx, entity_id)
+    return _download(imports.template_xlsx(entity), imports.XLSX_TYPE, f"{entity.id}.xlsx")
+
+
+@router.post("/entities/{entity_id}/import", status_code=201)
+async def import_file(
+    entity_id: str, request: Request, ctx: Ctx, db: DB, meta: Meta,
+    branch_id: Annotated[int, Query(ge=1)],
+) -> BatchOut:
+    entity = _writable(ctx, entity_id)
+    ctx.assert_branch(branch_id)
+    media = request.headers.get("content-type", "").split(";")[0].strip().lower()
+    if media not in (imports.CSV_TYPE, imports.XLSX_TYPE):
+        raise ValidationFailed("unsupported_file")
+    ratelimit.check("data_import", str(ctx.user_id), ratelimit.DATA_IMPORT_PER_USER)
+    body = await request.body()  # <= 1 MiB (BodySizeLimitMiddleware); diskka yozilmaydi
+    name = store._BAD_TEXT.sub("", unquote(request.headers.get("x-file-name", "")))[:200] or None
+    digest = hashlib.sha256(body)
+
+    def work() -> BatchOut:
+        rows = imports.parse_upload(entity, body, media)
+        try:
+            out = store.create_batch(
+                db, ctx, meta, entity_id=entity.id, branch_id=branch_id, origin="import",
+                items=[ItemIn(values=r) for r in rows],
+                file_meta={"name": name, "sha256": digest.digest()})  # bytea
+        except ValidationFailed as exc:
+            if "rows" not in exc.params:
+                raise
+            # ItemIn indeksi (1 = birinchi ma'lumot qatori) -> fayl qatori (1 = sarlavha)
+            shifted = [{**r, "row": r["row"] + 1} for r in exc.params["rows"]]
+            raise ValidationFailed("import_invalid", rows=shifted,
+                                   fields=exc.params.get("fields", [])) from None
+        log_event(meta, AuditAction.DATA_IMPORTED, user_id=ctx.user_id,
+                  object_type="manual_batch", object_id=out.batch_id,
+                  details={"batch_id": out.batch_id, "entity": entity.id, "file_name": name,
+                           "sha256": digest.hexdigest(), "rows": out.rows})
+        return out
+
+    return await run_in_threadpool(work)

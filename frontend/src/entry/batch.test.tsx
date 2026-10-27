@@ -50,12 +50,29 @@ describe('batches', () => {
     const { user } = renderWithProviders(<BatchList box="inbox" />);
     expect(await screen.findByRole('table', { name: 'На согласовании' })).toBeInTheDocument();
     await open(user);
-    expect(document.querySelector('del')).toHaveTextContent('1500,00');
-    expect(document.querySelector('ins')).toHaveTextContent('1600,00');
+    expect(document.querySelector('del')).toHaveTextContent('1 500,00');
+    expect(document.querySelector('ins')).toHaveTextContent('1 600,00');
     expect(screen.getByText('изменена')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Утвердить' }));
     await screen.findByText('Утверждено');
     expect(srv.calls.find((c) => c.path === '/data/batches/5/approve')?.body).toEqual({ expected_version: 2, comment: null });
+  });
+
+  it('status filter starts with «Все»', async () => {
+    server();
+    renderWithProviders(<BatchList box="mine" />);
+    const select = await screen.findByRole('combobox', { name: /Статус/ });
+    expect(within(select).getAllByRole('option')[0]).toHaveTextContent('Все');
+  });
+
+  it('formats dates and money in the diff', async () => {
+    const added = { ...DETAIL, items: [{ entry_id: 7, version: 1, op: 'add' as const, before: null, after: { date: '2026-09-30', balance: '1600.00' } }] };
+    server({ 'GET /data/batches/5': json(added) });
+    const { user } = renderWithProviders(<BatchList box="inbox" />);
+    await open(user);
+    expect(screen.getByText('30.09.2026')).toBeInTheDocument();
+    expect(screen.getByText('1 600,00')).toBeInTheDocument();
+    expect(screen.getByText('новая')).toBeInTheDocument();
   });
 
   it('reject requires a comment', async () => {

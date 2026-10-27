@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { api } from '../api/client';
+import { api, apiBlob, postRaw } from '../api/client';
 import type { components } from '../api/schema';
 
 type S = components['schemas'];
@@ -100,6 +100,30 @@ function useInvalidate() {
       client.invalidateQueries({ queryKey: entryKeys.batches }),
       client.invalidateQueries({ queryKey: ['entry', 'history'] }),
     ]);
+}
+
+export const IMPORT_TYPES: Record<string, string> = {
+  csv: 'text/csv',
+  xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+};
+export const IMPORT_MAX_BYTES = 1_048_576;
+
+export function downloadTemplate(entity: string, kind: 'csv' | 'xlsx') {
+  return apiBlob(`/data/entities/${entity}/template.${kind}`);
+}
+
+/** Fayl -> draft paket (xom tana, CSRF `api()` ichida); gcTime: 0 -- fayl mazmuni keshda qolmasin. */
+export function useImportFile() {
+  const invalidate = useInvalidate();
+  return useMutation({
+    gcTime: 0,
+    mutationFn: (v: { entity: string; branch_id: number; file: File; type: string }) =>
+      postRaw<EntryBatch>(`/data/entities/${v.entity}/import`, v.file, v.type, {
+        query: { branch_id: v.branch_id },
+        headers: { 'X-File-Name': encodeURIComponent(v.file.name) },
+      }),
+    onSuccess: invalidate,
+  });
 }
 
 export interface CreateBatchIn {

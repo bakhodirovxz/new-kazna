@@ -21,8 +21,7 @@ import {
   type EntryBatchDetail,
   type EntryEntity,
 } from './api';
-import { toInput } from './fields';
-import { serverErrorText } from './fields';
+import { displayValue, serverErrorText } from './fields';
 import './entry.css';
 
 type Change = EntryBatchDetail['items'][number];
@@ -34,7 +33,7 @@ const STATUS_TONE: Record<string, BadgeTone> = {
 function shown(entity: EntryEntity | undefined, name: string, value: unknown): string {
   if (value !== null && typeof value === 'object' && 'mask' in value) return String((value as { mask: string }).mask);
   const field = entity?.fields.find((f) => f.name === name);
-  return field ? toInput(field, value) : String(value ?? '');
+  return field ? displayValue(field, value) : String(value ?? '');
 }
 
 /** Paket qatori o'zgarishi: matn belgisi bilan (rangga tayanmasdan). */

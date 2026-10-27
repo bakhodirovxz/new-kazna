@@ -46,7 +46,7 @@ export function BatchList({ box }: { box: 'inbox' | 'mine' }) {
         <label className="entry-filter">
           <span>{t('entry.status')}: </span>
           <select value={status} onChange={(e) => setStatus(e.target.value)} className="select">
-            <option value="">—</option>
+            <option value="">{t('entry.filter.all')}</option>
             {['draft', 'submitted', 'approved', 'rejected', 'withdrawn'].map((s) => (
               <option key={s} value={s}>{t(`entry.status.${s}` as 'entry.status.draft')}</option>
             ))}

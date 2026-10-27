@@ -34,6 +34,7 @@ from app.meta.router import router as meta_router
 from app.sections.exports import log_router as exports_log_router
 from app.sections.exports import xlsx_router as exports_xlsx_router
 from app.sections.kazna import router as kazna_router
+from app.sections.kredity import router as kredity_router
 from app.sections.obzor import router as obzor_router
 
 API_PREFIX = "/api/v1"
@@ -73,6 +74,7 @@ def create_app() -> FastAPI:
     app.include_router(meta_router, prefix=API_PREFIX)
     app.include_router(obzor_router, prefix=API_PREFIX)
     app.include_router(kazna_router, prefix=API_PREFIX)
+    app.include_router(kredity_router, prefix=API_PREFIX)
     app.include_router(exports_xlsx_router, prefix=API_PREFIX)
     app.include_router(exports_log_router, prefix=API_PREFIX)
     app.include_router(etl_router, prefix=API_PREFIX)

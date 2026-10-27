@@ -59,6 +59,11 @@ export function formatDuration(ms: number): string {
   return `${seconds} с`;
 }
 
+/** Davr nomi gap ichida: «январь – октябрь 2026», lekin rim raqami saqlanadi — «III квартал 2026». */
+export function periodInline(label: string): string {
+  return /^[IVX]+\s/.test(label) ? label : label.charAt(0).toLowerCase() + label.slice(1);
+}
+
 export function plural(n: number, forms: readonly [string, string, string]): string {
   const mod100 = Math.abs(n) % 100;
   const mod10 = mod100 % 10;

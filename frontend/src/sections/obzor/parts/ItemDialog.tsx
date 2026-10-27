@@ -2,6 +2,7 @@ import type { ItemAmountOut, ItemBranchesOut } from '../../../api/types';
 import { Rank } from '../../../dash/Rank';
 import { formatMoney, formatPct } from '../../../dash/money';
 import { t } from '../../../i18n';
+import { periodInline } from '../../../i18n/format';
 import type { FilterState } from '../../../shell/useFilters';
 import { ErrorBanner } from '../../../ui/ErrorBanner';
 import { Modal } from '../../../ui/Modal';
@@ -19,7 +20,7 @@ export function ItemDialog({ path, filters, onClose }: { path: string; filters: 
       open
       onClose={onClose}
       title={data?.item.name ?? t('common.loading')}
-      note={data ? t('obzor.item.note', { direction: out ? t('obzor.item.out') : t('obzor.item.in'), period: data.period.label.toLowerCase() }) : undefined}
+      note={data ? t('obzor.item.note', { direction: out ? t('obzor.item.out') : t('obzor.item.in'), period: periodInline(data.period.label) }) : undefined}
     >
       {query.isError ? <ErrorBanner error={query.error} onRetry={() => void query.refetch()} /> : null}
       {!data ? (

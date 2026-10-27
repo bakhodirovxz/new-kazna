@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { ApiError, isApiError } from '../api/client';
 import type { MenuOut } from '../api/types';
 import { t, type MessageKey } from '../i18n';
-import { formatDateTime } from '../i18n/format';
+import { formatDateTime, periodInline } from '../i18n/format';
 import { useBranches, usePeriods } from '../meta/api';
 import type { SectionRoute } from '../router/hash';
 import { flattenMenu } from '../shell/sectionMeta';
@@ -119,7 +119,7 @@ export function AiDrawer({ menu, route, onClose }: AiDrawerProps) {
   return (
     <Drawer open onClose={onClose} title={t('ai.title')}>
       <div className="ai">
-        <p className="note">{`${section?.title ?? ''}: ${pageTitle}. ${branchName}, ${periodLabel.toLowerCase()}`}</p>
+        <p className="note">{`${section?.title ?? ''}: ${pageTitle}. ${branchName}, ${periodInline(periodLabel)}`}</p>
         <div className="ai-out" aria-live="polite" aria-busy={streaming}>
           {phase.kind === 'idle' ? <p>{t('ai.intro')}</p> : null}
           {streaming && text === '' ? <p className="note">{t('ai.thinking')}</p> : null}

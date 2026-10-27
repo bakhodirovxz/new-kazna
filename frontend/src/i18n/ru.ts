@@ -903,7 +903,7 @@ export const ru = {
   'zak.col.contract': 'Цена договора',
   'zak.col.status': 'Статус',
   'zak.col.days': 'Срок',
-  'zak.col.daysOf': '{days} дн. из {norm}',
+  'zak.col.daysOf': '{days} дн. (норма {norm})',
   'zak.col.daysDone': '{days} дн.',
   'zak.status.announced': 'Объявлен',
   'zak.status.evaluation': 'На оценке',

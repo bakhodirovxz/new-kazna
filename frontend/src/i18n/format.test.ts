@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { dayStartIso, formatDate, formatDateTime, formatDuration, formatNumber, plural } from './format';
+import { dayStartIso, formatDate, formatDateTime, formatDuration, formatNumber, periodInline, plural } from './format';
 
 const NBSP = '\u00a0';
 
@@ -44,5 +44,13 @@ describe('plural', () => {
     expect(plural(5, forms)).toBe('кодов');
     expect(plural(11, forms)).toBe('кодов');
     expect(plural(21, forms)).toBe('код');
+  });
+});
+
+describe('periodInline', () => {
+  it('lowercases the month but keeps Roman quarter numerals', () => {
+    expect(periodInline('Январь – октябрь 2026')).toBe('январь – октябрь 2026');
+    expect(periodInline('III квартал 2026')).toBe('III квартал 2026');
+    expect(periodInline('IV квартал 2026')).toBe('IV квартал 2026');
   });
 });

@@ -23,7 +23,7 @@ describe('Закупки', () => {
     expect(within(screen.getByRole('list', { name: 'Способы закупки' })).getAllByRole('listitem')).toHaveLength(2);
     const table = screen.getByRole('table', { name: 'Лоты' });
     expect(within(table).getAllByRole('row')).toHaveLength(1 + 5);
-    expect(within(table).getByText('85 дн. из 40')).toHaveClass('badge--neg');
+    expect(within(table).getByText('85 дн. (норма 40)')).toHaveClass('badge--neg');
     expect(screen.getByRole('link', { name: 'Все лоты' }).getAttribute('href')).toContain('zakupki/loty');
     await expectNoAxeViolations(container);
   });

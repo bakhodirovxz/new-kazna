@@ -1,5 +1,6 @@
 import type { AlertsOut } from '../../api/types';
 import { t } from '../../i18n';
+import { periodInline } from '../../i18n/format';
 import { navigate } from '../../router/store';
 import { Card } from '../../ui/Card';
 import type { SectionPageProps } from '../registry';
@@ -18,7 +19,7 @@ export default function ObzorVnimanie({ filters }: SectionPageProps) {
               ? t('obzor.alerts.sub', {
                   count: data.items.length,
                   scope: filters.br === null ? t('obzor.alerts.scopeAll') : t('obzor.alerts.scopeOne'),
-                  period: data.period.label.toLowerCase(),
+                  period: periodInline(data.period.label),
                 })
               : undefined
           }

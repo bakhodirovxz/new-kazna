@@ -2,6 +2,7 @@ import { Suspense, useEffect, useMemo, type ReactNode } from 'react';
 import type { MeOut, MenuOut } from '../api/types';
 import { useDocumentTitle } from '../app/useDocumentTitle';
 import { t } from '../i18n';
+import { periodInline } from '../i18n/format';
 import type { SectionRoute } from '../router/hash';
 import { useInboxCount } from '../entry/useInboxCount';
 import { navigate } from '../router/store';
@@ -70,7 +71,7 @@ export function SectionScreen({ me, menu, route, tools }: SectionScreenProps) {
       <PageHeader
         crumb={section.title}
         title={title}
-        sub={filters.ready ? `${filters.branchLabel}, ${filters.periodLabel.toLowerCase()}` : undefined}
+        sub={filters.ready ? `${filters.branchLabel}, ${periodInline(filters.periodLabel)}` : undefined}
         filters={<FilterControls filters={filters} />}
         filterCount={activeFilterCount(filters)}
       />

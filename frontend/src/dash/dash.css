@@ -74,7 +74,7 @@
 .prog__f { display: flex; justify-content: space-between; color: var(--muted); font-size: 0.88rem; }
 .mini { display: inline-block; width: 4.5rem; height: 0.45rem; border-radius: 0.2rem; background: #e9f1fb; overflow: hidden; vertical-align: middle; margin-left: 0.5rem; }
 .mini i { display: block; height: 100%; background: linear-gradient(90deg, #2f8ef5, #1d6df2); }
-.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 0.45rem; overflow: hidden; background: var(--card); }
+.seg { display: inline-flex; flex-wrap: wrap; max-width: 100%; border: 1px solid var(--line); border-radius: 0.45rem; overflow: hidden; background: var(--card); }
 .seg button { border: 0; background: none; padding: 0.42rem 0.85rem; cursor: pointer; min-height: 44px; }
 .seg button + button { border-left: 1px solid var(--line); }
 .seg button[aria-pressed='true'] { background: linear-gradient(135deg, #1d6df2, #0b4fa8); color: #fff; }

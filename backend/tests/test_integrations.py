@@ -162,7 +162,7 @@ def test_http_flow_requires_permission_and_totp(make_user: Callable[..., SeedUse
     with TestClient(create_app(), base_url="https://testserver") as client:
         login(client, admin)
         listed = client.get(API).json()
-        assert [i["name"] for i in listed] == ["smtp"]
+        assert [i["name"] for i in listed] == ["smtp", "hr"]
         assert listed[0]["endpoint"] == ["smtp.host", "smtp.port"]
         body = {"values": {"smtp.host": "relay.uge.uz"}, "secrets": {"smtp.password": PLAIN},
                 "reason": "Заявка ИТ-42"}

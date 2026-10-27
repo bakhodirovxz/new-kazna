@@ -43,6 +43,8 @@ class Settings(BaseSettings):
 
     env: Literal["dev", "test", "prod"] = "prod"  # fail-closed: dev/test faqat aniq ENV bilan
     base_url: str = "https://localhost"
+    # S4: HR API manzili/hisobi panelda (integrations); faqat korporativ CA fayli muhitda.
+    hr_ca_file: str = "/run/secrets/hr_ca_bundle"
     argon2_profile: Literal["standard", "fast_test"] = "standard"
 
     db_host: str = "db"

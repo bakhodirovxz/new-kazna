@@ -38,3 +38,39 @@ def onec_orgs(value: list[OneCOrg]) -> list[dict[str, str]]:
         if len(set(values)) != len(values):
             raise ValueError(f"onec.orgs: {attr} takrorlangan")
     return [org.model_dump() for org in value]
+
+
+# S4: xarid usullari va normativ kunlar (app.etl.zakupki.codes shundan re-export qiladi).
+METHODS: tuple[str, ...] = ("eshop", "contest", "tender", "exchange", "direct", "other")
+# Vaqtinchalik normativlar (prototip PMETH yuqori chegarasi) — mijoz tasdiqlaydi (spec 12, 2-savol).
+DEFAULT_METHOD_NORMS: dict[str, int] = {
+    "eshop": 15, "contest": 40, "tender": 70, "exchange": 20, "direct": 12, "other": 40,
+}
+
+
+def method_norms(value: dict[str, int]) -> dict[str, int]:
+    if set(value) != set(METHODS):
+        raise ValueError("zakupki.method_norms: barcha usullar uchun normativ kerak")
+    return dict(value)
+
+
+def normalize_org(name: str) -> str:
+    """Tashkilot nomini solishtirish uchun: apostrof variantlari, bo'shliqlar, registr."""
+    for ch in "ʻʼ‘’`":
+        name = name.replace(ch, "'")
+    return " ".join(name.casefold().split())
+
+
+class HrOrg(BaseModel):
+    """HR manbasidagi tashkilot ↔ filial (`hr.orgs`)."""
+
+    model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
+    org: Annotated[str, Field(min_length=1, max_length=200)]
+    branch_code: Annotated[str, Field(min_length=1, max_length=32)]
+
+
+def hr_orgs(value: list[HrOrg]) -> list[dict[str, str]]:
+    names = [normalize_org(o.org) for o in value]
+    if not all(names) or len(set(names)) != len(names):
+        raise ValueError("hr.orgs: tashkilot nomi bo'sh yoki takrorlangan")
+    return [o.model_dump() for o in value]

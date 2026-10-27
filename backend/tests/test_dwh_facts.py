@@ -15,6 +15,7 @@ FACTS = (
     "fact_cashflow", "fact_balance", "fact_payment_plan", "fact_payment_order", "fact_debt",
     "fact_generation", "fact_energy_sales", "fact_procurement", "fact_stock", "fact_stock_move",
     "fact_investment", "fact_loan_schedule", "fact_hr", "fact_target_funds",
+    "fact_object_stage",
 )
 SRC = "test_facts"
 

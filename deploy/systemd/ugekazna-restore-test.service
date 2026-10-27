@@ -1,0 +1,13 @@
+[Unit]
+Description=UGEKAZNA oylik tiklash testi (zaxiradan vaqtinchalik klasterga)
+Documentation=file:/opt/ugekazna/current/docs/ops/backup-restore.md
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/ugekazna/current
+Environment=UGK_LOG_DIR=/var/log/ugekazna
+ExecStart=/opt/ugekazna/current/scripts/restore_test.sh
+SyslogIdentifier=ugekazna-restore-test
+TimeoutStartSec=3h

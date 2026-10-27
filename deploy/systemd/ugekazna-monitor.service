@@ -1,0 +1,11 @@
+[Unit]
+Description=UGEKAZNA monitoring: servislar holati va ops-check
+Documentation=file:/opt/ugekazna/current/docs/ops/monitoring.md
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/ugekazna/current
+ExecStart=/opt/ugekazna/current/scripts/ops/monitor.sh
+SyslogIdentifier=ugekazna-monitor

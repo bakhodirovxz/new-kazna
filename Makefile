@@ -110,3 +110,18 @@ test-caddy: ## Caddyfile.prod xatti-harakati (probe'lar, TLS, sarlavhalar, 1 MB,
 .PHONY: load-test
 load-test: ## k6 yuklama testi: dev stack + sintetik ma'lumot (≈ 11 daqiqa; UGK_LOAD_DURATION=20s — tez)
 	scripts/load_test.sh
+
+PROD := docker compose -f deploy/compose.prod.yml --env-file deploy/prod.env --env-file deploy/release.env
+
+.PHONY: backup backup-status restore-test backup-selftest monitor
+backup: ## prod: bir martalik zaxira — make backup [TYPE=full|diff]
+	$(PROD) exec -T backup ugk-backup once $(or $(TYPE),full)
+backup-status: ## prod: pgBackRest info va oxirgi tiklash testi
+	$(PROD) exec -T backup ugk-backup info
+	$(PROD) run --rm -T --no-deps migrate python -m app.cli restore-test-status
+restore-test: ## prod: tiklash testi (vaqtinchalik klaster, natija core.settings'ga)
+	scripts/restore_test.sh
+backup-selftest: ## zaxira/tiklash avtotesti Docker'da (sekin, 10–25 daqiqa)
+	scripts/backup_selftest.sh
+monitor: ## prod: servislar holati + ops-check (systemd timer bilan bir xil)
+	scripts/ops/monitor.sh

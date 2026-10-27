@@ -1,0 +1,9 @@
+[Unit]
+Description=UGEKAZNA tiklash testi har oyning birinchi shanbasida 21:00 (Toshkent)
+
+[Timer]
+OnCalendar=Sat *-*-01..07 21:00:00 Asia/Tashkent
+Persistent=true
+
+[Install]
+WantedBy=timers.target

@@ -49,7 +49,9 @@
    записать его в `/opt/ugekazna/shared/secrets/smtp_password` до запуска `secrets_perms.sh`.
 4. Том репозитория копий на отдельном диске:
    ```bash
-   install -d -m 0750 -o 165606 -g 165606 /srv/ugk-backup/repo   # без userns-remap: -o 70 -g 70
+   # userns-remap: uid/gid = база dockremap из /etc/subgid + 70 (как в scripts/secrets_perms.sh)
+   BASE="$(awk -F: '$1 == "dockremap" { print $2; exit }' /etc/subgid)"   # без userns-remap: BASE=0
+   install -d -m 0750 -o $((BASE + 70)) -g $((BASE + 70)) /srv/ugk-backup/repo
    docker volume create --driver local --opt type=none --opt o=bind \
      --opt device=/srv/ugk-backup/repo ugk_pgbackrest_repo
    ```
@@ -128,6 +130,11 @@ Trivy не видит интерпретатор Python, PostgreSQL, Redis и Ca
 контроль — это ежемесячный цикл выше плюс отслеживание сообщений об уязвимостях разработчиков этих
 продуктов службой ИБ (в системе не автоматизировано). Исключения сканера — в
 [../security/sast-exceptions.md](../security/sast-exceptions.md).
+
+Раз в месяц в том же цикле: обновить закреплённые по SHA GitHub Actions в `.github/workflows/ci.yml`
+(Dependabot или вручную) и проверить версии образов инструментов в `deploy/compose.tools.yml`
+([../security/sbom.md](../security/sbom.md), «Инструменты разработки и CI»). Релиз не подписывается
+цифровой подписью: целостность обеспечивает `SHA256SUMS`, переданный по отдельному каналу.
 
 ## 6. Выпуск релиза (контрольный список)
 

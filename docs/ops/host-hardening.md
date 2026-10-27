@@ -95,7 +95,8 @@ Docker публикует порты в обход правил INPUT ufw, по�
 -A DOCKER-USER -m conntrack --ctstate ESTABLISHED,RELATED -j RETURN
 -A DOCKER-USER -i ens18 -s 10.10.0.0/16 -p tcp -m multiport --dports 8443,8080 -j RETURN
 -A DOCKER-USER -i ens18 -j DROP
--A DOCKER-USER -o ens18 -d 10.20.0.25 -p tcp -m multiport --dports 25,587 -j RETURN
+# SMTP: 25/587 (STARTTLS) и 465 (SMTP_SSL=true) — оставьте только порт, выбранный в prod.env
+-A DOCKER-USER -o ens18 -d 10.20.0.25 -p tcp -m multiport --dports 25,465,587 -j RETURN
 -A DOCKER-USER -o ens18 -d 10.20.0.53 -p udp --dport 53 -j RETURN
 -A DOCKER-USER -o ens18 -j DROP
 -A DOCKER-USER -j RETURN
@@ -184,8 +185,9 @@ Unattended-Upgrade::Automatic-Reboot "false";
 - `userns-remap` — root в контейнере не является root на хосте (пользователь `dockremap`). Включать до
   создания томов: данные хранятся в отдельном каталоге `/var/lib/docker/<uid>.<gid>/`.
 - При `userns-remap` владельцы файлов на хосте сдвигаются на базу из `/etc/subuid` (`/etc/subgid`),
-  обычно 165536: группа секретов — 165536 + 10001 = 175537 (учитывает `scripts/secrets_perms.sh`),
-  владелец каталога репозитория копий — 165536 + 70 = 165606.
+  обычно 165536 (значение берите из файла, не из этого документа): группа секретов — база + 10001 (учитывает
+  `scripts/secrets_perms.sh`), владелец каталога репозитория копий — база + 70. База:
+  `awk -F: '$1 == "dockremap" { print $2; exit }' /etc/subgid`.
 - `live-restore` — перезапуск dockerd без остановки контейнеров; `no-new-privileges` — по умолчанию для
   всех контейнеров; `icc: false` — запрет обмена на сети по умолчанию.
 
@@ -200,7 +202,7 @@ Unattended-Upgrade::Automatic-Reboot "false";
 | `/opt/ugekazna/current` | ссылка на действующий релиз | root |
 | `/opt/ugekazna/shared/prod.env` | параметры площадки | root, 0640 |
 | `/opt/ugekazna/shared/secrets/` | секреты | root:<группа 10001 или 175537>, каталог 0750, файлы 0440 |
-| `/srv/ugk-backup/repo` | репозиторий pgBackRest | uid 70 (или 165606 при userns-remap), 0750 |
+| `/srv/ugk-backup/repo` | репозиторий pgBackRest | uid 70 (при userns-remap — база из `/etc/subgid` + 70), 0750 |
 | `/var/log/ugekazna/` | журналы проверки восстановления и инцидентов | root, 0750 |
 
 ## 9. Журналы и SIEM (обязательно)

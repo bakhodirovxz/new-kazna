@@ -57,8 +57,15 @@
 проверки должен быть запущен. Коды завершения: 0 — успешно; 1 — ошибка проверки; 3 — в репозитории
 нет копий. Отсутствие проверки более 40 дней или ошибка — оповещение ops-check
 (`restore_test_overdue`, `restore_test_failed`, `restore_test_missing`); таймер при ненулевом коде
-завершения вызывает запись crit в syslog (`ugekazna-alert`). Сама процедура проверяется автоматизированным тестом `make backup-selftest`; он входит в чек-лист выпуска релиза
-([install-upgrade.md](install-upgrade.md), раздел 6), а не в CI.
+завершения вызывает запись crit в syslog (`ugekazna-alert`). Юниты systemd (`deploy/systemd/*`) проверены только статически и в среде разработки, на реальном
+systemd-хосте не запускались. Перед приёмкой на тестовом Linux-сервере выполните один раз
+`systemctl start ugekazna-monitor.service ugekazna-restore-test.service` и убедитесь, что
+`ProtectHome=read-only`/`ProtectSystem=full` не мешают `docker compose` и `logger`; результат запишите в
+протокол приёмки.
+
+Сама процедура проверяется автоматизированным тестом `make backup-selftest`; он входит в чек-лист выпуска релиза
+([install-upgrade.md](install-upgrade.md), раздел 6), а не в CI. Рабочий каталог `backup_selftest.sh` (включая журналы) удаляется при любом завершении;
+при сбое диагностика — в выводе консоли, поэтому сохраняйте его целиком.
 
 ## 5. Аварийное восстановление рабочей системы
 

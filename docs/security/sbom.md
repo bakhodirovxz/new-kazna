@@ -55,4 +55,8 @@ CI повторяет сканирование еженедельно (расп�
 запускаются в prod. В поставку входят только образы `ugekazna-*`, собранные из базовых образов по digest
 (`deploy/images.lock.env`). Предупреждение для esbuild 0.21.5 (dev-сервер Vite,
 `frontend/package-lock.json`) к поставке не относится: dev-сервер не используется, `npm audit --omit=dev`
-проверяет только production-зависимости.
+проверяет только production-зависимости. То же относится к образам сканеров и k6
+(`aquasec/trivy:0.57.1`, `zricethezav/gitleaks:v8.21.2`, `semgrep/semgrep:1.95.0`, `hadolint/hadolint:v2.12.0`,
+`grafana/k6:0.54.0`): они закреплены тегом (изменяемым), а наборы правил semgrep (`p/owasp-top-ten`,
+`p/python`, `p/typescript`, `p/react`) загружаются из сети при каждом запуске, поэтому результат
+`make check` может меняться со временем. Закрепление по digest — запланировано.

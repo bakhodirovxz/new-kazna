@@ -160,7 +160,7 @@
 .empty-state { display: flex; flex-direction: column; align-items: center; gap: 0.6rem; padding: 3rem 1.5rem; text-align: center; color: var(--muted); }
 .empty-state__ic { display: grid; place-items: center; width: 3.5rem; height: 3.5rem; border-radius: 1rem; background: linear-gradient(135deg, #e7f1ff, #dff6fa); color: var(--brand2); }
 .empty-state__ic .icon { width: 1.8rem; height: 1.8rem; }
-.empty-state h2 { margin: 0.4rem 0 0; font-size: 1.3rem; color: var(--ink); }
+.empty-state :is(h2, h3, h4) { margin: 0.4rem 0 0; font-size: 1.3rem; color: var(--ink); }
 .empty-state p { max-width: 34rem; margin: 0; }
 .empty-state__action { margin-top: 0.4rem; }
 

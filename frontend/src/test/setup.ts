@@ -25,3 +25,6 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
 });
+
+// jsdom'da canvas yo'q: ChartCanvas kontekst olmasa grafikni yaratmaydi (fallback jadval qoladi).
+Object.defineProperty(HTMLCanvasElement.prototype, 'getContext', { value: () => null, writable: true, configurable: true });

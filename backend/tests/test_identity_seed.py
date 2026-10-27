@@ -4,25 +4,37 @@ from sqlalchemy.exc import IntegrityError, ProgrammingError
 from sqlalchemy.orm import Session
 
 from app.auth.models import Permission, Position, Role, RolePermission
-from app.auth.permissions import ADMIN_GUARANTEED, PERMISSIONS, Perm, Section, section_perm
+from app.auth.permissions import (
+    ADMIN_GUARANTEED,
+    DATA_SECTIONS,
+    PERMISSIONS,
+    Perm,
+    Section,
+    data_perm,
+    section_perm,
+)
 from app.auth.seed import sync_reference
 from app.core.db import new_session
 
 S = {s: section_perm(s) for s in Section}
+W = {s: data_perm(s, "write") for s in DATA_SECTIONS}
+A = {s: data_perm(s, "approve") for s in DATA_SECTIONS}
 EXPORT = {Perm.EXPORT_CSV.value, Perm.EXPORT_XLSX.value}
 
 # Spec 3.3 / TZ 1-bo'lim jadvali.
 EXPECTED = {
     "rukovodstvo": (True, set(S.values()) | EXPORT),
-    "nach_otdela": (True, set(S.values()) | EXPORT),
+    "nach_otdela": (True, set(S.values()) | EXPORT | set(A.values())),
     "spec_kazna": (
         True,
-        {S[Section.OBZOR], S[Section.KAZNA], S[Section.KREDITY], S[Section.FINMODEL]} | EXPORT,
+        {S[Section.OBZOR], S[Section.KAZNA], S[Section.KREDITY], S[Section.FINMODEL]} | EXPORT
+        | {W[Section.KAZNA], W[Section.KREDITY]},
     ),
     "economist_filiala": (
         False,
         {S[Section.OBZOR], S[Section.KAZNA], S[Section.PROIZVODSTVO], S[Section.SKLAD],
-         S[Section.KADRY]} | EXPORT,
+         S[Section.KADRY]} | EXPORT
+        | {W[Section.KAZNA], W[Section.PROIZVODSTVO], W[Section.KADRY]},
     ),
     "profil_sluzhba": (True, {S[Section.OBZOR]} | EXPORT),
     "admin": (True, set(S.values()) | {p.value for p in Perm}),
@@ -89,3 +101,45 @@ def test_username_format_is_enforced_by_db(db: Session) -> None:
 def test_app_role_cannot_delete_users(db: Session) -> None:
     with pytest.raises(ProgrammingError, match="permission denied"):
         db.execute(text("DELETE FROM core.users"))
+
+
+def test_fresh_perm_granted_once_to_system_roles(monkeypatch: pytest.MonkeyPatch) -> None:
+    perm = data_perm(Section.KAZNA, "write")
+
+    def has() -> bool:
+        with new_session() as s:
+            return s.execute(text(
+                "SELECT count(*) FROM core.role_permissions rp "
+                "JOIN core.roles r ON r.id = rp.role_id "
+                "WHERE r.code = 'spec_kazna' AND rp.permission_code = :p"), {"p": perm}
+            ).scalar_one() == 1
+
+    def drop() -> None:
+        with new_session() as s:
+            s.execute(text("DELETE FROM core.role_permissions rp USING core.roles r "
+                           "WHERE r.id = rp.role_id AND r.code = 'spec_kazna' "
+                           "AND rp.permission_code = :p"), {"p": perm})
+            s.commit()
+
+    # yangi qo'shilgan ruxsat: kodda yo'q -> bazadan ketadi -> kodga qaytadi -> bir marta beriladi
+    drop()
+    reduced = {k: v for k, v in PERMISSIONS.items() if k != perm}
+    monkeypatch.setattr("app.auth.seed.PERMISSIONS", reduced)
+    with new_session() as s:
+        sync_reference(s)
+        s.commit()
+    monkeypatch.undo()
+    with new_session() as s:
+        sync_reference(s)
+        s.commit()
+    assert has()
+    # keyin administrator olib tashlasa -- qayta qo'shilmaydi
+    drop()
+    with new_session() as s:
+        sync_reference(s)
+        s.commit()
+    assert not has()
+    with new_session() as s:  # keyingi testlar uchun qaytarish
+        s.execute(text("INSERT INTO core.role_permissions (role_id, permission_code) "
+                       "SELECT id, :p FROM core.roles WHERE code = 'spec_kazna'"), {"p": perm})
+        s.commit()

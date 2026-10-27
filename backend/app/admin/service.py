@@ -35,7 +35,7 @@ from app.auth.models import (
     RolePermission,
     User,
 )
-from app.auth.permissions import ADMIN_GUARANTEED, ADMIN_ROLE
+from app.auth.permissions import ADMIN_GUARANTEED, ADMIN_ROLE, ALL_DATA_PERMS
 from app.core.errors import ConflictError, ForbiddenError, NotFoundError, ValidationFailed
 from app.core.request_meta import ClientMeta
 
@@ -101,7 +101,10 @@ def _role_permission_codes(db: Session, role_id: int) -> frozenset[str]:
 
 def _assert_no_escalation(actor: AuthContext, granted: Iterable[str]) -> None:
     """I3: admin endpointlari orqali actor o'zida yo'q ruxsatni hech kimga bera olmaydi."""
-    if not set(granted) <= actor.permissions:
+    # data:* admin rolida YO'Q (vazifalar ajratilishi), lekin admin lavozim/rollarni boshqaradi:
+    # ularni berish xavfi audit (admin.role.updated / admin.user.updated) va o'z-o'zini
+    # o'zgartirish taqiqi bilan yopiladi (spec 4.1, risk 7).
+    if not set(granted) - set(ALL_DATA_PERMS) <= actor.permissions:
         raise ForbiddenError("privilege_escalation")
 
 

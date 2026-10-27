@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import StrEnum
+from typing import Literal
 
 
 class Section(StrEnum):
@@ -65,9 +66,31 @@ _PERM_TITLES: dict[Perm, str] = {
     Perm.AUDIT_READ: "Просмотр журнала аудита",
 }
 
+# «Ввод данных»: ruxsatlar Perm enum'iga KIRMAYDI -- admin roli ularni avtomatik olmaydi
+# (vazifalar ajratilishi: admin foydalanuvchilarni boshqaradi, moliyaviy ma'lumot kiritmaydi).
+DATA_SECTIONS: tuple[Section, ...] = (
+    Section.KAZNA, Section.KREDITY, Section.PROIZVODSTVO, Section.INVESTICII, Section.KADRY,
+)
+DataAction = Literal["write", "approve"]
+_DATA_ACTION_TITLES: dict[str, str] = {"write": "ввод и изменение", "approve": "согласование"}
+
+
+def data_perm(section: Section, action: DataAction) -> str:
+    return f"data:{section.value}:{action}"
+
+
+ALL_DATA_PERMS: tuple[str, ...] = tuple(
+    data_perm(s, a) for s in DATA_SECTIONS for a in ("write", "approve")
+)
+
 PERMISSIONS: dict[str, str] = {
     **{section_perm(s): f"Раздел «{t}»: просмотр" for s, t in SECTION_TITLES.items()},
     **{p.value: t for p, t in _PERM_TITLES.items()},
+    **{
+        data_perm(s, a): f"Ввод данных «{SECTION_TITLES[s]}»: {_DATA_ACTION_TITLES[a]}"
+        for s in DATA_SECTIONS
+        for a in ("write", "approve")
+    },
 }
 
 
@@ -84,6 +107,10 @@ def _sections(*items: Section) -> frozenset[str]:
 
 
 _ALL_SECTIONS = _sections(*Section)
+def _data(action: DataAction, *items: Section) -> frozenset[str]:
+    return frozenset(data_perm(s, action) for s in items)
+
+
 _EXPORT = frozenset({Perm.EXPORT_CSV.value, Perm.EXPORT_XLSX.value})
 
 ADMIN_ROLE = "admin"
@@ -95,20 +122,23 @@ ROLE_SEEDS: tuple[RoleSeed, ...] = (
         "nach_otdela",
         "Начальник отдела финансирования и контроля денежных потоков",
         True,
-        _ALL_SECTIONS | _EXPORT,
+        _ALL_SECTIONS | _EXPORT | _data("approve", *DATA_SECTIONS),
     ),
     RoleSeed(
         "spec_kazna",
         "Специалист казначейства",
         True,
-        _sections(Section.OBZOR, Section.KAZNA, Section.KREDITY, Section.FINMODEL) | _EXPORT,
+        _sections(Section.OBZOR, Section.KAZNA, Section.KREDITY, Section.FINMODEL)
+        | _EXPORT
+        | _data("write", Section.KAZNA, Section.KREDITY),
     ),
     RoleSeed(
         "economist_filiala",
         "Экономист филиала",
         False,
         _sections(Section.OBZOR, Section.KAZNA, Section.PROIZVODSTVO, Section.SKLAD, Section.KADRY)
-        | _EXPORT,
+        | _EXPORT
+        | _data("write", Section.KAZNA, Section.PROIZVODSTVO, Section.KADRY),
     ),
     RoleSeed("profil_sluzhba", "Профильная служба", True, _sections(Section.OBZOR) | _EXPORT),
     RoleSeed(ADMIN_ROLE, "Администратор", True, _ALL_SECTIONS | frozenset(p.value for p in Perm)),

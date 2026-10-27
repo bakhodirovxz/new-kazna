@@ -203,4 +203,5 @@ def clean_manual() -> None:
     """«Ввод данных» jadvallarini testdan oldin tozalaydi (biznes-kalitlar to'qnashmasin)."""
     with get_engine("migrator").begin() as conn:
         conn.execute(text(
-            "TRUNCATE core.manual_entry, core.manual_head, core.manual_batch RESTART IDENTITY"))
+            "TRUNCATE core.manual_entry, core.manual_head, core.manual_batch, core.etl_requests "
+            "RESTART IDENTITY"))

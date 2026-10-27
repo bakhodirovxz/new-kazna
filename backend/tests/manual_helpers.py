@@ -113,3 +113,21 @@ def audit_rows(action: str | None = None) -> list[dict[str, Any]]:
 
 def audit_dump() -> str:
     return json.dumps([r["details"] for r in audit_rows()], ensure_ascii=False, default=str)
+
+
+def make_role_user(
+    perms: set[str], *, branch_ids: tuple[int, ...] = (), scope_all: bool = False
+) -> SeedUser:
+    """Maxsus ruxsatli rol va lavozim (masalan, filialga cheklangan tasdiqlovchi)."""
+    from app.auth.models import Role, RolePermission
+    from tests.helpers import create_user
+
+    code = f"t_{uuid.uuid4().hex[:10]}"
+    with new_session() as s:
+        role = Role(code=code, name=code, scope_all=scope_all, is_system=False)
+        s.add(role)
+        s.flush()
+        for perm in sorted(perms):
+            s.add(RolePermission(role_id=role.id, permission_code=perm))
+        s.commit()
+    return create_user(code, branch_ids=branch_ids)

@@ -350,6 +350,7 @@ def _prepare(db: Session, entity: ManualEntity, branch_id: int, items: Sequence[
                                "code": "invalid_value"})
     if errors:
         _raise_item_errors(errors)
+    assert_period_open(db, entity, [p.prev["payload"] for p in planned if p.delete and p.prev])
     return planned
 
 
@@ -464,8 +465,7 @@ def _submit(db: Session, ctx: AuthContext, meta: ClientMeta, entity: ManualEntit
     rows = batch_entries(db, batch["batch_id"])
     if not rows:
         raise ValidationFailed("invalid_value", fields=["items"])
-    assert_period_open(db, entity, [r["payload"] for r in rows if not r["deleted"]]
-                       if entity.kind == "fact" else [])
+    assert_period_open(db, entity, [r["payload"] for r in rows])  # tombstone ham
     corrections = any(r["approved_version"] is not None for r in rows)
     cleaned = clean_reason(reason) if corrections else (reason or "").strip() or None
     digest = canonical_hash(rows)

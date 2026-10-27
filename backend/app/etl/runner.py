@@ -329,6 +329,13 @@ class Runner:
             if not health.ok:
                 raise ConnectorUnavailableError(health.detail or "источник недоступен")
             captured.append(self.connector.watermark())
+            # I1 (S3): sekin tashqi HTTP (1C) DB tranzaksiyasi ochiq paytda bajarilmasin
+            # (idle_in_transaction_session_timeout). Ixtiyoriy `prefetch(window)` tranzaksiyadan
+            # OLDIN chaqiriladi; extract() xotiradan sink'ga yozadi. S1c runner shartnomasi bilan
+            # integratsiyada qayta ko'rib chiqiladi (minimal, ixtiyoriy kanca).
+            prefetch = getattr(self.connector, "prefetch", None)
+            if callable(prefetch):
+                prefetch(window)
             with etl_transaction() as conn:
                 clear_load(conn, run_id)
                 sink = DbStagingSink(conn, run_id, self.connector.source)

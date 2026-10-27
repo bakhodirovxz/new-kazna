@@ -309,8 +309,13 @@ def test_partitions_audit_records_effective_retention() -> None:
     assert details["keep_years_effective"] == 5 and "keep_years_setting" in details
 
 
-def test_askue_job_is_scheduled_and_skips_when_not_configured(tmp_path: Path) -> None:
+def test_askue_job_is_scheduled_and_skips_when_not_configured(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     jobs = {j.id: j for j in worker.build_scheduler(get_settings(), RecordingNotifier()).get_jobs()}
-    assert jobs["etl_askue"].func is worker.run_askue_job
+    assert "etl_askue" in jobs
+    # M10: stdlib/structlog chiqishi yopilgan capture oqimiga yozmasligi uchun log almashtiriladi
+    quiet = type("Quiet", (), {"info": staticmethod(lambda *a, **k: None)})()
+    monkeypatch.setattr(worker, "log", quiet)
     put_setting("askue.stations", [])
     assert worker.run_askue_job(RecordingNotifier()) is None  # sozlanmagan — o'tkazib yuboradi

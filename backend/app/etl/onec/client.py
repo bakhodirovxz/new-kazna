@@ -71,6 +71,8 @@ class OneCClient:
             raise ConnectorUnavailableError(f"{WHERE} {path}: тайм-аут") from exc
         except httpx.TransportError as exc:
             raise ConnectorUnavailableError(f"{WHERE} {path}: {type(exc).__name__}") from exc
+        except httpx.HTTPError as exc:
+            raise OneCFormatError(f"{WHERE} {path}: {type(exc).__name__}") from exc
         if status >= 500 or status == 429:
             raise ConnectorUnavailableError(f"{WHERE} {path}: HTTP {status}")
         if status in (401, 403):

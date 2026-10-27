@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from sqlalchemy import text
+
 from app.core import integrations, sysconfig
 from app.core.config import ConfigError, Settings, get_settings
 from app.core.db import get_engine
@@ -24,11 +26,13 @@ def _askue(settings: Settings) -> AskueConnector:
     with get_engine("etl").connect() as conn:
         stations = sysconfig.current(conn, "askue.stations")
         days = int(sysconfig.current(conn, "askue.inbox_days"))
+        caps = {r.code: r.capacity_mw for r in conn.execute(text(
+            "SELECT code, capacity_mw FROM dwh.dim_branch WHERE capacity_mw IS NOT NULL"))}
     if not stations:
         raise ConfigError("askue.stations bo'sh: `python -m app.cli askue-stations --file …` "
                           "bilan sozlang")
     return AskueConnector(DirectoryExport(Path(settings.askue_inbox_dir), max_age_days=days),
-                          [AskueStation.model_validate(s) for s in stations])
+                          [AskueStation.model_validate(s) for s in stations], capacities=caps)
 
 
 def _onec_sklad(settings: Settings) -> OneCSkladConnector:

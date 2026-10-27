@@ -58,6 +58,7 @@ class OneCSkladConnector:
         self.orgs = list(orgs)
         self.lookback_months = months
         self.now = now
+        self._fetched: list[tuple[OrgMap, date, list[MaterialRow]]] | None = None
 
     def healthcheck(self) -> HealthResult:
         today = today_tashkent().isoformat()
@@ -74,16 +75,23 @@ class OneCSkladConnector:
     def control_totals(self, window: Window) -> ControlTotals | None:
         return None
 
+    def prefetch(self, window: Window) -> None:
+        """Barcha /materials javoblari DB tranzaksiyasidan TASHQARIDA olinadi (Runner chaqiradi)."""
+        self._fetched = [
+            (org, end, parse_materials(self.client.post(PATH, {
+                "date_from": start.isoformat(), "date_to": end.isoformat(),
+                "org_uid": org.org_uid})).data)
+            for org in self.orgs for start, end in periods(window)]
+
     def extract(self, window: Window, sink: StagingSink) -> ExtractStats:
+        if self._fetched is None:
+            self.prefetch(window)
+        fetched, self._fetched = self._fetched or [], None
         counts: Counter[str] = Counter({"fact_stock": 0, "fact_stock_move": 0})
         noms: dict[str, dict[str, Any]] = {}
-        for org in self.orgs:
-            for start, end in periods(window):
-                data = self.client.post(PATH, {"date_from": start.isoformat(),
-                                               "date_to": end.isoformat(),
-                                               "org_uid": org.org_uid})
-                for row in parse_materials(data).data:
-                    self._row(org, end, row, sink, counts, noms)
+        for org, end, rows in fetched:
+            for row in rows:
+                self._row(org, end, row, sink, counts, noms)
         for nom in noms.values():
             sink.add("dim_nomenclature", nom)
         counts["dim_nomenclature"] = len(noms)

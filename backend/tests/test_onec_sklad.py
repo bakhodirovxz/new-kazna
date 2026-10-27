@@ -190,8 +190,7 @@ def test_make_connector_worker_and_cli(panel: None, capsys: pytest.CaptureFixtur
     assert isinstance(made, OneCSkladConnector) and made.lookback_months == 13
     assert made.orgs == [ORG]
     jobs = {j.id: j for j in worker.build_scheduler(get_settings(), RecordingNotifier()).get_jobs()}
-    assert jobs["etl_onec_sklad_full"].args[:1] == (Mode.FULL,)
-    assert jobs["etl_onec_sklad_incremental"].args[:1] == (Mode.INCREMENTAL,)
+    assert {"etl_onec_sklad_full", "etl_onec_sklad_incremental"} <= set(jobs)
     # Probe: faqat soxta transport (tarmoqqa chiqmaydi).
     for payload, code in ((body("materials_current.json"), "ok"),
                           (b"<html>", "format_error"),
@@ -203,3 +202,28 @@ def test_make_connector_worker_and_cli(panel: None, capsys: pytest.CaptureFixtur
     assert worker.run_onec_sklad_job(Mode.FULL, RecordingNotifier()) is None  # sozlanmagan
     assert cli.main(["onec-sklad-check"]) == 2
     assert "onec_sklad.base_url" in capsys.readouterr().out
+
+
+def test_no_open_etl_transaction_during_1c_http(source: str) -> None:
+    """I1: 1C so'rovlari paytida Runner'ning DB tranzaksiyasi ochiq turmasin."""
+    tag = new_tag()
+    run = open_run(source)
+    stage(run, source, {"dim_branch": [branch_row(tag)]})
+    merge_all(run, source)
+    org = OrgMap(branch_code=f"T-{tag}", org_uid=f"uid-{tag}", org_name="Тест")
+    payload = body("materials_current.json")
+    open_tx: list[int] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        with etl_transaction() as conn:  # alohida ulanish: boshqa ugk_etl seanslari holati
+            open_tx.append(int(conn.execute(text(
+                "SELECT count(*) FROM pg_stat_activity WHERE usename = 'ugk_etl' "
+                "AND pid <> pg_backend_pid() AND state = 'idle in transaction' "
+                "AND datname = current_database()")).scalar_one()))
+        return httpx.Response(200, content=payload)
+
+    client = OneCClient(BASE, "u", "p", transport=httpx.MockTransport(handler))
+    connector = OneCSkladConnector(client, [org], months=2, source=source)
+    result = Runner(connector, mode=Mode.FULL, today=TEST_AS_OF, sleep=lambda _: None).run()
+    assert result.status == "success", result
+    assert open_tx and max(open_tx) == 0

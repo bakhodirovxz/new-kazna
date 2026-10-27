@@ -2,9 +2,21 @@
 
 ## Суточная выгрузка (раздел «Производство»)
 
-1. Каталог на сервере: `/srv/ugekazna/askue/inbox` (переменная `UGK_ASKUE_INBOX`), в контейнере
-   `worker` — `/data/import/askue` только для чтения. Запись в каталог — у поставщика АСКУЭ
-   (SFTP или общий ресурс).
+1. В контейнере `worker` каталог `/data/import/askue` смонтирован только для чтения из именованного
+   тома `askue_inbox` (создаётся автоматически — `worker` стартует и без каталога на хосте).
+   Чтобы поставщик (SFTP или общий ресурс) писал файлы на хосте, создайте каталог и подключите его
+   файлом переопределения (один раз, при установке или обновлении):
+   ```bash
+   install -d -o <пользователь-sftp> -g 10001 -m 2750 /srv/ugekazna/askue/inbox
+   cat > deploy/compose.askue.yml <<'YML'
+   volumes:
+     askue_inbox:
+       driver: local
+       driver_opts: {type: none, o: bind, device: /srv/ugekazna/askue/inbox}
+   YML
+   docker compose -f deploy/compose.prod.yml -f deploy/compose.askue.yml up -d worker
+   ```
+   Каталог должен существовать до запуска с переопределением, иначе Docker не смонтирует том.
 2. Сопоставление станций и филиалов — JSON-файл и команда:
    ```bash
    docker compose -f deploy/compose.prod.yml exec worker \

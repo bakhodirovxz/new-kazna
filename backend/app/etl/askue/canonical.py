@@ -97,6 +97,13 @@ def _row(line: int, fields: list[str], today: date) -> AskueRow:
 
 def parse_canonical(data: bytes, *, today: date) -> ParsedAskue:
     try:
+        return _parse(data, today)
+    except csv.Error as exc:  # masalan: maydon limiti (muvozanatsiz qo'shtirnoq)
+        raise AskueFileError("bad_csv", "файл не разбирается как CSV") from exc
+
+
+def _parse(data: bytes, today: date) -> ParsedAskue:
+    try:
         content = data.decode("utf-8-sig")
     except UnicodeDecodeError as exc:
         raise AskueFileError("bad_encoding", "файл не в кодировке UTF-8") from exc

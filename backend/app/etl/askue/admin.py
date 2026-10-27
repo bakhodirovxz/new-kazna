@@ -52,14 +52,17 @@ def askue_stations_command(file: Path | None, out: Out) -> int:
         return 1
     with new_session() as db:
         version, _before = write_setting(db, "askue.stations", value, None)
+        if version is not None:
+            # M8: audit commit'dan OLDIN — yozilmasa istisno chiqadi, sozlama commit qilinmaydi.
+            record(AuditEvent(action=AuditAction.SETTING_UPDATED, object_type="setting",
+                              object_id="askue.stations",
+                              details={"via": "cli", "version": version,
+                                       "stations": len(value)}))
         db.commit()
     if version is None:
         out("askue.stations: o'zgarish yo'q")
         _show(value, out)
         return 0
-    record(AuditEvent(action=AuditAction.SETTING_UPDATED, object_type="setting",
-                      object_id="askue.stations",
-                      details={"via": "cli", "version": version, "stations": len(value)}))
     _show(value, out)
     out(f"askue.stations: versiya {version}, {len(value)} ta stansiya")
     return 0

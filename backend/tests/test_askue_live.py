@@ -198,7 +198,7 @@ def test_live_check_cli(stations: None) -> None:
 
 def test_scheduler_adds_live_job_and_skips_without_url(stations: None) -> None:
     jobs = {j.id: j for j in worker.build_scheduler(get_settings(), RecordingNotifier()).get_jobs()}
-    assert jobs["askue_live"].func is live.poll_power_job
+    assert "askue_live" in jobs
     live.poll_power_job(get_settings())  # askue.live_url bo'sh — o'tkazib yuboradi, tarmoq yo'q
     assert _count() == 0
 
@@ -214,3 +214,18 @@ def test_askue_live_probe_codes(stations: None, monkeypatch: pytest.MonkeyPatch)
                            (httpx.Response(503), "connect_failed")):
         monkeypatch.setattr(probes, "GesLiveClient", lambda *a, _r=response, **k: fake(_r))
         assert probes.PROBES["askue_live"]() == code
+
+
+def test_decoding_error_is_not_retryable() -> None:
+    def broken(request: httpx.Request) -> httpx.Response:
+        raise httpx.DecodingError("bad gzip", request=request)
+
+    with pytest.raises(LiveError) as exc:
+        fake(broken).fetch()
+    assert not isinstance(exc.value, ConnectorUnavailableError)
+
+
+def test_overall_deadline(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(live, "DEADLINE", -1.0)
+    with pytest.raises(ConnectorUnavailableError, match="тайм-аут"):
+        ok_client().fetch()

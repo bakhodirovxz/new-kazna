@@ -244,3 +244,33 @@ def test_notify_askue_errors() -> None:
     assert notifier.kinds == ["askue_rows_rejected"]
     body = notifier.items[0].body
     assert "negative: 2" in body and "unknown_station: 1" in body
+
+
+def test_over_capacity_row_is_rejected_at_read_time() -> None:
+    caps = {"UGE-02": Decimal(100), "UGE-03": Decimal(100)}  # 100 x 24 = 2400 MVt*soat
+    sink = ReportSink()
+    AskueConnector(ListExport(ExportFile("a.csv", FIXTURE.read_bytes())), STATIONS,
+                   capacities=caps, today=lambda: TEST_AS_OF).extract(WINDOW, sink)
+    assert [r["src_id"] for _, r in sink.rows] == ["CHIRCHIQ-7:20260923"]
+    assert [(t, c) for t, c, _ in sink.errors] == [("askue_file", "over_capacity")] * 2
+
+
+def test_broken_csv_file_does_not_stop_other_files() -> None:
+    broken = ("station;date;generation_mwh;own_needs_mwh;supply_mwh;work_hours\n\""
+              + "A" * 200_000).encode()
+    sink = _extract(ExportFile("broken.csv", broken), ExportFile("ok.csv", FIXTURE.read_bytes()))
+    assert [c for _, c, _ in sink.errors] == ["bad_csv"]
+    assert len(sink.rows) == 3
+
+
+def test_over_capacity_does_not_block_later_publish(source: str, tmp_path: Path) -> None:
+    from app.etl.askue.export import DirectoryExport
+
+    a, b = _test_branches(source, capacity=100)
+    caps = {a: Decimal(100), b: Decimal(100)}
+    connector = AskueConnector(DirectoryExport(_inbox(tmp_path, FIXTURE.read_bytes())),
+                               _stations(a, b), capacities=caps, source=source,
+                               today=lambda: TEST_AS_OF)
+    result = Runner(connector, mode=Mode.INCREMENTAL, today=TEST_AS_OF,
+                    sleep=lambda _: None).run()
+    assert result.status == "success", result  # xato qatorlar rad etildi, global tekshiruv o'tdi

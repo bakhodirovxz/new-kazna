@@ -313,15 +313,18 @@ def build_scheduler(settings: Settings, notifier: Notifier, *,
         add_cron_job(scheduler, "etl_synthetic_full", "etl.synthetic_cron", run_etl_job,
                      args=("synthetic", Mode.FULL, notifier), **opts)
     # TZ 8: АСКУЭ — ежесуточно; inbox'dagi oxirgi askue.inbox_days kun fayllari qayta o'qiladi.
-    add_cron_job(scheduler, "etl_askue", "etl.askue_cron", run_askue_job, args=(notifier,), **opts)
+    add_cron_job(scheduler, "etl_askue", "etl.askue_cron",
+                 _guarded("etl_askue", lambda: run_askue_job(notifier)), **opts)
     # Jonli quvvat — Runner'siz (ETL lock'ini band qilmaydi); askue.live_url bo'sh — job o'tkazadi.
-    add_cron_job(scheduler, "askue_live", "askue.live_cron", poll_power_job, args=(settings,),
-                 **opts)
+    add_cron_job(scheduler, "askue_live", "askue.live_cron",
+                 _guarded("askue_live", lambda: poll_power_job(settings)), **opts)
     # TZ 8: 1C — kechasi to'liq (oxirgi onec.sklad_months oy), kunduzi inkremental 3 marta.
     add_cron_job(scheduler, "etl_onec_sklad_full", "etl.onec_sklad_full_cron",
-                 run_onec_sklad_job, args=(Mode.FULL, notifier), **opts)
+                 _guarded("etl_onec_sklad_full", lambda: run_onec_sklad_job(Mode.FULL, notifier)),
+                 **opts)
     add_cron_job(scheduler, "etl_onec_sklad_incremental", "etl.onec_sklad_incremental_cron",
-                 run_onec_sklad_job, args=(Mode.INCREMENTAL, notifier), **opts)
+                 _guarded("etl_onec_sklad_incremental",
+                          lambda: run_onec_sklad_job(Mode.INCREMENTAL, notifier)), **opts)
     scheduler.add_job(_guarded("etl_requests", lambda: process_requests(notifier)),
                       "interval", seconds=30, id="etl_requests", **opts)
     scheduler.add_job(_guarded("integration_checks", process_integration_checks),

@@ -102,3 +102,10 @@ def test_directory_export_filters_files(tmp_path: Path) -> None:
 def test_api_export_is_not_configured() -> None:
     with pytest.raises(AskueNotConfigured, match="АСКУЭ API не настроен"):
         AskueApiExport()
+
+
+def test_csv_error_is_a_file_level_error() -> None:
+    data = (HEADER + '\n"' + "A" * 200_000).encode("utf-8")  # muvozanatsiz qo'shtirnoq
+    with pytest.raises(AskueFileError) as exc:
+        parse_canonical(data, today=TODAY)
+    assert exc.value.code == "bad_csv"

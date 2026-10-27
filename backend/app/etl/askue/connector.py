@@ -9,7 +9,7 @@ Sutkalik ishlab chiqarish > quvvat × 24 → 2-reja sifat tekshiruvi 4 publish'n
 
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from datetime import UTC, date, datetime
 from decimal import ROUND_HALF_EVEN, Decimal
 
@@ -43,11 +43,15 @@ def to_mln_kwh(mwh: Decimal) -> Decimal:
 
 class AskueConnector:
     def __init__(self, export: AskueExport, stations: Sequence[AskueStation], *,
-                 source: str = SOURCE, today: Callable[[], date] = today_tashkent,
+                 capacities: Mapping[str, Decimal] | None = None, source: str = SOURCE,
+                 today: Callable[[], date] = today_tashkent,
                  now: Callable[[], datetime] = lambda: datetime.now(UTC)) -> None:
         self.source = source
         self.export = export
         self.stations = list(stations)
+        # branch_code -> MVt: sutkalik ishlab chiqarish quvvat x 24 dan oshsa qator o'qishda rad
+        # etiladi (bitta xato qator global sifat tekshiruvini yiqitmasin, I3).
+        self.capacities = dict(capacities or {})
         self.today = today
         self.now = now
 
@@ -88,11 +92,15 @@ class AskueConnector:
             for row in parsed.rows:
                 station = by_code.get(row.station)
                 if station is None:
-                    report("unknown_station", f"{name}:{row.line}: станция «{row.station}» не "
+                    report("unknown_station", f"{name}:{row.line}: станция {row.station!r} не "
                                               "сопоставлена с филиалом (askue.stations)")
                     continue
                 if not window.contains(row.day):
                     skipped += 1
+                    continue
+                cap = self.capacities.get(station.branch_code)
+                if cap is not None and row.generation > cap * 24:
+                    report("over_capacity", f"{name}:{row.line}: выработка больше мощности × 24")
                     continue
                 generation = to_mln_kwh(row.generation)
                 own = to_mln_kwh(row.own_needs)

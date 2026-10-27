@@ -249,9 +249,9 @@ volumes:
   db_data: {}
   pg_run: {}
   etl_inbox: {}
-  askue_inbox:
-    driver: local
-    driver_opts: {type: none, o: bind, device: "${UGK_ASKUE_INBOX:-/srv/ugekazna/askue/inbox}"}
+  # I2: nomli hajm — host katalogi talab qilinmaydi (worker har doim ishga tushadi). Host SFTP
+  # uchun bind override: docs/integration/askue-connector.md.
+  askue_inbox: {}
   pgbackrest_repo:
     external: true
     name: ${UGK_BACKUP_VOLUME:-ugk_pgbackrest_repo}

@@ -11,7 +11,7 @@ DOCS = {
         "ГГГГ-ММ-ДД", "МВт·ч", "unknown_station", "CHARVAK-1;2026-09-22;4810.6"),
     "docs/integration/askue-connector.md": (
         "askue-stations", "/srv/ugekazna/askue/inbox", "askue-live-check", "askue.live_url",
-        "askue.live_stale_minutes", "askue.inbox_days", "Интеграции"),
+        "askue.live_stale_minutes", "askue.inbox_days", "Интеграции", "install -d"),
     "docs/integration/proizvodstvo-fayl.md": (
         "fact_generation.csv", "generation_plan", "fact_energy_sales.csv", "etl-run",
         "dim_counterparty.csv"),
@@ -29,9 +29,8 @@ def compose() -> dict[str, Any]:
 def test_askue_inbox_volume(compose: dict[str, Any]) -> None:
     worker = compose["services"]["worker"]
     assert "askue_inbox:/data/import/askue:ro" in worker["volumes"]
-    opts = compose["volumes"]["askue_inbox"]["driver_opts"]
-    assert (opts["type"], opts["o"]) == ("none", "bind")
-    assert "/srv/ugekazna/askue/inbox" in opts["device"]
+    # I2: nomli hajm, host bind YO'Q (katalog bo'lmasa worker ishga tushmay qolardi)
+    assert not (compose["volumes"]["askue_inbox"] or {}).get("driver_opts")
     for service, svc in compose["services"].items():
         if service != "worker":
             assert not any("askue" in v for v in svc.get("volumes", [])), service

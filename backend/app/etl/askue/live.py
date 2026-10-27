@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import re
+import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -35,6 +36,7 @@ from app.etl.types import ConnectorUnavailableError
 
 TIMEOUT = httpx.Timeout(connect=5.0, read=20.0, write=10.0, pool=5.0)
 MAX_BYTES = 1024 * 1024
+DEADLINE = 60.0  # s: butun so'rov uchun devor soati (sekin-tomchi serverdan himoya)
 _POWER = re.compile(r"^\d{1,5}(\.\d{1,4})?$")
 _AGG = re.compile(r"^\d{1,3}/\d{1,3}/\d{1,3}$")
 WHERE = "АСКУЭ (онлайн)"
@@ -106,10 +108,13 @@ class GesLiveClient:
     def fetch(self) -> LiveResponse:
         chunks: list[bytes] = []
         size = 0
+        deadline = time.monotonic() + DEADLINE
         try:
             with self.http.stream("GET", self.url) as response:
                 status = response.status_code
                 for chunk in response.iter_bytes():
+                    if time.monotonic() > deadline:
+                        raise ConnectorUnavailableError(f"{WHERE}: тайм-аут")
                     size += len(chunk)
                     if size > self.max_bytes:
                         raise LiveError(f"{WHERE}: ответ больше {self.max_bytes} байт")
@@ -118,6 +123,8 @@ class GesLiveClient:
             raise ConnectorUnavailableError(f"{WHERE}: тайм-аут") from exc
         except httpx.TransportError as exc:
             raise ConnectorUnavailableError(f"{WHERE}: {type(exc).__name__}") from exc
+        except httpx.HTTPError as exc:  # masalan DecodingError: qayta urinilmaydi
+            raise LiveError(f"{WHERE}: {type(exc).__name__}") from exc
         if status >= 500 or status == 429:
             raise ConnectorUnavailableError(f"{WHERE}: HTTP {status}")
         if status != 200:
@@ -225,7 +232,8 @@ def poll_power(settings: Settings, *, client: GesLiveClient | None = None,
             live_client.close()
     snaps, unmapped = map_snapshot(resp, stations)
     if unmapped:
-        log.warning("askue_live_unmapped", count=len(unmapped), names=unmapped[:10])
+        log.warning("askue_live_unmapped", count=len(unmapped),
+                    names=[repr(n) for n in unmapped[:10]])
     with etl_transaction() as conn:
         stored = store(conn, moment, resp.date, snaps)
         pruned = prune(conn, moment, keep)

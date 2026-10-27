@@ -28,7 +28,17 @@ from app.auth.permissions import Perm
 from app.core.config import get_settings
 from app.core.db import get_engine
 from app.core.logging import get_logger
-from app.core.setting_types import OneCOrg, calendar_kinds, onec_orgs
+from app.core.setting_types import (
+    BANKS,
+    BankAccount,
+    OneCOrg,
+    bank_accounts,
+    bank_formats,
+    branch_codes,
+    calendar_kinds,
+    currencies,
+    onec_orgs,
+)
 from app.dwh.dates import today_tashkent
 
 Kind = Literal["int", "float", "bool", "str", "cron", "date", "list", "json"]
@@ -116,6 +126,9 @@ def str_def(key: str, default: str, pattern: str, max_length: int, **kw: Any) ->
 _SEC: dict[str, Any] = {"category": "security", "perm": Perm.ADMIN_SECURITY, "guarded": True}
 _SMTP: dict[str, Any] = {"category": "integrations", "perm": Perm.ADMIN_INTEGRATIONS,
                          "guarded": True}
+_CHAT_IDS: TypeAdapter[Any] = TypeAdapter(Annotated[
+    list[Annotated[str, Field(strict=True, pattern=r"^-?[0-9]{1,20}$")]],
+    Field(max_length=10)])
 _EMAILS: TypeAdapter[Any] = TypeAdapter(Annotated[
     list[Annotated[str, Field(strict=True, pattern=EMAIL_RE, max_length=254)]],
     Field(max_length=20)])
@@ -155,6 +168,28 @@ _DEFS: tuple[SettingDef, ...] = (
              title="Расписание полной загрузки 1С"),
     cron_def("etl.onec_incremental_cron", "0 10,13,16 * * *", category="etl",
              title="Расписание инкрементальной загрузки 1С"),
+    # S2: banklar, kurslar, Telegram
+    SettingDef("banks.accounts", [],
+               TypeAdapter(Annotated[list[BankAccount], AfterValidator(bank_accounts)]), "json",
+               category="banks", title="Банковские счета", apply="next_run"),
+    SettingDef("banks.statement_branches", [],
+               TypeAdapter(Annotated[list[str], AfterValidator(branch_codes)]), "list",
+               category="banks", title="Филиалы с проводками из банковских выписок",
+               apply="next_run"),
+    SettingDef("banks.formats", dict.fromkeys(BANKS, "canonical"),
+               TypeAdapter(Annotated[dict[str, str], AfterValidator(bank_formats)]), "json",
+               category="banks", title="Форматы выписок банков", apply="next_run"),
+    cron_def("etl.banks_cron", "30 9,12,15,18 * * *", category="banks",
+             title="Расписание загрузки банковских выписок"),
+    cron_def("etl.cbu_cron", "0 8 * * *", category="fx",
+             title="Расписание загрузки курсов ЦБ РУз"),
+    SettingDef("fx.currencies", ["USD", "EUR", "CNY", "RUB", "GBP", "JPY", "CHF", "KZT", "KRW"],
+               TypeAdapter(Annotated[list[str], AfterValidator(currencies)]), "list",
+               category="fx", title="Валюты курсов ЦБ", apply="next_run"),
+    int_def("fx.lookback_days", 7, 1, 31, category="fx", title="Окно загрузки курсов",
+            unit="дн.", apply="next_run"),
+    cron_def("telegram.summary_cron", "30 8 * * *", category="notify",
+             title="Расписание ежедневной сводки в Telegram"),
     # Sifat va saqlash
     float_def("quality.control_tolerance", 0.001, 0.0, 0.01, category="quality",
               title="Допуск сверки контрольных сумм (доля)", guarded=True, apply="next_run"),
@@ -214,6 +249,8 @@ _DEFS: tuple[SettingDef, ...] = (
     str_def("smtp.user", "", r"^[\x21-\x7e]{0,128}$", 128, title="Учётная запись",
             env="smtp_user", **_SMTP),
     bool_def("smtp.starttls", True, title="STARTTLS", env="smtp_starttls", **_SMTP),
+    bool_def("cbu.enabled", False, title="Загружать курсы ЦБ РУз", **_SMTP),
+    SettingDef("telegram.chat_ids", [], _CHAT_IDS, "list", title="Чаты Telegram", **_SMTP),
     bool_def("smtp.ssl", False, title="SSL/TLS (SMTPS)", env="smtp_ssl", **_SMTP),
 )
 REGISTRY: dict[str, SettingDef] = {d.key: d for d in _DEFS}

@@ -45,6 +45,29 @@ def test_base_targets_survive() -> None:
     assert defined >= BASE_TARGETS, sorted(BASE_TARGETS - defined)
 
 
+def test_dev_compose_goes_through_prod_host_guard() -> None:
+    text = repo_path("Makefile").read_text(encoding="utf-8")
+    lines = [
+        ln for ln in text.splitlines() if "deploy/compose.yml" in ln and not ln.startswith("#")
+    ]
+    assert len(lines) == 1, lines  # dev compose faqat DEV ta'rifida
+    assert re.match(r"DEV\s+=\s", lines[0]), lines[0]  # rekursiv (:= emas)
+    assert "$(wildcard deploy/prod.env)" in lines[0] and "$(error" in lines[0]
+    assert not re.search(r"^(STACK_COMPOSE|CLI)\s+:=", text, re.M)  # parse vaqtida DEV'ni ochmasin
+
+
+def test_stack_only_from_command_line() -> None:
+    text = repo_path("Makefile").read_text(encoding="utf-8")
+    assert "ifneq ($(origin STACK),command line)" in text
+    assert "override STACK := dev" in text
+    assert not re.search(r"^STACK\s+\?=", text, re.M)
+
+
+def test_ops_check_passes_tls_cert() -> None:
+    text = repo_path("Makefile").read_text(encoding="utf-8")
+    assert "ops-check $(if $(filter prod,$(STACK)),--tls-cert /run/secrets/tls_cert,)" in text
+
+
 def test_every_make_target_has_help() -> None:
     defined, documented = _make_targets()
     assert defined == documented, sorted(defined - documented)

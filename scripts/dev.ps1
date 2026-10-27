@@ -39,7 +39,12 @@ function Invoke-Docker([string[]]$Arguments) {
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 }
 
-if (-not $Version) { $Version = (& git describe --tags --always --dirty).Trim() }
+function Get-Version {
+    if ($Version) { return $Version }
+    $described = & git describe --tags --always --dirty 2>$null
+    if ($LASTEXITCODE -ne 0 -or -not $described) { return "dev" }
+    return ([string]$described).Trim()
+}
 $Dev = @("compose", "-f", "deploy/compose.yml")
 $Test = @("compose", "-f", "deploy/compose.test.yml", "run", "--rm", "test")
 $Node = @("compose", "-f", "deploy/compose.frontend.yml", "run", "--rm", "node")
@@ -57,7 +62,9 @@ switch ($Target) {
     "down" { Invoke-Docker ($Dev + @("down")) }
     "logs" { Invoke-Docker ($Dev + @("logs", "-f", "--tail=100")) }
     "web" { Invoke-Docker ($Dev + @("up", "-d", "--build", "caddy")) }
-    "create-admin" { Invoke-Docker ($Cli + @("create-admin", "--username", $Username, "--full-name", $FullName)) }
+    "create-admin" {
+        Invoke-Docker ($Dev + @("exec", "-T", "api", "python", "-m", "app.cli", "create-admin", "--username", $Username, "--full-name", $FullName))
+    }
     "seed-synthetic" {
         Invoke-Docker ($Dev + @("exec", "-T", "worker", "python", "-m", "app.cli", "etl-run", "--source", "synthetic", "--mode", "full"))
     }
@@ -71,13 +78,13 @@ switch ($Target) {
     "check-backend" { Invoke-Bash "scripts/check_backend.sh" }
     "check-frontend" { Invoke-Bash "scripts/check_frontend.sh" }
     "check-repo" { Invoke-Bash "scripts/check_repo.sh" }
-    "hooks" { & git config core.hooksPath .githooks }
+    "hooks" { & git config core.hooksPath .githooks; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE } }
     "fe-install" { Invoke-Docker ($Node + @("npm", "ci")) }
     "fe-check" { Invoke-Docker ($Node + @("npm", "run", "check")) }
     "e2e" { Invoke-Bash "scripts/e2e.sh" }
     "pin-images" { Invoke-Bash "scripts/pin_images.sh" }
-    "scan" { Invoke-Bash "scripts/scan.sh" @($Version) }
-    "release" { Invoke-Bash "scripts/release.sh" @($Version) }
+    "scan" { Invoke-Bash "scripts/scan.sh" @(Get-Version) }
+    "release" { Invoke-Bash "scripts/release.sh" @(Get-Version) }
     "prod-config" { Invoke-Bash "scripts/prod_config.sh" }
     "test-caddy" { Invoke-Bash "scripts/tests/caddy_prod_test.sh" }
     "db-smoke" { Invoke-Bash "scripts/tests/db_image_smoke.sh" }

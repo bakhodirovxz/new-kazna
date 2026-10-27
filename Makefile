@@ -2,22 +2,27 @@
 # STACK=dev (standart: deploy/compose.yml) yoki STACK=prod (deploy/compose.prod.yml + deploy/prod.env
 # + deploy/release.env) — operator buyruqlari (create-admin, audit-verify, rotate-keys, …) uchun.
 SHELL   := /bin/bash
-STACK   ?= dev
+# STACK faqat buyruq qatoridan olinadi (muhitdagi STACK, masalan Heroku-uslubidagi, e'tiborsiz).
+ifneq ($(origin STACK),command line)
+  override STACK := dev
+endif
 VERSION ?= $(shell git describe --tags --always --dirty)
 
-DEV  := docker compose -f deploy/compose.yml
+# Prod host'da (deploy/prod.env bor) dev compose bilan bir xil loyiha nomi (ugekazna) — `make down` prod'ni
+# o'chirardi. DEV rekursiv: faqat dev retsepti ishlaganda tekshiriladi (make check/test/lint ta'sirlanmaydi).
+DEV  = $(if $(wildcard deploy/prod.env),$(error prod host: dev buyrug'i taqiqlangan - prod uchun STACK=prod yoki prod-up/prod-down/prod-ps ishlating),docker compose -f deploy/compose.yml)
 PROD := docker compose -f deploy/compose.prod.yml --env-file deploy/prod.env --env-file deploy/release.env
 TEST := docker compose -f deploy/compose.test.yml run --rm test
 NODE := docker compose -f deploy/compose.frontend.yml run --rm node
 
 ifeq ($(STACK),prod)
-  STACK_COMPOSE := $(PROD)
+  STACK_COMPOSE = $(PROD)
 else ifeq ($(STACK),dev)
-  STACK_COMPOSE := $(DEV)
+  STACK_COMPOSE = $(DEV)
 else
   $(error STACK faqat dev yoki prod bo'lishi mumkin)
 endif
-CLI := $(STACK_COMPOSE) run --rm -T migrate python -m app.cli
+CLI = $(STACK_COMPOSE) run --rm -T migrate python -m app.cli
 
 .DEFAULT_GOAL := help
 
@@ -68,7 +73,7 @@ retire-keys: ## ishlatilmayotgan eski DEK'larni yo'q qilish (ugk_migrator) [STAC
 rewrap-keys: ## KEK rotatsiyasi: make rewrap-keys f=/abs/path/new_kek [STACK=prod] (key-management.md)
 	$(STACK_COMPOSE) run --rm -T -v "$(f):/tmp/new_kek:ro" migrate python -m app.cli rewrap-keys --new-kek-file /tmp/new_kek
 ops-check: ## ekspluatatsiya tekshiruvi worker ichida [STACK=prod]
-	$(STACK_COMPOSE) exec -T worker python -m app.cli ops-check
+	$(STACK_COMPOSE) exec -T worker python -m app.cli ops-check $(if $(filter prod,$(STACK)),--tls-cert /run/secrets/tls_cert,)
 
 # ── Sifat darvozalari (spec 10) ────────────────────────────────────────────────
 .PHONY: test lint typecheck check check-backend check-frontend check-repo hooks fe-install fe-check e2e e2e-ci

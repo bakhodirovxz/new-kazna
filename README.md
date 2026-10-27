@@ -62,7 +62,7 @@ Limit: to'liq yugurish 6 login (10/min) va ~7 MFA (20/min) ishlatadi — ~60 s i
 | `rotate-key --purpose P` | DEK rotatsiyasi + qayta shifrlash | **faqat `migrate` konteyneri** |
 | `retire-keys [--grace-minutes N]` | ishlatilmayotgan eski DEK'larni yo'q qilish | **faqat `migrate` konteyneri** |
 | `rewrap-keys --new-kek-file F` | KEK rotatsiyasi (barcha DEK'larni yangi KEK bilan qayta o'raydi) | **faqat `migrate` konteyneri** |
-| `audit-verify` | audit zanjirini tekshirish (buzilgan bo'lsa chiqish kodi 2) | `api` konteyneri |
+| `audit-verify` | audit zanjirini tekshirish (buzilgan bo'lsa chiqish kodi 2) | `migrate` konteyneri (`make audit-verify`) |
 | `cleanup` | eskirgan sessiya, 2FA challenge va staging qatorlarini o'chirish | `worker` konteyneri |
 | `etl-run --source S --mode full\|incremental [--no-retry]` | ETL yuklash | `worker` konteyneri |
 | `rollback-build [--build ID]` | aktiv build'ni qaytarish | `worker` konteyneri |
@@ -82,7 +82,9 @@ docker compose -f deploy/compose.yml run --rm migrate python -m app.cli rotate-k
 docker compose -f deploy/compose.yml run --rm migrate python -m app.cli retire-keys
 ```
 
-(`make retire-keys` / `make rewrap-keys f=...` — Linux/prod uchun qulay yorliqlar, `Makefile`ga qarang.)
+(`make retire-keys` / `make rewrap-keys f=...` — qulay yorliqlar; `make retire-keys` standart `--grace-minutes` bilan ishlaydi, boshqa qiymat uchun CLI'ni to'g'ridan-to'g'ri chaqiring.)
+
+Operator buyruqlari (`create-admin`, `audit-verify`, `rotate-keys`, `retire-keys`, `rewrap-keys`, `etl-run`, `rollback-build`, `ops-check`, `migrate`) standart holda dev stack'ga qaratilgan; prod uchun buyruq qatorida `STACK=prod` bering (muhit o'zgaruvchisi hisobga olinmaydi). Prod host'da: `make prod-up`, `make prod-down`, `make prod-ps`. **Prod host'da (`deploy/prod.env` bor) dev-stack buyruqlari (`up`, `down`, `build`, `logs`, `web`, `seed-synthetic`, `STACK=dev` bilan operator buyruqlari) xatolik bilan rad etiladi** — dev va prod compose loyiha nomi bir xil (`ugekazna`), shuning uchun `make down` prod'ni to'xtatardi.
 
 ### `rewrap-keys` — KEK rotatsiyasi
 

@@ -11,19 +11,23 @@ from sqlalchemy.orm import Session
 
 from app.auth.context import require_perm
 from app.auth.permissions import Section, section_perm
+from app.core import sysconfig
 from app.core.cache import Cache
 from app.core.db import DB
 from app.dwh.reference import current_setting
 from app.sections.deps import SQ, SectionQuery
 from app.sections.kadry_schemas import (
     HrCategoryOut,
+    HrKpisOut,
     HrMonthOut,
     KadryChislennostOut,
     KadryDvizhenieOut,
     KadryFotOut,
     KadrySvodOut,
     hr_branch_out,
+    hr_category_out,
     hr_kpis_out,
+    hr_month_out,
 )
 from app.sections.queries import hr
 from app.sections.schemas import period_out
@@ -37,47 +41,58 @@ def salary_codes(db: Session) -> list[str]:
     return [str(code) for code in kinds.get("salary", [])]
 
 
+def min_group() -> int:
+    """k-anonimlik chegarasi: guruh < kadry.min_group bo'lsa ФОТ/o'rtacha yashiriladi."""
+    return int(sysconfig.value("kadry.min_group"))
+
+
 def _months(db: Session, q: SectionQuery, codes: list[str]) -> list[HrMonthOut]:
-    return [HrMonthOut(month_id=m.month_id, payroll=m.payroll, fact=m.fact,
-                       avg_salary=m.avg_salary, hired=m.hired, fired=m.fired,
-                       overtime=m.overtime) for m in hr.monthly(db, q.sel(), q.today, codes)]
+    return [hr_month_out(m) for m in hr.monthly(db, q.sel(), q.today, codes, min_group())]
 
 
 def _categories(db: Session, q: SectionQuery) -> list[HrCategoryOut]:
-    return [HrCategoryOut(name=c.name, value=c.value)
-            for c in hr.categories(db, q.sel(), q.period())]
+    return [hr_category_out(c) for c in hr.categories(db, q.sel(), q.period(), min_group())]
+
+
+def _kpis(db: Session, q: SectionQuery, codes: list[str]) -> HrKpisOut:
+    return hr_kpis_out(hr.totals(db, q.sel(), q.period(), codes, min_group()))
+
+
+def _branches(db: Session, q: SectionQuery, codes: list[str]) -> list[hr.HrBranch]:
+    return hr.by_branch(db, q.sel(), q.period(), codes, min_group())
 
 
 def build_svod(db: Session, q: SectionQuery) -> KadrySvodOut:
-    period, sel, codes = q.period(), q.sel(), salary_codes(db)
+    period, codes = q.period(), salary_codes(db)
     return KadrySvodOut(
-        period=period_out(period), kpis=hr_kpis_out(hr.totals(db, sel, period, codes)),
+        period=period_out(period), kpis=_kpis(db, q, codes),
         months=_months(db, q, codes), categories=_categories(db, q),
-        branches=[hr_branch_out(b) for b in hr.by_branch(db, sel, period, codes)])
+        branches=[hr_branch_out(b) for b in _branches(db, q, codes)])
 
 
 def build_chislennost(db: Session, q: SectionQuery) -> KadryChislennostOut:
-    period, sel, codes = q.period(), q.sel(), salary_codes(db)
+    period, codes = q.period(), salary_codes(db)
     return KadryChislennostOut(
-        period=period_out(period), kpis=hr_kpis_out(hr.totals(db, sel, period, codes)),
-        branches=[hr_branch_out(b) for b in hr.by_branch(db, sel, period, codes)],
+        period=period_out(period), kpis=_kpis(db, q, codes),
+        branches=[hr_branch_out(b) for b in _branches(db, q, codes)],
         categories=_categories(db, q))
 
 
 def build_fot(db: Session, q: SectionQuery) -> KadryFotOut:
-    period, sel, codes = q.period(), q.sel(), salary_codes(db)
-    rows = sorted(hr.by_branch(db, sel, period, codes), key=lambda b: (-b.payroll, b.name))
+    period, codes = q.period(), salary_codes(db)
+    # yashirilgan filiallar tartibi ФОТ miqdorini ochmasligi uchun ularning kaliti 0
+    rows = sorted(_branches(db, q, codes),
+                  key=lambda b: (0.0 if b.hidden else -b.payroll, b.name))
     return KadryFotOut(
-        period=period_out(period), kpis=hr_kpis_out(hr.totals(db, sel, period, codes)),
+        period=period_out(period), kpis=_kpis(db, q, codes),
         months=_months(db, q, codes), branches=[hr_branch_out(b) for b in rows])
 
 
 def build_dvizhenie(db: Session, q: SectionQuery) -> KadryDvizhenieOut:
-    period, sel, codes = q.period(), q.sel(), salary_codes(db)
-    rows = sorted(hr.by_branch(db, sel, period, codes),
-                  key=lambda b: (-(b.turnover or 0.0), b.name))
+    period, codes = q.period(), salary_codes(db)
+    rows = sorted(_branches(db, q, codes), key=lambda b: (-(b.turnover or 0.0), b.name))
     return KadryDvizhenieOut(
-        period=period_out(period), kpis=hr_kpis_out(hr.totals(db, sel, period, codes)),
+        period=period_out(period), kpis=_kpis(db, q, codes),
         months=_months(db, q, codes), branches=[hr_branch_out(b) for b in rows])
 
 

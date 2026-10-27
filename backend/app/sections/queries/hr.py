@@ -10,7 +10,7 @@ hisoblanmaydi). Faqat agregatlar — ФИО yo'q (TZ 9).
 from __future__ import annotations
 
 import calendar
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date
 from typing import Any
 
@@ -23,6 +23,7 @@ from app.sections.queries.cash import num
 from app.sections.queries.procurement import pairs, ratio
 from app.sections.scope import BranchSel
 
+HIDDEN_REASON = "скрыто (малая группа)"  # k-anonymity: guruh < kadry.min_group
 _NO_CODE = ["—"]  # bo'sh ro'yxat o'rniga (ANY('{}') turini PG aniqlay olmaydi)
 
 
@@ -42,6 +43,11 @@ class _Derived:
     months: float
 
     @property
+    def suppressed(self) -> bool:
+        """Kichik guruh (< kadry.min_group): shaxsga yaqin ko'rsatkichlar yashiriladi."""
+        raise NotImplementedError
+
+    @property
     def vacancies(self) -> float | None:
         return None if self.plan <= 0 else round(self.plan - self.fact, 1)
 
@@ -56,17 +62,17 @@ class _Derived:
     @property
     def avg_salary(self) -> float | None:
         """Средняя зарплата = ФОТ / численность / число месяцев периода."""
-        if self.fact <= 0 or self.months <= 0:
+        if self.suppressed or self.fact <= 0 or self.months <= 0:
             return None
         return round(self.payroll / self.fact / self.months, 6)
 
     @property
     def turnover(self) -> float | None:
-        return ratio(float(self.fired), self.fact)
+        return None if self.suppressed else ratio(float(self.fired), self.fact)
 
     @property
     def overtime_per_employee(self) -> float | None:
-        return ratio(self.overtime, self.fact)
+        return None if self.suppressed else ratio(self.overtime, self.fact)
 
 
 @dataclass(frozen=True, slots=True)
@@ -80,10 +86,15 @@ class HrFigures(_Derived):
     fired: int
     overtime: float
     months: float
+    min_group: int = 0
+
+    @property
+    def suppressed(self) -> bool:
+        return self.min_group > 0 and self.fact < self.min_group
 
     @property
     def payroll_share(self) -> float | None:
-        return ratio(self.payroll, self.outflow)
+        return None if self.suppressed else ratio(self.payroll, self.outflow)
 
     @property
     def has_data(self) -> bool:
@@ -101,6 +112,11 @@ class HrBranch(_Derived):
     fired: int
     overtime: float
     months: float
+    hidden: bool = False  # kichik guruh yoki to'ldiruvchi yashirish (qo'shimcha ayirish hujumi)
+
+    @property
+    def suppressed(self) -> bool:
+        return self.hidden
 
 
 @dataclass(frozen=True, slots=True)
@@ -112,12 +128,33 @@ class HrMonth:
     hired: int
     fired: int
     overtime: float
+    hidden: bool = False
 
 
 @dataclass(frozen=True, slots=True)
 class NamedValue:
     name: str
     value: float
+    hidden: bool = False
+
+
+def hide_small(sizes: dict[Any, float], min_group: int) -> set[Any]:
+    """Yashiriladigan kalitlar: hajmi < min_group bo'lganlar + to'ldiruvchi yashirish — yashirilgan
+    guruhlar yig'indisi ham >= min_group bo'lguncha eng kichik ko'rinadigan guruh qo'shiladi
+    (aks holda jami − ko'rinadiganlar = yakka guruh qiymatini ochardi)."""
+    if min_group <= 0:
+        return set()
+    hidden = {k for k, v in sizes.items() if v < min_group}
+    if not hidden:
+        return hidden
+    total = sum(sizes[k] for k in hidden)
+    for key, size in sorted(((k, v) for k, v in sizes.items() if k not in hidden),
+                            key=lambda kv: kv[1]):
+        if total >= min_group:
+            break
+        hidden.add(key)
+        total += size
+    return hidden
 
 
 def _snap_month(db: Session, where: str, params: dict[str, Any], last: int) -> int | None:
@@ -138,7 +175,7 @@ def _payroll(db: Session, where: str, params: dict[str, Any], months: list[int],
 
 
 def totals(db: Session, sel: BranchSel, period: ReportPeriod,
-           salary_codes: list[str]) -> HrFigures:
+           salary_codes: list[str], min_group: int = 0) -> HrFigures:
     where, params = sel.total("h.branch_id")
     snap = _snap_month(db, where, params, period.last_month)
     head = db.execute(text(
@@ -155,10 +192,11 @@ def totals(db: Session, sel: BranchSel, period: ReportPeriod,
     return HrFigures(
         snap_month=snap, plan=num(head.plan), fact=num(head.fact), payroll=payroll,
         outflow=outflow, hired=int(flow.hired), fired=int(flow.fired), overtime=num(flow.ot),
-        months=round(period.month_equivalents, 6))
+        months=round(period.month_equivalents, 6), min_group=min_group)
 
 
-def categories(db: Session, sel: BranchSel, period: ReportPeriod) -> list[NamedValue]:
+def categories(db: Session, sel: BranchSel, period: ReportPeriod,
+               min_group: int = 0) -> list[NamedValue]:
     where, params = sel.total("h.branch_id")
     snap = _snap_month(db, where, params, period.last_month)
     rows = db.execute(text(
@@ -166,11 +204,12 @@ def categories(db: Session, sel: BranchSel, period: ReportPeriod) -> list[NamedV
         f"WHERE {where} AND h.month_id = :snap GROUP BY h.category "
         "HAVING sum(h.headcount_fact) > 0 ORDER BY v DESC, h.category"),
         {**params, "snap": snap or 0}).all()
-    return [NamedValue(r.category, num(r.v)) for r in rows]
+    hidden = hide_small({r.category: num(r.v) for r in rows}, min_group)
+    return [NamedValue(r.category, num(r.v), r.category in hidden) for r in rows]
 
 
 def by_branch(db: Session, sel: BranchSel, period: ReportPeriod,
-              salary_codes: list[str]) -> list[HrBranch]:
+              salary_codes: list[str], min_group: int = 0) -> list[HrBranch]:
     where, params = sel.rows("h.branch_id")
     x_where, _ = sel.rows("x.branch_id")
     head = {int(r.branch_id): r for r in db.execute(text(
@@ -202,11 +241,13 @@ def by_branch(db: Session, sel: BranchSel, period: ReportPeriod,
         payroll=num(pay.get(i)), hired=int(flow[i].hired) if i in flow else 0,
         fired=int(flow[i].fired) if i in flow else 0,
         overtime=num(flow[i].ot) if i in flow else 0.0, months=months) for i in ids]
+    hidden = hide_small({b.branch_id: b.fact for b in out}, min_group)
+    out = [replace(b, hidden=b.branch_id in hidden) for b in out]
     return sorted(out, key=lambda b: (-b.fact, b.name))
 
 
 def monthly(db: Session, sel: BranchSel, today: date,
-            salary_codes: list[str]) -> list[HrMonth]:
+            salary_codes: list[str], min_group: int = 0) -> list[HrMonth]:
     months = [today.year * 100 + m for m in range(1, month_id(today) % 100 + 1)]
     where, params = sel.total("h.branch_id")
     by = {int(r.month_id): r for r in db.execute(text(
@@ -228,7 +269,8 @@ def monthly(db: Session, sel: BranchSel, today: date,
         fact = num(row.fact) if row else 0.0
         payroll = num(pay.get(m))
         share = part if m == current else 1.0
-        avg = None if fact <= 0 else round(payroll / fact / share, 6)
+        hide = min_group > 0 and fact < min_group
+        avg = None if fact <= 0 or hide else round(payroll / fact / share, 6)
         out.append(HrMonth(m, payroll, fact, avg, int(row.hired) if row else 0,
-                           int(row.fired) if row else 0, num(row.ot) if row else 0.0))
+                           int(row.fired) if row else 0, num(row.ot) if row else 0.0, hide))
     return out

@@ -8,13 +8,14 @@ from __future__ import annotations
 from sqlalchemy.orm import Session
 
 from app.alerts.types import AlertHit, RuleConfig, breached, evaluator, hit
+from app.core import sysconfig
 from app.sections.deps import SectionQuery
 from app.sections.fmt import fmt_num, fmt_pct, plural
 from app.sections.queries import hr
 
 
 def _totals(db: Session, q: SectionQuery) -> hr.HrFigures:
-    return hr.totals(db, q.sel(), q.period(), [])
+    return hr.totals(db, q.sel(), q.period(), [], int(sysconfig.value("kadry.min_group")))
 
 
 @evaluator("vacancies_share")

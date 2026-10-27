@@ -86,7 +86,8 @@ def test_svod_numbers_and_etag(sc: HrScenario, app_factory: Callable[[], TestCli
     assert [c["name"] for c in body["categories"]] == ["Оперативный персонал", "Руководители"]
     assert body["months"][6] == {"month_id": 202607, "payroll": 170.0, "fact": 91.0,
                                  "avg_salary": 1.868132, "hired": 1, "fired": 2,
-                                 "overtime": 315.0}
+                                 "overtime": 315.0, "suppressed": False,
+                                 "suppressed_reason": None}
     again = client.get("/api/v1/kadry/svod", params=params,
                        headers={"If-None-Match": r.headers["ETag"]})
     assert again.status_code == 304

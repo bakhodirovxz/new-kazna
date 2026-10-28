@@ -37,6 +37,7 @@ from app.etl.askue.live import poll_power_job
 from app.etl.connectors import make_connector
 from app.etl.db import etl_transaction
 from app.etl.errors import FILE_FULL_REFUSED, EtlBusyError, safe_error, sqlstate_of
+from app.etl.hr.attendance import attendance_job
 from app.etl.notify import Kind, Notification, Notifier, build_notifier
 from app.etl.probes import process_integration_checks
 from app.etl.runner import Runner, RunResult
@@ -408,6 +409,11 @@ def build_scheduler(settings: Settings, notifier: Notifier, *,
                  _guarded("telegram_summary", send_daily_summary), **opts)
     # S4: HR API — kuniga bir marta (U5: shartsiz, ichida configured tekshiruvi)
     add_cron_job(scheduler, "etl_hr", "etl.hr_cron", run_hr_job, args=(notifier,), **opts)
+    # Kunlik davomat (HR) - Runner'siz; kalit yo'q bo'lsa job jim o'tkazib yuboradi (U5).
+    add_cron_job(scheduler, "hr_attendance", "hr.attendance_cron",
+                 _guarded("hr_attendance", lambda: attendance_job(settings)), **opts)
+    add_cron_job(scheduler, "hr_attendance_nightly", "hr.attendance_nightly_cron",
+                 _guarded("hr_attendance_nightly", lambda: attendance_job(settings, 1)), **opts)
     # TZ 8: АСКУЭ — ежесуточно; inbox'dagi oxirgi askue.inbox_days kun fayllari qayta o'qiladi.
     add_cron_job(scheduler, "etl_askue", "etl.askue_cron",
                  _guarded("etl_askue", lambda: run_askue_job(notifier)), **opts)

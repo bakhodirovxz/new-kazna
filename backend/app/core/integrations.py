@@ -74,7 +74,8 @@ _ALL: tuple[IntegrationDef, ...] = (
     IntegrationDef(
         "hr", "Кадровая система (HR API)", fields=("hr.base_url",),
         endpoint=("hr.base_url",),
-        secrets=(SecretDef("hr.api_key", "API-ключ HR", pattern=r"[!-~]+", max_length=512),)),
+        secrets=(SecretDef("hr.api_key", "API-ключ HR", env="hr_api_key", pattern=r"[!-~]+",
+                           max_length=512),)),
     IntegrationDef(
         "ai", "AI-анализ (провайдер)",
         fields=("ai.model", "ai.effort", "ai.max_tokens"), endpoint=(),

@@ -165,3 +165,25 @@ def test_api_key_must_be_header_safe_ascii() -> None:
     for bad in ("ключ", "with space", "tab	x", ""):
         with pytest.raises(ValueError):
             sd.validate(bad)
+
+
+def test_api_key_falls_back_to_env_until_panel_overrides(monkeypatch: pytest.MonkeyPatch) -> None:
+    from pydantic import SecretStr
+
+    from app.core import integrations
+    from app.core.config import Settings
+    from app.core.db import get_engine
+    from tests.helpers import clear_setting, put_setting
+
+    monkeypatch.setattr(integrations, "get_settings", lambda: Settings(hr_api_key=SecretStr(KEY)))
+    clear_setting("hr.base_url")
+    with get_engine("app").connect() as conn:
+        assert integrations.secret(conn, "hr.api_key") == KEY
+        assert integrations.secret_state(conn, "hr.api_key")[0] == "env"
+    put_setting("hr.base_url", "https://hr.test")  # manzil panelda o'zgardi: env kaliti ishlamaydi
+    try:
+        with get_engine("app").connect() as conn:
+            assert integrations.secret(conn, "hr.api_key") == ""
+            assert integrations.secret_state(conn, "hr.api_key")[0] == "none"
+    finally:
+        clear_setting("hr.base_url")

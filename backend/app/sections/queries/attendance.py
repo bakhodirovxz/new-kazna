@@ -92,8 +92,9 @@ def load(db: Session, sel: BranchSel, *, today: date, now: datetime,
         "a.branch_employees, a.generated_at FROM pub.attendance_daily a "
         f"JOIN pub.branches b ON b.branch_id = a.branch_id WHERE {where} AND a.att_date = :d"),
         {**params, "d": day}).all()
-    out = Yavka(day=day, generated_at=max(r.generated_at for r in rows))
-    out.stale = now - out.generated_at > timedelta(minutes=stale_minutes) or day < today
+    generated: datetime = max(r.generated_at for r in rows)
+    out = Yavka(day=day, generated_at=generated)
+    out.stale = now - generated > timedelta(minutes=stale_minutes) or day < today
     per: dict[int, BranchFigures] = {}
     counts: dict[str, StatusCount] = {}
     for r in rows:

@@ -89,7 +89,6 @@ class AuditAction(StrEnum):
     DATA_BATCH_APPROVED = "data.batch.approved"
     DATA_BATCH_REJECTED = "data.batch.rejected"
     DATA_BATCH_WITHDRAWN = "data.batch.withdrawn"
-    DATA_BATCH_PUBLISH_FAILED = "data.batch.publish_failed"
     DATA_IMPORTED = "data.imported"
     DATA_IMPORT_REJECTED = "data.import.rejected"
     DATA_APPROVE_GRANTED = "security.data_approve_granted"

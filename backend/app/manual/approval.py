@@ -14,6 +14,7 @@ from app.audit.service import AuditAction, log_event
 from app.auth.context import AuthContext
 from app.core.errors import ConflictError, ForbiddenError, ValidationFailed
 from app.core.request_meta import ClientMeta
+from app.manual import publication
 from app.manual.entities import ENTITIES, ManualEntity
 from app.manual.schemas import BatchOut, PublicationOut
 from app.manual.store import (
@@ -136,23 +137,5 @@ def reject_batch(db: Session, ctx: AuthContext, meta: ClientMeta, batch_id: int,
 
 
 def publication_status(db: Session, batch: BatchOut | Any) -> PublicationOut:
-    """Tasdiqlangan paketning nashr holati: core.etl_requests -> core.etl_run."""
-    if batch.status == "failed":
-        return PublicationOut(status="failed")
-    if batch.status != "approved" or batch.etl_request_id is None:
-        return PublicationOut(status="none")
-    req = db.execute(text("SELECT status, run_id FROM core.etl_requests WHERE id = :i"),
-                     {"i": batch.etl_request_id}).first()
-    if req is None:
-        return PublicationOut(status="none")
-    if req.status == "pending":
-        return PublicationOut(status="queued")
-    if req.status == "running":
-        return PublicationOut(status="running")
-    if req.status == "failed" or req.run_id is None:
-        return PublicationOut(status="failed")
-    run = db.execute(text("SELECT status, build_id FROM core.etl_run WHERE id = :i"),
-                     {"i": req.run_id}).first()
-    if run is not None and run.status == "success" and run.build_id is not None:
-        return PublicationOut(status="published", build_id=int(run.build_id))
-    return PublicationOut(status="failed")
+    """Tasdiqlangan paketning nashr holati (hisoblanadi, saqlanmaydi): `manual.publication`."""
+    return publication.detail(db, publication.state(db), batch)

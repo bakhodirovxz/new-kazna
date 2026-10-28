@@ -50,6 +50,22 @@ class DecisionIn(Strict):
     comment: str | None = Field(default=None, max_length=500)
 
 
+class PublicationCheck(BaseModel):
+    code: str
+    items: list[dict[str, int]] = Field(default_factory=list)  # branch_id / month_id / date_id
+
+
+class PublicationOut(BaseModel):
+    """Nashr holati -- o'qilganda hisoblanadi (paket `status` i o'zgarmaydi)."""
+
+    status: Literal["none", "queued", "running", "published", "failed"]
+    build_id: int | None = None
+    run_id: int | None = None
+    kind: Literal["quality", "build"] | None = None
+    error: str | None = None
+    checks: list[PublicationCheck] = Field(default_factory=list)
+
+
 class BatchOut(BaseModel):
     batch_id: int
     entity: str
@@ -66,7 +82,7 @@ class BatchOut(BaseModel):
     decision_comment: str | None = None
     version: int
     etl_request_id: int | None = None
-    publish_error: str | None = None
+    publication: PublicationOut | None = None
 
 
 class ChangeOut(BaseModel):
@@ -77,14 +93,8 @@ class ChangeOut(BaseModel):
     after: dict[str, Any] | None
 
 
-class PublicationOut(BaseModel):
-    status: Literal["none", "queued", "running", "published", "failed"]
-    build_id: int | None = None
-
-
 class BatchDetailOut(BatchOut):
     items: list[ChangeOut]
-    publication: PublicationOut | None = None
 
 
 class Page[T](BaseModel):

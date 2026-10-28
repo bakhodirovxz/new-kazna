@@ -217,17 +217,22 @@ def _build(entity: ManualEntity, header: list[Any], rows: Rows) -> Parsed:
     return items, lines
 
 
-def _decode(body: bytes) -> str:
-    """UTF-8; ruscha Excel «CSV» ni cp1251 da saqlaydi -- shunda qat'iy cp1251 (I-2)."""
+def _decode(entity: ManualEntity, body: bytes) -> str:
+    """UTF-8. Ruscha Excel «CSV» ni cp1251 da saqlaydi: faqat sarlavha qatori ruscha yorliqlarga
+    mos kelsa qat'iy cp1251 (aks holda buzuq UTF-8 fayl jimgina o'qilmasin)."""
     try:
         return body.decode("utf-8-sig")
     except UnicodeDecodeError:
-        return body.decode("cp1251")  # UnicodeDecodeError -> _parse_csv unsupported_file
+        text_ = body.decode("cp1251")  # UnicodeDecodeError -> _parse_csv unsupported_file
+        head = {c.strip().casefold() for c in text_.partition("\n")[0].split(";")}
+        if head & {header_label(f).casefold() for f in entity.fields}:
+            return text_
+        raise
 
 
 def _parse_csv(entity: ManualEntity, body: bytes) -> Parsed:
     try:
-        reader = csv.reader(io.StringIO(_decode(body)), delimiter=";")
+        reader = csv.reader(io.StringIO(_decode(entity, body)), delimiter=";")
         lines: Rows = []
         prev = 0
         for raw in reader:  # yozuv boshlanish qatori (bo'sh va ko'p qatorli kataklar bilan)

@@ -593,3 +593,10 @@ def test_header_aliases_never_collide_across_entities() -> None:
             for key in {f.name, imports.header_label(f)}:
                 owner = seen.setdefault(key.casefold(), f.name)
                 assert owner == f.name, (entity.id, key)
+
+
+def test_cp1251_fallback_only_for_russian_headers(client_for, make_user: MakeUser) -> None:  # type: ignore[no-untyped-def]
+    maker = client_for(make_user("spec_kazna"))
+    body = ("\r\n".join([HEAD, _row().replace("2026", "2026 Ёж")])).encode("cp1251")
+    r = _post(maker, body)  # kodli sarlavha + cp1251 -- jimgina o'qilmaydi
+    assert r.status_code == 422 and r.json()["error"]["code"] == "unsupported_file"

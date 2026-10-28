@@ -1989,11 +1989,9 @@ export interface components {
             version: number;
             /** Etl Request Id */
             etl_request_id?: number | null;
-            /** Publish Error */
-            publish_error?: string | null;
+            publication?: components["schemas"]["PublicationOut"] | null;
             /** Items */
             items: components["schemas"]["ChangeOut"][];
-            publication?: components["schemas"]["PublicationOut"] | null;
         };
         /** BatchIn */
         BatchIn: {
@@ -2051,8 +2049,7 @@ export interface components {
             version: number;
             /** Etl Request Id */
             etl_request_id?: number | null;
-            /** Publish Error */
-            publish_error?: string | null;
+            publication?: components["schemas"]["PublicationOut"] | null;
         };
         /** BatchUpdateIn */
         BatchUpdateIn: {
@@ -3734,6 +3731,23 @@ export interface components {
             status: "none" | "queued" | "running" | "published" | "failed";
             /** Build Id */
             build_id?: number | null;
+            /** Run Id */
+            run_id?: number | null;
+            /** Kind */
+            kind?: ("quality" | "build") | null;
+            /** Error */
+            error?: string | null;
+            /** Checks */
+            checks?: components["schemas"]["PublicationCheck"][];
+        };
+        /** PublicationCheck */
+        PublicationCheck: {
+            /** Code */
+            code: string;
+            /** Items */
+            items?: {
+                [key: string]: number;
+            }[];
         };
         /**
          * Purpose

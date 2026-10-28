@@ -15,6 +15,7 @@ from app.auth.permissions import ALL_DATA_PERMS, SECTION_TITLES, Perm, data_perm
 from app.core import ratelimit
 from app.core.db import DB
 from app.core.errors import AppError, ConflictError, ForbiddenError, NotFoundError, ValidationFailed
+from app.core.logging import get_logger
 from app.core.request_meta import Meta
 from app.manual import approval, imports, store
 from app.manual.entities import ENTITIES, FieldDef, ManualEntity
@@ -38,6 +39,7 @@ from app.manual.schemas import (
 from app.manual.validate import branch_scoped_sql
 from app.sections.deps import SQ
 
+log = get_logger(__name__)
 router = APIRouter(
     prefix="/data",
     tags=["data"],
@@ -237,7 +239,6 @@ def list_batches(
 @router.get("/batches/{batch_id}")
 def get_batch(batch_id: int, ctx: Ctx, db: DB) -> BatchDetailOut:
     out = store.get_batch(db, ctx, batch_id)
-    out.publication = approval.publication_status(db, out)
     return out
 
 
@@ -318,7 +319,8 @@ async def import_file(
             if isinstance(exc, imports.FormatErrors):  # format + spravochnik xatolari bir yo'la
                 try:
                     exc = imports.with_reference_errors(db, entity, branch_id, exc)
-                except Exception:  # tekshiruv yiqilsa ham rad etish auditga tushadi (M-2)
+                except Exception as err:  # tekshiruv yiqilsa ham rad etish auditga tushadi
+                    log.error("import_reference_check_failed", error=type(err).__name__)
                     db.rollback()
             new = _remap(exc, lines) if lines and exc.params.get("rows") else exc
             rejected(new)

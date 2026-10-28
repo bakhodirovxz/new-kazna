@@ -303,13 +303,6 @@ def process_requests(
             continue
         _set_request(row.id, "done" if result.status == "success" else "failed",
                      result.run_id, result.error)
-        if row.source == "manual" and result.status == "failed_quality":
-            try:  # «Ошибка публикации»: keyingi qo'lda nashrlar bloklanmasin
-                from app.manual.publication import fail_unpublished
-
-                fail_unpublished(row.id, result.run_id, result.error or "")
-            except Exception as exc:
-                _log_error("manual_fail_unpublished_failed", exc, request_id=row.id)
         done += 1
 
 

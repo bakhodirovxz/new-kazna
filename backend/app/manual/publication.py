@@ -1,55 +1,121 @@
-"""Nashr xatosi: qo'lda kiritilgan paketlar sifat tekshiruvidan o'tmadi.
+"""Tasdiqlangan paketning nashr holati -- o'qilganda HISOBLANADI (saqlanmaydi, o'zgarmaydi).
 
-Ildiz sabab: ManualConnector HAR yugurishda BARCHA tasdiqlangan boshlarni to'liq o'qiydi, shuning
-uchun bitta yomon paket keyingi barcha qo'lda nashrlarni yiqitardi. Yechim: yiqilgan yugurishga
-kirgan, hali nashr qilinmagan paketlar `failed` («Ошибка публикации», sabab ko'rinadi) bo'ladi va
-boshlar oxirgi NASHR QILINGAN tasdiqlangan versiyaga qaytadi; keyingi mustaqil paketlar nashr
-qilinadi. Yangi tasdiq/versiya yaratilmaydi (SoD saqlanadi): tuzatish -- muallifning yangi paketi
-va ikkinchi shaxsning tasdig'i. 1C tekshiruvlari o'zgarmaydi.
+Qo'lda nashr har yugurishda BARCHA tasdiqlangan boshlarni to'liq o'qiydi, shuning uchun paketni
+`etl_request_id >= o'z so'rovi` bo'lgan har qanday qo'lda yugurish qamrab oladi (tasdiqlangan
+ma'lumot hech qachon avtomatik o'chirilmaydi/qaytarilmaydi):
+- shu oraliqda muvaffaqiyatli yugurish bor -> «опубликовано»;
+- aks holda ishlayotgan so'rov bor -> «публикуется»;
+- aks holda eng yangi tugagan qamrab oluvchi yugurish yiqilgan -> «ошибка» (sabab + tafsilot);
+- aks holda -> «ожидает».
+Tuzatish -- mavjud maker-checker oqimi: tuzatuvchi yoki o'chiruvchi yangi paket; tasdig'idan keyin
+yangi qo'lda yugurish tuzatilgan boshlarni o'qiydi.
 """
 
 from __future__ import annotations
 
-from sqlalchemy import text
+from dataclasses import dataclass
+from typing import Any
 
-from app.audit.service import AuditAction, AuditEvent, record
-from app.etl.db import etl_transaction
+from sqlalchemy import text
+from sqlalchemy.orm import Session
+
+from app.manual.schemas import PublicationCheck, PublicationOut
 
 ERROR_MAX = 300
-
-# So'rovlar id tartibida bajariladi: id <= k ning hammasi shu yugurishgacha o'qilgan; muvaffaqiyatli
-# yugurish bilan yopilmaganlari nashr qilinmagan.
-_FAIL = text(
-    "UPDATE core.manual_batch b SET status = 'failed', publish_error = :m, version = version + 1 "
-    "WHERE b.status = 'approved' AND b.etl_request_id <= :k AND NOT EXISTS ("
-    "  SELECT 1 FROM core.etl_requests r JOIN core.etl_run u ON u.id = r.run_id "
-    "  WHERE r.id = b.etl_request_id AND u.status = 'success') "
-    "RETURNING b.batch_id, b.entity, b.branch_id, b.rows")
-_REVERT = text(
-    "UPDATE core.manual_head h SET approved_version = p.version, "
-    "approved_deleted = coalesce(p.deleted, false), updated_at = now() "
-    "FROM (SELECT fe.entry_id, pv.version, pv.deleted "
-    "      FROM (SELECT DISTINCT entry_id FROM core.manual_entry WHERE batch_id = ANY(:b)) fe "
-    "      LEFT JOIN LATERAL (SELECT e.version, e.deleted FROM core.manual_entry e "
-    "        JOIN core.manual_batch b ON b.batch_id = e.batch_id "
-    "        WHERE e.entry_id = fe.entry_id AND b.status = 'approved' "
-    "        ORDER BY e.version DESC LIMIT 1) pv ON true) p "
-    "WHERE h.entry_id = p.entry_id")
+DETAIL_MAX = 10
+_DETAIL_KEYS = ("branch_id", "month_id", "date_id")  # faqat identifikatorlar, summalarsiz
 
 
-def fail_unpublished(request_id: int, run_id: int | None, error: str) -> list[int]:
-    """`request_id` yugurishi sifatdan yiqilganda chaqiriladi. Yiqilgan batch_id'lar qaytadi."""
-    message = f"{error} (запуск №{run_id})"[:ERROR_MAX]
-    with etl_transaction() as conn:
-        failed = conn.execute(_FAIL, {"m": message, "k": request_id}).all()
-        ids = sorted(int(r.batch_id) for r in failed)
-        if ids:
-            conn.execute(_REVERT, {"b": ids})
-    for r in failed:
-        record(AuditEvent(
-            action=AuditAction.DATA_BATCH_PUBLISH_FAILED, result="fail",
-            object_type="manual_batch", object_id=str(r.batch_id),
-            details={"batch_id": int(r.batch_id), "entity": r.entity, "branch_id": r.branch_id,
-                     "rows": r.rows, "etl_request_id": request_id, "run_id": run_id,
-                     "error": message}), role="etl")
-    return ids
+@dataclass(frozen=True, slots=True)
+class State:
+    published_through: int  # eng katta muvaffaqiyatli qo'lda so'rov id'si (0 -- yo'q)
+    running: int  # ishlayotgan so'rov id'si (0 -- yo'q)
+    finished: int  # eng yangi tugagan (done/failed) so'rov id'si (0 -- yo'q)
+    finished_failed: bool
+    run_id: int | None
+    run_status: str | None
+    run_error: str | None
+    request_error: str | None
+
+
+def state(db: Session) -> State:
+    published = db.execute(text(
+        "SELECT coalesce(max(r.id), 0) FROM core.etl_requests r JOIN core.etl_run u "
+        "ON u.id = r.run_id WHERE r.source = 'manual' AND r.status = 'done' "
+        "AND u.status = 'success'")).scalar_one()
+    running = db.execute(text(
+        "SELECT coalesce(max(id), 0) FROM core.etl_requests "
+        "WHERE source = 'manual' AND status = 'running'")).scalar_one()
+    last = db.execute(text(
+        "SELECT r.id, r.status, r.error, r.run_id, u.status AS run_status, u.error AS run_error "
+        "FROM core.etl_requests r LEFT JOIN core.etl_run u ON u.id = r.run_id "
+        "WHERE r.source = 'manual' AND r.status IN ('done', 'failed') "
+        "ORDER BY r.id DESC LIMIT 1")).first()
+    if last is None:
+        return State(int(published), int(running), 0, False, None, None, None, None)
+    ok = last.status == "done" and last.run_status == "success"
+    return State(int(published), int(running), int(last.id), not ok, last.run_id,
+                 last.run_status, last.run_error, last.error)
+
+
+def status_of(s: State, request_id: int) -> str:
+    if request_id <= s.published_through:
+        return "published"
+    if s.running >= request_id:
+        return "running"
+    if s.finished >= request_id and s.finished_failed:
+        return "failed"
+    return "queued"
+
+
+def failed_filter(s: State) -> tuple[str, dict[str, Any]]:
+    """`status=failed` filtri: status_of() bilan bir xil qoida, SQL ko'rinishida."""
+    if not s.finished_failed:
+        return "FALSE", {}
+    return ("(etl_request_id IS NOT NULL AND etl_request_id > :ms AND etl_request_id <= :nf "
+            "AND NOT :rn >= etl_request_id)",
+            {"ms": s.published_through, "nf": s.finished, "rn": s.running})
+
+
+def brief(s: State, status: str, request_id: int | None) -> PublicationOut | None:
+    """Ro'yxat uchun: holat va (xatoda) qisqa sabab, qo'shimcha so'rovlarsiz."""
+    if status != "approved" or request_id is None:
+        return None
+    st = status_of(s, request_id)
+    out = PublicationOut(status=st)
+    if st == "failed":
+        out.run_id = s.run_id
+        out.kind = "quality" if s.run_status == "failed_quality" else "build"
+        out.error = (s.run_error or s.request_error or "")[:ERROR_MAX] or None
+    return out
+
+
+def _checks(db: Session, run_id: int, branch_id: int) -> list[PublicationCheck]:
+    detail = db.execute(text(
+        "SELECT detail FROM core.etl_step WHERE run_id = :r AND name = 'quality'"),
+        {"r": run_id}).scalar_one_or_none()
+    out: list[PublicationCheck] = []
+    for code, body in sorted((detail or {}).items()):
+        if not isinstance(body, dict) or body.get("ok", True):
+            continue
+        items = [{k: int(v[k]) for k in _DETAIL_KEYS if k in v}
+                 for v in body.get("violations", []) if isinstance(v, dict)
+                 and v.get("branch_id") == branch_id][:DETAIL_MAX]  # faqat o'z filiali
+        out.append(PublicationCheck(code=code, items=items))
+    return out
+
+
+def detail(db: Session, s: State, batch: Any) -> PublicationOut:
+    """Paket sahifasi uchun: sabab, tekshiruv nomi va (o'z filiali bo'yicha) buzilishlar."""
+    if batch.status != "approved" or batch.etl_request_id is None:
+        return PublicationOut(status="none")
+    out = brief(s, batch.status, batch.etl_request_id) or PublicationOut(status="none")
+    if out.status == "published":
+        out.build_id = db.execute(text(
+            "SELECT u.build_id FROM core.etl_requests r JOIN core.etl_run u ON u.id = r.run_id "
+            "WHERE r.source = 'manual' AND r.status = 'done' AND u.status = 'success' "
+            "AND r.id >= :i ORDER BY r.id LIMIT 1"),
+            {"i": batch.etl_request_id}).scalar_one_or_none()
+    elif out.status == "failed" and out.kind == "quality" and s.run_id is not None:
+        out.checks = _checks(db, s.run_id, batch.branch_id)
+    return out

@@ -35,6 +35,7 @@ from app.core.errors import (
     ValidationFailed,
 )
 from app.core.request_meta import ClientMeta
+from app.manual import publication
 from app.manual.entities import ENTITIES, FieldDef, ManualEntity, business_key
 from app.manual.schemas import (
     MAX_IMPORT_ROWS,
@@ -120,7 +121,7 @@ def load_batch(db: Session, batch_id: int, *, lock: bool = False) -> Row:
 
 
 def batch_out(row: Row) -> BatchOut:
-    return BatchOut(**{k: row[k] for k in BatchOut.model_fields})
+    return BatchOut(**{k: row[k] for k in BatchOut.model_fields if k != "publication"})
 
 
 def _stamp(db: Session, batch_id: int) -> BatchOut:
@@ -615,7 +616,9 @@ def get_batch(db: Session, ctx: AuthContext, batch_id: int) -> BatchDetailOut:
     if not (ctx.has(data_perm(entity.section, "write"))
             or ctx.has(data_perm(entity.section, "approve"))):
         raise ForbiddenError()
-    return BatchDetailOut(**batch_out(batch).model_dump(), items=changes(db, entity, batch_id))
+    out = BatchDetailOut(**batch_out(batch).model_dump(), items=changes(db, entity, batch_id))
+    out.publication = publication.detail(db, publication.state(db), out)
+    return out
 
 
 def list_batches(db: Session, ctx: AuthContext, *, box: Literal["mine", "inbox"],
@@ -630,7 +633,12 @@ def list_batches(db: Session, ctx: AuthContext, *, box: Literal["mine", "inbox"]
         where += " AND created_by = :u"
     else:  # tasdiqlovchi o'z paketini ko'rmaydi (u baribir tasdiqlay olmaydi)
         where += " AND status = 'submitted' AND created_by <> :u"
-    if status:
+    state = publication.state(db)
+    if status == "failed":  # hosila filtr: paket holati 'approved', nashr yiqilgan
+        clause, extra = publication.failed_filter(state)
+        where += f" AND status = 'approved' AND {clause}"
+        params |= extra
+    elif status:
         where += " AND status = :s"
         params["s"] = status
     total = db.execute(text(f"SELECT count(*) FROM core.manual_batch WHERE {where}"),  # noqa: S608
@@ -639,4 +647,7 @@ def list_batches(db: Session, ctx: AuthContext, *, box: Literal["mine", "inbox"]
         f"SELECT * FROM core.manual_batch WHERE {where} "  # noqa: S608
         "ORDER BY batch_id DESC LIMIT :n OFFSET :o"),
         {**params, "n": PAGE_SIZE, "o": (max(page, 1) - 1) * PAGE_SIZE}).mappings()
-    return Page[BatchOut](items=[batch_out(r) for r in rows], total=total, page=max(page, 1))
+    items = [batch_out(r) for r in rows]
+    for b in items:
+        b.publication = publication.brief(state, b.status, b.etl_request_id)
+    return Page[BatchOut](items=items, total=total, page=max(page, 1))

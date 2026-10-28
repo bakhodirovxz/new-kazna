@@ -11,7 +11,7 @@ import { useBatches, useEntities, type EntryBatch } from './api';
 import { BatchPage } from './BatchPage';
 import './entry.css';
 
-const TONE: Record<string, BadgeTone> = { draft: 'neutral', submitted: 'warn', approved: 'ok', rejected: 'neg', withdrawn: 'neutral', failed: 'neg' };
+const TONE: Record<string, BadgeTone> = { draft: 'neutral', submitted: 'warn', approved: 'ok', rejected: 'neg', withdrawn: 'neutral' };
 
 /** «На согласовании» (inbox) va «Мои пакеты» (mine): ro'yxat, qatorni bosish — paket sahifasi. */
 export function BatchList({ box }: { box: 'inbox' | 'mine' }) {
@@ -35,7 +35,9 @@ export function BatchList({ box }: { box: 'inbox' | 'mine' }) {
     { key: 'status', header: t('entry.status'), cell: (b) => (
       <>
         <Badge tone={TONE[b.status] ?? 'neutral'}>{t(`entry.status.${b.status}` as 'entry.status.draft')}</Badge>
-        {b.publish_error ? <div className="entry-hint">{b.publish_error}</div> : null}
+        {b.publication?.status === 'failed' ? (
+          <> <Badge tone="neg">{t('entry.pub.failed')}</Badge></>
+        ) : null}
       </>
     ) },
     { key: 'when', header: t('entry.batch.col.when'), cell: (b) => (b.submitted_at ? formatDateTime(b.submitted_at) : '—') },
@@ -52,7 +54,8 @@ export function BatchList({ box }: { box: 'inbox' | 'mine' }) {
           <span>{t('entry.status')}: </span>
           <select value={status} onChange={(e) => setStatus(e.target.value)} className="select">
             <option value="">{t('entry.filter.all')}</option>
-            {['draft', 'submitted', 'approved', 'rejected', 'withdrawn', 'failed'].map((s) => (
+            <option value="failed">{t('entry.pub.failed')}</option>
+            {['draft', 'submitted', 'approved', 'rejected', 'withdrawn'].map((s) => (
               <option key={s} value={s}>{t(`entry.status.${s}` as 'entry.status.draft')}</option>
             ))}
           </select>

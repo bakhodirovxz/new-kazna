@@ -100,8 +100,25 @@ SCENARIO_TITLES = {
     "fx": "Ослабление сума",
 }
 FIN_YEARS = range(2026, 2033)
-FIN_KEYS = ("tariff_growth", "generation_factor", "fx_rate_factor", "opex_index", "tax_rate",
-            "kium")
+FIN_FIRST_YEAR = FIN_YEARS[0]
+FIN_YEAR_KEYS = ("tariff_growth", "generation_factor", "fx_rate_factor", "opex_index", "tax_rate",
+                 "kium", "capacity_add_mw")
+# S5: skalyar допущения — faqat model birinchi yili (FIN_FIRST_YEAR) qatorida saqlanadi.
+FIN_SCALAR_KEYS = ("tariff_start", "own_needs_share", "capex_fx_share")
+FIN_KEYS = FIN_YEAR_KEYS + FIN_SCALAR_KEYS
+# Har kalit uchun ruxsat etilgan oraliq (admin API tekshiradi; umumiy ±10 o'rniga).
+FIN_KEY_BOUNDS: dict[str, tuple[Decimal, Decimal]] = {
+    "tariff_growth": (Decimal("-0.5"), Decimal("1")),
+    "generation_factor": (Decimal("0"), Decimal("2")),
+    "fx_rate_factor": (Decimal("0.1"), Decimal("5")),
+    "opex_index": (Decimal("-0.5"), Decimal("1")),
+    "tax_rate": (Decimal("0"), Decimal("0.9")),
+    "kium": (Decimal("0.01"), Decimal("1")),
+    "capacity_add_mw": (Decimal("0"), Decimal("5000")),
+    "tariff_start": (Decimal("1"), Decimal("100000")),
+    "own_needs_share": (Decimal("0"), Decimal("0.5")),
+    "capex_fx_share": (Decimal("0"), Decimal("1")),
+}
 # Bazaviy допущения — vaqtinchalik (TZ ochiq savoli), mijoz tasdiqlagach yangilanadi.
 _BASE = {
     "tariff_growth": Decimal("0.08"),
@@ -110,15 +127,32 @@ _BASE = {
     "opex_index": Decimal("0.07"),
     "tax_rate": Decimal("0.15"),
     "kium": Decimal("0.40"),
+    "tariff_start": Decimal("705"),  # prototip: 2026 tarifi, so'm/kVt·soat
+    "own_needs_share": Decimal("0.016"),  # prototip ownSh
+    "capex_fx_share": Decimal("0.4"),  # prototip: investitsiyalarning valyutali qismi
 }
+# Prototip addCap: АИП bo'yicha ввод мощностей, MVt (2026 — joriy yil, quvvat allaqachon hisobda).
+_CAPACITY_ADD = {2026: 0, 2027: 120, 2028: 210, 2029: 95, 2030: 60, 2031: 40, 2032: 30}
+
+
+def fin_value_error(year: int, key: str, value: Decimal) -> str | None:
+    """Admin API tekshiruvi: noma'lum kalit, skalyar kalit noto'g'ri yilda, chegaradan tashqari."""
+    if key not in FIN_KEY_BOUNDS:
+        return "key"
+    if key in FIN_SCALAR_KEYS and year != FIN_FIRST_YEAR:
+        return "year"
+    low, high = FIN_KEY_BOUNDS[key]
+    if not value.is_finite() or not low <= value <= high:
+        return "value"
+    return None
 
 
 def fin_assumption_seeds() -> list[tuple[str, int, str, Decimal]]:
     rows: list[tuple[str, int, str, Decimal]] = []
     for scenario in SCENARIOS:
         for year in FIN_YEARS:
-            for key in FIN_KEYS:
-                value = _BASE[key]
+            for key in FIN_YEAR_KEYS:
+                value = Decimal(_CAPACITY_ADD[year]) if key == "capacity_add_mw" else _BASE[key]
                 if scenario == "water" and key == "generation_factor" and 2027 <= year <= 2029:
                     value = Decimal("0.85")  # маловодье: выработка −15% в 2027–2029
                 if scenario == "tariff" and key == "tariff_growth":
@@ -126,6 +160,8 @@ def fin_assumption_seeds() -> list[tuple[str, int, str, Decimal]]:
                 if scenario == "fx" and key == "fx_rate_factor":
                     value = Decimal("1.2")  # курс +20%
                 rows.append((scenario, year, key, value))
+            if year == FIN_FIRST_YEAR:
+                rows.extend((scenario, year, key, _BASE[key]) for key in FIN_SCALAR_KEYS)
     return rows
 
 

@@ -145,6 +145,12 @@ _EMAILS: TypeAdapter[Any] = TypeAdapter(Annotated[
     list[Annotated[str, Field(strict=True, pattern=EMAIL_RE, max_length=254)]],
     Field(max_length=20)])
 
+def _unique_codes(value: list[str]) -> list[str]:
+    if len(set(value)) != len(value):
+        raise ValueError("takrorlangan statya kodi")
+    return value
+
+
 _DEFS: tuple[SettingDef, ...] = (
     # Витрина va ETL (2-reja kalitlari — nomlar va chegaralar o'zgarmagan)
     int_def("freshness.max_age_hours", 6, 1, 168, category="data",
@@ -241,6 +247,16 @@ _DEFS: tuple[SettingDef, ...] = (
              title="Расписание полной загрузки склада 1С"),
     cron_def("etl.onec_sklad_incremental_cron", "30 10,13,16 * * *", category="etl",
              title="Расписание инкрементальной загрузки склада 1С"),
+    # S5: финмодель — ковенант va xarajat bazasidan chiqariladigan statyalar (masalan, 1C'da
+    # «operating» deb kelgan kapital xarajat statyalari)
+    float_def("finmodel.dscr_covenant", 1.2, 0.0001, 5.0, category="finmodel",
+              title="Ковенант DSCR (минимум)"),
+    SettingDef("finmodel.opex_exclude_items", [],
+               TypeAdapter(Annotated[
+                   list[Annotated[str, Field(strict=True, min_length=1, max_length=64)]],
+                   Field(max_length=200), AfterValidator(_unique_codes)]),
+               "list", category="finmodel", title="Статьи, исключаемые из операционных расходов",
+               apply="next_run"),
     # Sifat va saqlash
     float_def("quality.control_tolerance", 0.001, 0.0, 0.01, category="quality",
               title="Допуск сверки контрольных сумм (доля)", guarded=True, apply="next_run"),

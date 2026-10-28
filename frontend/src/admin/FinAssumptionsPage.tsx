@@ -10,8 +10,9 @@ import { Icon } from '../ui/icons';
 import { PageSkeleton } from '../ui/Skeleton';
 import { Tabs } from '../ui/Tabs';
 import { useToast } from '../ui/Toast';
-import { useFinAssumptions, useUpdateFinAssumptions } from './api';
+import { useFinAssumptions, useRequestEtlRun, useUpdateFinAssumptions } from './api';
 import { formatDecimal, parseDecimal } from './numbers';
+import type { AdminPageProps } from './registry';
 import { useFocusFirstInvalid } from './useFocusFirstInvalid';
 
 type Scenario = FinAssumptionItem['scenario'];
@@ -30,7 +31,31 @@ const KEY_TITLES: Record<string, MessageKey> = {
   opex_index: 'fin.key.opex_index',
   tax_rate: 'fin.key.tax_rate',
   kium: 'fin.key.kium',
+  capacity_add_mw: 'fin.key.capacity_add_mw',
+  tariff_start: 'fin.key.tariff_start',
+  own_needs_share: 'fin.key.own_needs_share',
+  capex_fx_share: 'fin.key.capex_fx_share',
 };
+
+/** S5: backend `FIN_KEY_BOUNDS` bilan bir xil oraliqlar (tekshiruv baribir serverda). */
+const KEY_BOUNDS: Record<string, readonly [number, number]> = {
+  tariff_growth: [-0.5, 1],
+  generation_factor: [0, 2],
+  fx_rate_factor: [0.1, 5],
+  opex_index: [-0.5, 1],
+  tax_rate: [0, 0.9],
+  kium: [0.01, 1],
+  capacity_add_mw: [0, 5000],
+  tariff_start: [1, 100000],
+  own_needs_share: [0, 0.5],
+  capex_fx_share: [0, 1],
+};
+
+function inBounds(key: string, value: number | null): value is number {
+  if (value === null) return false;
+  const [low, high] = KEY_BOUNDS[key] ?? [-10, 10];
+  return value >= low && value <= high;
+}
 
 function keyTitle(key: string): string {
   return Object.hasOwn(KEY_TITLES, key) ? t(KEY_TITLES[key] as MessageKey) : key;
@@ -38,17 +63,18 @@ function keyTitle(key: string): string {
 
 // numeric(18,6): DB aniqligiga yaxlitlab solishtiramiz, aks holda bir xil qiymat uchun yangi versiya yaratiladi.
 const round6 = (v: number) => Math.round(v * 1e6) / 1e6;
-const inRange = (v: number | null): v is number => v !== null && v >= -10 && v <= 10;
 
 function cellId(scenario: string, year: number, key: string): string {
   return `${scenario}|${year}|${key}`;
 }
 
-export default function FinAssumptionsPage() {
+export default function FinAssumptionsPage({ me }: Partial<AdminPageProps> = {}) {
   const errorId = useId();
   const data = useFinAssumptions();
   const update = useUpdateFinAssumptions();
   const toast = useToast();
+  const rebuild = useRequestEtlRun();
+  const canRebuild = me?.permissions.includes('admin:etl') ?? false;
   const [scenario, setScenario] = useState<Scenario>('base');
   const [draft, setDraft] = useState<Record<string, string>>({});
   const [attempt, setAttempt] = useState({}); // har «Сохранить» — yangi obyekt: fokus faqat bosilganda
@@ -75,7 +101,7 @@ export default function FinAssumptionsPage() {
   const parts = (id: string) => id.split('|') as [Scenario, string, string];
 
   // Noto'g'ri kataklar «Сохранить» bosilgandan keyin jonli hisoblanadi: to'g'rilangani xabardan ketadi.
-  const badIds = attempted ? changed.filter(([, text]) => !inRange(parseDecimal(text))).map(([id]) => id) : [];
+  const badIds = attempted ? changed.filter(([id, text]) => !inBounds(parts(id)[2], parseDecimal(text))).map(([id]) => id) : [];
   const badSet = new Set(badIds);
   const invalidLabels = badIds.map((id) => {
     const [sc, year, key] = parts(id);
@@ -89,7 +115,7 @@ export default function FinAssumptionsPage() {
     for (const [id, text] of changed) {
       const [sc, yearText, key] = parts(id);
       const value = parseDecimal(text);
-      if (!inRange(value)) firstBad ??= sc;
+      if (!inBounds(key, value)) firstBad ??= sc;
       else items.push({ scenario: sc, year: Number(yearText), key, value: round6(value) });
     }
     setAttempted(true);
@@ -121,6 +147,7 @@ export default function FinAssumptionsPage() {
         onChange={(id) => setScenario(SCENARIOS.find((s) => s.id === id)?.id ?? 'base')}
       >
         <p className="note">{t('fin.hint')}</p>
+        <p className="note">{t('fin.firstYearNote')}</p>
         <div ref={gridRef} className="tw tw--free">
           <table className="table matrix">
             <caption className="visually-hidden">{t(SCENARIOS.find((s) => s.id === scenario)?.titleKey ?? 'fin.scenario.base')}</caption>
@@ -176,6 +203,15 @@ export default function FinAssumptionsPage() {
       <div className="toolbar">
         <span className="note">{t('fin.changed', { count: changed.length })}</span>
         <span className="toolbar__grow" />
+        {canRebuild ? (
+          <Button
+            variant="secondary"
+            loading={rebuild.isPending}
+            onClick={() => rebuild.mutate({ source: 'rebuild', mode: 'full' }, { onSuccess: () => toast.show(t('fin.recalcDone'), 'success') })}
+          >
+            {t('fin.recalc')}
+          </Button>
+        ) : null}
         <Button variant="secondary" disabled={changed.length === 0} onClick={() => {
             setDraft({});
             setAttempted(false);

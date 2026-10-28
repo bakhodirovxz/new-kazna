@@ -205,6 +205,7 @@ PAYMENTS_MONTH = register(Aggregate("agg_payments_month", (_PAYMENTS,)))
 
 # S1 agregatlari (spec 5): shu modul yuklanganda ro'yxatga qo'shiladi (register allaqachon tayyor).
 from app.dwh import (  # noqa: E402, F401
+    finmodel_aggregates,
     hr_aggregates,
     investment_aggregates,
     loan_aggregates,

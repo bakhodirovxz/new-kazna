@@ -33,7 +33,8 @@ class LoanKpisOut(_Out):
     peak_year: int | None
     peak_amount: float | None
     missing_fx: list[str]
-    # DSCR = EBITDA / обслуживание долга — Финмодель (S5) ulanmaguncha None («нет данных»).
+    # DSCR = EBITDA года / обслуживание долга года — bazaviy ssenariy (S5); faqat «все филиалы»,
+    # aks holda None («нет данных»).
     dscr: float | None
 
 
@@ -97,7 +98,7 @@ def payment_out(p: LoanPayment) -> LoanPaymentOut:
                           interest=p.interest, total=p.total)
 
 
-def kpis_out(r: LoanReport) -> LoanKpisOut:
+def kpis_out(r: LoanReport, dscr: float | None = None) -> LoanKpisOut:
     peak = r.peak
     nxt = r.next_payment
     return LoanKpisOut(
@@ -106,7 +107,7 @@ def kpis_out(r: LoanReport) -> LoanKpisOut:
         next_payment=None if nxt is None else payment_out(nxt),
         peak_year=None if peak is None else peak.year,
         peak_amount=None if peak is None else peak.total,
-        missing_fx=r.missing_fx, dscr=None)
+        missing_fx=r.missing_fx, dscr=dscr)
 
 
 def years_out(r: LoanReport) -> list[LoanYearOut]:

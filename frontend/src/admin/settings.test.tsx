@@ -84,7 +84,7 @@ describe('FinAssumptionsPage', () => {
     await user.clear(cell);
     await user.type(cell, '99');
     await user.click(screen.getByRole('button', { name: 'Сохранить изменения' }));
-    expect(screen.getByRole('alert')).toHaveTextContent('Значение должно быть числом от −10 до 10: Маловодье · Рост тарифа · 2026');
+    expect(screen.getByRole('alert')).toHaveTextContent('Значение вне допустимого диапазона: Маловодье · Рост тарифа · 2026');
     expect(server.calls.some((c) => c.method === 'PUT')).toBe(false);
   });
 

@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 from datetime import date, datetime
+from decimal import Decimal
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from app.dwh.reference import FIN_KEYS, FIN_YEARS
+from app.dwh.reference import FIN_YEARS, fin_value_error
 
 
 class _In(BaseModel):
@@ -111,8 +112,8 @@ class FinAssumptionOut(BaseModel):
 class FinAssumptionItem(_In):
     scenario: Literal["base", "water", "tariff", "fx"]
     year: int
-    key: str
-    value: float = Field(ge=-10, le=10)
+    key: str = Field(min_length=1, max_length=64)
+    value: float = Field(allow_inf_nan=False)
 
     @field_validator("year")
     @classmethod
@@ -121,12 +122,13 @@ class FinAssumptionItem(_In):
             raise ValueError("year")
         return value
 
-    @field_validator("key")
-    @classmethod
-    def _key(cls, value: str) -> str:
-        if value not in FIN_KEYS:
-            raise ValueError("key")
-        return value
+    @model_validator(mode="after")
+    def _bounds(self) -> FinAssumptionItem:
+        # S5: har kalitning o'z oralig'i (tarif — so'mda, quvvat — MVt), skalyar — faqat 2026.
+        error = fin_value_error(self.year, self.key, Decimal(str(self.value)))
+        if error is not None:
+            raise ValueError(error)
+        return self
 
 
 class FinAssumptionsUpdate(_In):

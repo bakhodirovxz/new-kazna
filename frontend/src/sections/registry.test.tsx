@@ -29,7 +29,8 @@ it('resolves pages by file name and returns null for missing pages', async () =>
 it('resolves the real S1 pages and nothing for pages not built yet', () => {
   expect(resolveSectionPage('obzor', 'svod')).not.toBeNull();
   expect(resolveSectionPage('kazna', 'celevye')).not.toBeNull();
-  expect(resolveSectionPage('finmodel', 'svod')).toBeNull();
+  expect(resolveSectionPage('finmodel', 'svod')).not.toBeNull();
+  expect(resolveSectionPage('finmodel', 'nope')).toBeNull();
 });
 
 it('ignores Object.prototype names', () => {

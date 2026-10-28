@@ -9,7 +9,8 @@ export type IndicatorKey =
   | 'program' | 'invYtd' | 'schedule' | 'finExec' | 'physExec' | 'finGap' | 'advances' | 'objStatus'
   | 'headcount' | 'vacancies' | 'payroll' | 'avgSalary' | 'staffTurnover' | 'overtime'
   | 'generation' | 'genPlan' | 'capacity' | 'kium' | 'ownNeeds' | 'supply' | 'paymentLevel' | 'currentPower'
-  | 'stockValue' | 'turnover' | 'belowMin' | 'illiquid' | 'stockAge' | 'stockFlow';
+  | 'stockValue' | 'turnover' | 'belowMin' | 'illiquid' | 'stockAge' | 'stockFlow'
+  | 'finCapacity' | 'finRevenue' | 'finMargin' | 'finCapex' | 'finCumFlow' | 'finUnitCost' | 'finNetFlow';
 
 export function formula(key: IndicatorKey): string {
   return t(`formula.${key}` as MessageKey);

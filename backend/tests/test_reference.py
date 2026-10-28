@@ -49,7 +49,7 @@ def test_fin_assumptions_four_scenarios() -> None:
             text("SELECT scenario, year, key, value FROM core.fin_assumptions WHERE is_current")
         ).all()
     values = {(s, y, k): v for s, y, k, v in rows}
-    assert len(values) == 4 * 7 * 6
+    assert len(values) == 4 * 7 * 7 + 4 * 3
     assert {s for s, _, _ in values} == {"base", "water", "tariff", "fx"}
     assert values[("base", 2027, "tariff_growth")] == Decimal("0.08")
     assert values[("tariff", 2027, "tariff_growth")] == Decimal("0.04")
@@ -92,6 +92,7 @@ def test_settings_defaults_and_validation() -> None:
         "askue.stations", "askue.inbox_days", "askue.live_cron", "askue.live_keep_days",
         "askue.live_stale_minutes", "etl.askue_cron", "onec.sklad_months",
         "etl.onec_sklad_full_cron", "etl.onec_sklad_incremental_cron",
+        "finmodel.dscr_covenant", "finmodel.opex_exclude_items",
     } <= set(DEFAULT_SETTINGS)
 
 

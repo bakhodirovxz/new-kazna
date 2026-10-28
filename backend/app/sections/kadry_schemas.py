@@ -4,6 +4,10 @@ soatlar, ulushlar 0..1 — ФИО yoki shaxsga oid kalit yo'q
 
 from __future__ import annotations
 
+from dataclasses import asdict
+from datetime import date, datetime
+
+from app.sections.queries.attendance import Yavka
 from app.sections.queries.hr import HIDDEN_REASON, HrBranch, HrFigures, HrMonth, NamedValue
 from app.sections.schemas import ReportPeriodOut, _Out
 
@@ -133,3 +137,55 @@ def hr_month_out(m: HrMonth) -> HrMonthOut:
 def hr_category_out(c: NamedValue) -> HrCategoryOut:
     return HrCategoryOut(name=c.name, value=None if c.hidden else c.value, suppressed=c.hidden,
                          suppressed_reason=_reason(c.hidden))
+
+
+class YavkaFiguresOut(_Out):
+    employees: int
+    on_work: int
+    late: int
+    absent: int
+    trip: int
+    sick: int
+    leave: int
+    other_reason: int
+    rest: int
+
+
+class YavkaStatusOut(_Out):
+    code: str
+    label: str
+    kind: str
+    employees: int
+
+
+class YavkaBranchOut(_Out):
+    branch_id: int
+    name: str
+    employees: int
+    on_work: int
+    late: int
+    absent: int
+    attendance_rate: float | None
+
+
+class KadryYavkaOut(_Out):
+    has_source: bool
+    date: date | None
+    generated_at: datetime | None
+    stale: bool
+    totals: YavkaFiguresOut
+    statuses: list[YavkaStatusOut]
+    branches: list[YavkaBranchOut]
+
+
+def yavka_out(y: Yavka) -> KadryYavkaOut:
+    return KadryYavkaOut(
+        has_source=y.has_source, date=y.day, generated_at=y.generated_at, stale=y.stale,
+        totals=YavkaFiguresOut(**asdict(y.totals)),
+        statuses=[YavkaStatusOut(code=s.code, label=s.label, kind=s.kind, employees=s.employees)
+                  for s in y.statuses],
+        branches=[YavkaBranchOut(
+            branch_id=b.branch_id, name=b.name, employees=b.figures.employees,
+            on_work=b.figures.on_work, late=b.figures.late, absent=b.figures.absent,
+            attendance_rate=(round(b.figures.on_work / b.figures.employees, 4)
+                             if b.figures.employees else None)) for b in y.branches])

@@ -24,12 +24,15 @@ from app.sections.kadry_schemas import (
     KadryDvizhenieOut,
     KadryFotOut,
     KadrySvodOut,
+    KadryYavkaOut,
     hr_branch_out,
     hr_category_out,
     hr_kpis_out,
     hr_month_out,
+    yavka_out,
 )
-from app.sections.queries import hr
+from app.sections.proizvodstvo import Now
+from app.sections.queries import attendance, hr
 from app.sections.schemas import period_out
 
 router = APIRouter(prefix="/kadry", tags=["kadry"],
@@ -115,3 +118,10 @@ def fot(cache: Cache, db: DB, q: SQ) -> Response:
 @router.get("/dvizhenie", response_model=KadryDvizhenieOut)
 def dvizhenie(cache: Cache, db: DB, q: SQ) -> Response:
     return cache.respond("kadry.dvizhenie", q.cache_filters, lambda: build_dvizhenie(db, q))
+
+
+@router.get("/yavka", response_model=KadryYavkaOut)
+def yavka(db: DB, q: SQ, now: Now) -> KadryYavkaOut:
+    """Davomat (HR API): worker 10 daqiqada yangilaydi - kesh yo'q, har so'rovda o'qiladi."""
+    stale = int(current_setting(db.connection(), "hr.attendance_stale_minutes"))
+    return yavka_out(attendance.load(db, q.sel(), today=q.today, now=now, stale_minutes=stale))

@@ -8,7 +8,7 @@ API: `https://hr-api.uzgidro.uz` (без `/api/v1`), только чтение (
    (Изменить → причина + код 2FA → Проверить подключение). Адрес `hr.base_url` — только
    `https://` (по умолчанию `https://hr-api.uzgidro.uz`), секрет `hr.api_key` («API-ключ HR»)
    хранится зашифрованным; в файлах, `prod.env`, Docker secrets, журналах и браузере его нет.
-   Проверка подключения запрашивает `/directory/structure?branch_id=1` (без ФИО). При
+   Проверка подключения запрашивает `/directory/structure?include_empty=false` (без ФИО). При
    корпоративном сертификате — файл CA `HR_CA_FILE` (по умолчанию `/run/secrets/hr_ca_bundle`).
 2. Если имя `hr-api.uzgidro.uz` не разрешается DNS внутри сети, адрес закрепляется файлом
    `deploy/compose.override.yml` (сертификат по-прежнему проверяется по имени):
@@ -21,7 +21,8 @@ API: `https://hr-api.uzgidro.uz` (без `/api/v1`), только чтение (
    искажённые символы и используется только как запасной вариант). Готовое сопоставление для
    филиалов демо — `docs/integration/hr-orgs.example.json`:
    ```bash
-   docker compose -f deploy/compose.prod.yml exec worker      python -m app.cli hr-orgs --file /data/inbox/hr_orgs.json
+   docker compose -f deploy/compose.prod.yml exec worker \
+     python -m app.cli hr-orgs --file /data/inbox/hr_orgs.json
    ```
    Без `--file` — показать текущее сопоставление. Каждое изменение — новая версия и запись аудита.
    Не вошедшие в список организации (дочерние общества, Норин и Камчик без филиала в системе)

@@ -7,8 +7,15 @@ from __future__ import annotations
 from dataclasses import asdict
 from datetime import date, datetime
 
-from app.sections.queries.attendance import Yavka
-from app.sections.queries.hr import HIDDEN_REASON, HrBranch, HrFigures, HrMonth, NamedValue
+from app.sections.queries.attendance import BranchFigures, Yavka
+from app.sections.queries.hr import (
+    HIDDEN_REASON,
+    HrBranch,
+    HrFigures,
+    HrMonth,
+    NamedValue,
+    hide_small,
+)
 from app.sections.schemas import ReportPeriodOut, _Out
 
 
@@ -141,14 +148,14 @@ def hr_category_out(c: NamedValue) -> HrCategoryOut:
 
 class YavkaFiguresOut(_Out):
     employees: int
-    on_work: int
-    late: int
-    absent: int
-    trip: int
-    sick: int
-    leave: int
-    other_reason: int
-    rest: int
+    on_work: int | None
+    late: int | None
+    absent: int | None
+    trip: int | None
+    sick: int | None
+    leave: int | None
+    other_reason: int | None
+    rest: int | None
 
 
 class YavkaStatusOut(_Out):
@@ -162,10 +169,11 @@ class YavkaBranchOut(_Out):
     branch_id: int
     name: str
     employees: int
-    on_work: int
-    late: int
-    absent: int
+    on_work: int | None
+    late: int | None
+    absent: int | None
     attendance_rate: float | None
+    suppressed: bool = False
 
 
 class KadryYavkaOut(_Out):
@@ -173,19 +181,39 @@ class KadryYavkaOut(_Out):
     date: date | None
     generated_at: datetime | None
     stale: bool
+    suppressed: bool = False
+    suppressed_reason: str | None = None
     totals: YavkaFiguresOut
     statuses: list[YavkaStatusOut]
     branches: list[YavkaBranchOut]
 
 
-def yavka_out(y: Yavka) -> KadryYavkaOut:
+def _branch_out(b: BranchFigures, hidden: bool) -> YavkaBranchOut:
+    f = b.figures
+    if hidden:
+        return YavkaBranchOut(branch_id=b.branch_id, name=b.name, employees=f.employees,
+                              on_work=None, late=None, absent=None, attendance_rate=None,
+                              suppressed=True)
+    return YavkaBranchOut(
+        branch_id=b.branch_id, name=b.name, employees=f.employees, on_work=f.on_work,
+        late=f.late, absent=f.absent,
+        attendance_rate=round(f.on_work / f.employees, 4) if f.employees else None)
+
+
+def yavka_out(y: Yavka, min_group: int = 0) -> KadryYavkaOut:
+    """k-anonimlik (kadry.min_group): kichik guruhda holatlar bo'yicha sonlar yashiriladi."""
+    hidden = hide_small({b.branch_id: b.figures.employees for b in y.branches}, min_group)
+    total_hidden = bool(y.branches) and hide_small({0: y.totals.employees}, min_group) == {0}
+    totals = YavkaFiguresOut(**asdict(y.totals))
+    if total_hidden:
+        totals = YavkaFiguresOut(employees=y.totals.employees, on_work=None, late=None,
+                                 absent=None, trip=None, sick=None, leave=None,
+                                 other_reason=None, rest=None)
     return KadryYavkaOut(
         has_source=y.has_source, date=y.day, generated_at=y.generated_at, stale=y.stale,
-        totals=YavkaFiguresOut(**asdict(y.totals)),
-        statuses=[YavkaStatusOut(code=s.code, label=s.label, kind=s.kind, employees=s.employees)
-                  for s in y.statuses],
-        branches=[YavkaBranchOut(
-            branch_id=b.branch_id, name=b.name, employees=b.figures.employees,
-            on_work=b.figures.on_work, late=b.figures.late, absent=b.figures.absent,
-            attendance_rate=(round(b.figures.on_work / b.figures.employees, 4)
-                             if b.figures.employees else None)) for b in y.branches])
+        suppressed=total_hidden, suppressed_reason=HIDDEN_REASON if total_hidden else None,
+        totals=totals,
+        statuses=[] if total_hidden else [
+            YavkaStatusOut(code=s.code, label=s.label, kind=s.kind, employees=s.employees)
+            for s in y.statuses],
+        branches=[_branch_out(b, total_hidden or b.branch_id in hidden) for b in y.branches])

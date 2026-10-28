@@ -57,6 +57,7 @@ def test_api_key_header_get_only_no_login_and_not_in_repr() -> None:
     (422, '{"code":"invalid_date","message":"bad Каримов"}'.encode(), HrApiError,
      "invalid_date"),
     (502, b'', ConnectorUnavailableError, "HTTP 502"),
+    (404, b'{}', ConnectorUnavailableError, "HTTP 404"),
 ])
 def test_errors_are_classified_and_sanitized(status: int, body: bytes, exc: type[Exception],
                                              needle: str, caplog: pytest.LogCaptureFixture) -> None:
@@ -145,9 +146,10 @@ def test_hr_probe_codes_without_secrets_in_result() -> None:
             integrations.store_secret(conn, "hr.api_key", KEY, None)
         log: list[Any] = []
         assert probes.hr_probe(httpx.MockTransport(_server(log))) == "ok"
-        assert log[0][1:4] == ("/directory/structure", {"branch_id": "1"}, KEY)
+        assert log[0][1:4] == ("/directory/structure", {"include_empty": "false"}, KEY)
         assert probes.hr_probe(httpx.MockTransport(_server([], status=403))) == "auth_failed"
         assert probes.hr_probe(httpx.MockTransport(_server([], status=503))) == "http_error"
+        assert probes.hr_probe(httpx.MockTransport(_server([], status=404))) == "http_error"
         assert "hr" in probes.PROBES
     finally:
         clear_setting("hr.base_url")

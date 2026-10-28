@@ -222,3 +222,9 @@ def test_hr_notification_only_for_errors(monkeypatch: pytest.MonkeyPatch) -> Non
                                                message="m")
     worker.run_hr_job(notifier)
     assert notifier.kinds == ["hr_rows_rejected"]
+
+
+def test_name_fallback_only_for_entries_without_hr_id() -> None:
+    orgs = [HrOrg(org="Quyi Bo?zsuv GES", branch_code="UGE-12", hr_id=99)]
+    sink = _extract(FakeSource(), orgs)  # nom mos, lekin yozuvda hr_id bor -> nom bo'yicha emas
+    assert [t for t, _ in sink.rows if t == "fact_hr"] == []

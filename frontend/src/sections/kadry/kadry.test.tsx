@@ -4,7 +4,7 @@ import { expectNoAxeViolations } from '../../test/axe';
 import { ME_ADMIN } from '../../test/fixtures';
 import { json, mockApi } from '../../test/mockApi';
 import { renderWithProviders } from '../../test/render';
-import { KADRY_CHISL, KADRY_DVIZH, KADRY_EMPTY, KADRY_FOT, KADRY_SVOD, KADRY_YAVKA, KADRY_YAVKA_NONE, KADRY_YAVKA_STALE } from '../../test/s4Fixtures';
+import { KADRY_CHISL, KADRY_DVIZH, KADRY_EMPTY, KADRY_FOT, KADRY_SVOD, KADRY_YAVKA, KADRY_YAVKA_HIDDEN, KADRY_YAVKA_NONE, KADRY_YAVKA_STALE } from '../../test/s4Fixtures';
 import KadryChislennost from './chislennost';
 import KadryDvizhenie from './dvizhenie';
 import KadryFot from './fot';
@@ -60,6 +60,15 @@ describe('Кадры', () => {
     mockApi({ 'GET /kadry/svod': json(KADRY_SVOD), 'GET /kadry/yavka': json(KADRY_YAVKA_NONE), 'GET /auth/me': json(ME_ADMIN) });
     renderWithProviders(<KadrySvod section="kadry" page="svod" filters={filters} onBranch={vi.fn()} />);
     expect(await screen.findByText(/Источник данных не подключён: кадровая система \(HR API, явка\)/)).toBeInTheDocument();
+  });
+
+  it('Сводка: явка малой группы скрыта', async () => {
+    mockApi({ 'GET /kadry/svod': json(KADRY_SVOD), 'GET /kadry/yavka': json(KADRY_YAVKA_HIDDEN), 'GET /auth/me': json(ME_ADMIN) });
+    renderWithProviders(<KadrySvod section="kadry" page="svod" filters={filters} onBranch={vi.fn()} />);
+    const card = (await screen.findByRole('heading', { name: 'Явка сегодня' })).closest('section') as HTMLElement;
+    expect(within(card).getByText('В командировке').nextElementSibling).toHaveTextContent('скрыто (малая группа)');
+    const table = screen.getByRole('table', { name: 'Явка по филиалам' });
+    expect(within(table).getAllByText('скрыто (малая группа)').length).toBeGreaterThan(0);
   });
 
   it('Численность: vacancies by branch, largest first', async () => {

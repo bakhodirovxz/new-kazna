@@ -30,7 +30,7 @@ log = get_logger("ugekazna.probes")
 
 
 def hr_probe(transport: httpx.BaseTransport | None = None) -> str:
-    """HR API: arzon so'rov (bitta filial tuzilmasi, shaxsiy ma'lumotsiz). Faqat xavfsiz kod."""
+    """HR API: tuzilma so'rovi (shaxsiy ma'lumotsiz). Faqat xavfsiz kod."""
     with get_engine("app").connect() as conn:
         base = str(sysconfig.current(conn, "hr.base_url"))
         key = integrations.secret(conn, "hr.api_key")
@@ -43,7 +43,7 @@ def hr_probe(transport: httpx.BaseTransport | None = None) -> str:
     except ConfigError:
         return "not_configured"
     try:
-        client.get(STRUCTURE_PATH, {"branch_id": "1"})
+        client.get(STRUCTURE_PATH, {"include_empty": "false"})
     except ConnectorUnavailableError as exc:
         text_ = str(exc)
         return "timeout" if "тайм-аут" in text_ else (

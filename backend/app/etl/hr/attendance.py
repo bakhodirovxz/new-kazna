@@ -8,6 +8,7 @@ sonlar yoziladi. Filial - `hr.orgs[].hr_id` bo'yicha; moslashtirilmaganlar o'tka
 
 from __future__ import annotations
 
+from collections import defaultdict
 from dataclasses import dataclass
 from datetime import date, timedelta
 
@@ -37,33 +38,39 @@ class StoreResult:
 
 
 def store(conn: Connection, report: AttendanceReport, orgs: list[HrOrg]) -> StoreResult:
+    """Bir filialga bog'langan bir nechta HR tashkiloti yig'iladi; kunning eski qatorlari (qayta
+    moslashtirilgan/yo'qolgan tashkilot, sintetik demo) o'chirilib, yig'indi yoziladi."""
     codes = {o.hr_id: o.branch_code for o in orgs if o.hr_id is not None}
     ids: dict[str, int] = {r.code: r.branch_id for r in conn.execute(
         text("SELECT code, branch_id FROM dwh.dim_branch WHERE code = ANY(:c)"),
         {"c": list(codes.values()) or [""]})}
     meta = {s.code: s for s in report.statuses}
-    stored = skipped = 0
+    headcount: dict[int, int] = defaultdict(int)
+    cells: dict[tuple[int, str], list[int]] = {}
+    skipped = 0
     for branch in report.branches:
         branch_id = ids.get(codes.get(branch.hr_id, ""))
         if branch_id is None:
             skipped += 1
             continue
+        headcount[branch_id] += branch.employees
         for code, (days, employees) in branch.by_status.items():
-            st = meta.get(code)
-            conn.execute(text(
-                "INSERT INTO dwh.fact_attendance (att_date, branch_id, status_code, status_label, "
-                "status_kind, employees, person_days, branch_employees, generated_at) "
-                "VALUES (:d, :b, :c, :l, :k, :e, :p, :n, :g) "
-                "ON CONFLICT (att_date, branch_id, status_code) DO UPDATE SET "
-                "status_label = EXCLUDED.status_label, status_kind = EXCLUDED.status_kind, "
-                "employees = EXCLUDED.employees, person_days = EXCLUDED.person_days, "
-                "branch_employees = EXCLUDED.branch_employees, "
-                "generated_at = EXCLUDED.generated_at, loaded_at = now()"),
-                {"d": report.day, "b": branch_id, "c": code, "l": st.label if st else code,
-                 "k": st.kind if st else "other", "e": employees, "p": days,
-                 "n": branch.employees, "g": report.generated_at})
-            stored += 1
-    return StoreResult(stored, skipped)
+            cell = cells.setdefault((branch_id, code), [0, 0])
+            cell[0] += days
+            cell[1] += employees
+    if not cells and report.branches:
+        return StoreResult(0, skipped)  # hech narsa moslashmadi - mavjud ma'lumotni o'chirmaymiz
+    conn.execute(text("DELETE FROM dwh.fact_attendance WHERE att_date = :d"), {"d": report.day})
+    for (branch_id, code), (days, employees) in cells.items():
+        st = meta.get(code)
+        conn.execute(text(
+            "INSERT INTO dwh.fact_attendance (att_date, branch_id, status_code, status_label, "
+            "status_kind, employees, person_days, branch_employees, generated_at) "
+            "VALUES (:d, :b, :c, :l, :k, :e, :p, :n, :g)"),
+            {"d": report.day, "b": branch_id, "c": code, "l": st.label if st else code,
+             "k": st.kind if st else "other", "e": employees, "p": days,
+             "n": headcount[branch_id], "g": report.generated_at})
+    return StoreResult(len(cells), skipped)
 
 
 def poll_attendance(settings: Settings, day: date, *,
@@ -84,6 +91,9 @@ def poll_attendance(settings: Settings, day: date, *,
         result = store(conn, report, orgs)
         conn.execute(text("DELETE FROM dwh.fact_attendance WHERE att_date < :cut"),
                      {"cut": day - timedelta(days=KEEP_DAYS)})
+    if result.stored == 0 and report.branches:  # masalan hr.orgs da hr_id yo'q
+        log.warning("hr_attendance_unmapped", branches=len(report.branches),
+                    ids=[b.hr_id for b in report.branches][:30])
     return result
 
 

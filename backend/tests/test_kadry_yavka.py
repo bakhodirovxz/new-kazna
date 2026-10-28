@@ -110,3 +110,19 @@ def test_yesterday_shown_when_nothing_today(seeded: None, make_client: Callable[
                    make_user("rukovodstvo"))
     body = client.get(URL).json()
     assert body["date"] == "2026-10-28" and body["stale"] is True
+
+
+def test_small_group_is_suppressed(seeded: None, make_client: Callable[..., TestClient],
+                                   make_user: Callable[..., SeedUser]) -> None:
+    put_setting("kadry.min_group", 41)
+    try:
+        econ = login(make_client(GEN), make_user("economist_filiala", branch_ids=(3,)))
+        body = econ.get(URL).json()
+    finally:
+        put_setting("kadry.min_group", 5)
+    assert body["suppressed"] is True and body["statuses"] == []
+    assert body["totals"]["employees"] == 40 and body["totals"]["sick"] is None
+    row = body["branches"][0]
+    assert row["suppressed"] is True and row["on_work"] is None and row["attendance_rate"] is None
+    ok = login(make_client(GEN), make_user("rukovodstvo")).get(URL).json()
+    assert ok["suppressed"] is False and ok["totals"]["on_work"] == 60

@@ -124,4 +124,5 @@ def dvizhenie(cache: Cache, db: DB, q: SQ) -> Response:
 def yavka(db: DB, q: SQ, now: Now) -> KadryYavkaOut:
     """Davomat (HR API): worker 10 daqiqada yangilaydi - kesh yo'q, har so'rovda o'qiladi."""
     stale = int(current_setting(db.connection(), "hr.attendance_stale_minutes"))
-    return yavka_out(attendance.load(db, q.sel(), today=q.today, now=now, stale_minutes=stale))
+    return yavka_out(attendance.load(db, q.sel(), today=q.today, now=now, stale_minutes=stale),
+                     min_group())

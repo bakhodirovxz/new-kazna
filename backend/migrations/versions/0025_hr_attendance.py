@@ -48,11 +48,33 @@ STATEMENTS = [
 ]
 
 
+_SAME_BRANCH_MONTH = "o.branch_id = f.branch_id AND o.date_id / 100 = f.date_id / 100"
+_SAME_GRAIN = ("o.branch_id = f.branch_id AND o.pos_id = f.pos_id "
+               "AND o.date_id / 100 = f.date_id / 100")
+
+
+def _hr_effective(synthetic_same: str, synthetic_by: str) -> str:
+    """manual qatori tizim qatori bor donda yashiriladi; synthetic - `synthetic_by` bo'yicha."""
+    return (
+        "CREATE OR REPLACE VIEW dwh.hr_effective WITH (security_invoker = true) AS "
+        "SELECT f.* FROM dwh.fact_hr f "
+        "WHERE (f.src_system <> 'manual' OR NOT EXISTS (SELECT 1 FROM dwh.fact_hr o "
+        f"WHERE o.src_system NOT IN ('manual', 'synthetic') AND {_SAME_GRAIN})) "
+        "  AND (f.src_system <> 'synthetic' OR NOT EXISTS (SELECT 1 FROM dwh.fact_hr o "
+        f"WHERE o.src_system {synthetic_by} AND {synthetic_same}))")
+
+
 def upgrade() -> None:
     for statement in STATEMENTS:
         op.execute(statement)
+    # sintetik POS-* qatorlari haqiqiy HR-P-* bilan bir filial-oyda ikkilanmasin
+    op.execute(_hr_effective(_SAME_BRANCH_MONTH, "<> 'synthetic'"))
+    # Eski login/parol sirlari endi ishlatilmaydi (hr.api_key bilan almashtirilgan)
+    op.execute("DELETE FROM core.integration_credentials "
+               "WHERE name IN ('hr.username', 'hr.password')")
 
 
 def downgrade() -> None:
+    op.execute(_hr_effective(_SAME_GRAIN, "= 'manual'"))
     op.execute("DROP VIEW pub.attendance_daily")
     op.execute("DROP TABLE dwh.fact_attendance")

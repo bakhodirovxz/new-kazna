@@ -137,7 +137,7 @@ const NO_STAFF: HrKpisOut = {
 export const KADRY_EMPTY: KadrySvodOut = { period: PERIOD_M08_S4, kpis: NO_STAFF, months: HR_MONTHS, categories: [], branches: [] };
 
 export const KADRY_YAVKA: KadryYavkaOut = {
-  has_source: true, date: '2026-10-28', generated_at: '2026-10-28T06:12:00Z', stale: false,
+  has_source: true, date: '2026-10-28', generated_at: '2026-10-28T06:12:00Z', stale: false, suppressed: false, suppressed_reason: null,
   totals: { employees: 70, on_work: 60, late: 10, absent: 5, trip: 2, sick: 1, leave: 3, other_reason: 1, rest: 2 },
   statuses: [
     { code: 'present', label: 'Kelgan', kind: 'attendance', employees: 50 },
@@ -145,12 +145,17 @@ export const KADRY_YAVKA: KadryYavkaOut = {
     { code: 'dekret', label: "Tug'ruq", kind: 'reason', employees: 0 },
   ],
   branches: [
-    { branch_id: 3, name: 'Каскад Чирчикских ГЭС', employees: 40, on_work: 36, late: 6, absent: 3, attendance_rate: 0.9 },
-    { branch_id: 2, name: 'Чарвакская ГЭС', employees: 30, on_work: 24, late: 4, absent: 2, attendance_rate: 0.8 },
+    { branch_id: 3, name: 'Каскад Чирчикских ГЭС', employees: 40, on_work: 36, late: 6, absent: 3, attendance_rate: 0.9, suppressed: false },
+    { branch_id: 2, name: 'Чарвакская ГЭС', employees: 30, on_work: 24, late: 4, absent: 2, attendance_rate: 0.8, suppressed: false },
   ],
 };
 export const KADRY_YAVKA_STALE: KadryYavkaOut = { ...KADRY_YAVKA, stale: true };
 export const KADRY_YAVKA_NONE: KadryYavkaOut = {
-  has_source: false, date: null, generated_at: null, stale: false,
+  has_source: false, date: null, generated_at: null, stale: false, suppressed: false, suppressed_reason: null,
   totals: { employees: 0, on_work: 0, late: 0, absent: 0, trip: 0, sick: 0, leave: 0, other_reason: 0, rest: 0 }, statuses: [], branches: [],
+};
+export const KADRY_YAVKA_HIDDEN: KadryYavkaOut = {
+  ...KADRY_YAVKA, suppressed: true, suppressed_reason: 'скрыто (малая группа)', statuses: [],
+  totals: { employees: 40, on_work: null, late: null, absent: null, trip: null, sick: null, leave: null, other_reason: null, rest: null },
+  branches: [{ branch_id: 3, name: 'Каскад Чирчикских ГЭС', employees: 40, on_work: null, late: null, absent: null, attendance_rate: null, suppressed: true }],
 };

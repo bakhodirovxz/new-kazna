@@ -34,25 +34,28 @@ export function statusLabel(code: string, apiLabel: string): string {
   return Object.hasOwn(ru, key) ? t(key as MessageKey) : apiLabel;
 }
 
-function Tile({ label, value }: { label: string; value: number }) {
+const num = (value: number | null): string => (value === null ? t('kad.suppressed') : formatNumber(value));
+
+function Tile({ label, value }: { label: string; value: number | null }) {
   return (
     <div>
       <dt>{label}</dt>
-      <dd>{formatNumber(value)}</dd>
+      <dd>{num(value)}</dd>
     </div>
   );
 }
 
 function Summary({ data }: { data: KadryYavkaOut }) {
   const f = data.totals;
-  const rate = f.employees ? f.on_work / f.employees : null;
+  const rate = f.employees && f.on_work !== null ? f.on_work / f.employees : null;
   const others = data.statuses.filter((s) => s.kind === 'reason' && !REASON_CODES.has(s.code));
   return (
     <>
       <div className="bigline">
-        <b>{formatNumber(f.on_work)}</b>
+        <b>{num(f.on_work)}</b>
         <span>
-          {t('kad.att.onWork')}, {t('kad.att.rate', { pct: formatPct(rate, 1) })}
+          {t('kad.att.onWork')}
+          {rate === null ? '' : `, ${t('kad.att.rate', { pct: formatPct(rate, 1) })}`}
         </span>
       </div>
       <p className="note">
@@ -87,9 +90,9 @@ function BranchesTable({ rows, ctx, filters, onBranch, className }: { rows: Yavk
   const columns: Column<YavkaBranchOut>[] = [
     { key: 'name', header: headers[0] ?? '', cell: (b) => b.name, sortValue: (b) => b.name, wrap: true },
     { key: 'employees', header: headers[1] ?? '', cell: (b) => formatNumber(b.employees), sortValue: (b) => b.employees, align: 'right' },
-    { key: 'on_work', header: headers[2] ?? '', cell: (b) => <b>{formatNumber(b.on_work)}</b>, sortValue: (b) => b.on_work, align: 'right' },
-    { key: 'late', header: headers[3] ?? '', cell: (b) => formatNumber(b.late), sortValue: (b) => b.late, align: 'right' },
-    { key: 'absent', header: headers[4] ?? '', cell: (b) => formatNumber(b.absent), sortValue: (b) => b.absent, align: 'right' },
+    { key: 'on_work', header: headers[2] ?? '', cell: (b) => <b>{num(b.on_work)}</b>, sortValue: (b) => b.on_work, align: 'right' },
+    { key: 'late', header: headers[3] ?? '', cell: (b) => num(b.late), sortValue: (b) => b.late, align: 'right' },
+    { key: 'absent', header: headers[4] ?? '', cell: (b) => num(b.absent), sortValue: (b) => b.absent, align: 'right' },
     { key: 'rate', header: headers[5] ?? '', cell: (b) => formatPct(b.attendance_rate, 1), sortValue: (b) => b.attendance_rate, align: 'right' },
   ];
   return (

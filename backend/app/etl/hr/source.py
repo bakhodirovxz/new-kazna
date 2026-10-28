@@ -46,7 +46,7 @@ class HrApiSource:
 
     def healthcheck(self) -> HealthResult:
         try:
-            self.client.get(STRUCTURE_PATH, {"branch_id": "1"})
+            self.client.get(STRUCTURE_PATH, {"include_empty": "false"})
         except ConnectorUnavailableError as exc:
             return HealthResult(False, str(exc))
         return HealthResult(True, "HR API доступен")

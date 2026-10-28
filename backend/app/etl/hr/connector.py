@@ -63,7 +63,7 @@ class HrConnector:
             raise TypeError("HrConnector xatolarni yozish uchun ReportingSink talab qiladi")
         snap = self.hr.snapshot(self.today())
         by_id = {o.hr_id: o.branch_code for o in self.orgs if o.hr_id is not None}
-        by_name = {normalize_name(o.org): o.branch_code for o in self.orgs}
+        by_name = {normalize_name(o.org): o.branch_code for o in self.orgs if o.hr_id is None}
         sums: dict[tuple[str, str], int] = defaultdict(int)
         categories: dict[str, str] = {}
         unmapped: set[int] = set()

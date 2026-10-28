@@ -128,3 +128,33 @@ def test_jobs_skip_silently_without_key_and_swallow_errors(
     attendance.attendance_job(get_settings())  # xato log'ga yoziladi, ko'tarilmaydi
     attendance.attendance_job(get_settings(), days_back=1)
     assert "k3y-SECRET-123" not in caplog.text
+
+
+def test_two_hr_orgs_on_one_branch_are_summed_and_stale_rows_removed(orgs: None) -> None:
+    both = [attendance.HrOrg(org="x", branch_code="UGE-02", hr_id=1),
+            attendance.HrOrg(org="y", branch_code="UGE-02", hr_id=6)]
+
+    def rows() -> dict[str, tuple[int, int, int]]:
+        with etl_transaction() as conn:
+            return {r.status_code: (r.employees, r.person_days, r.branch_employees)
+                    for r in conn.execute(text(
+                        "SELECT status_code, employees, person_days, branch_employees "
+                        "FROM dwh.fact_attendance WHERE att_date = :d"), {"d": DAY})}
+
+    with etl_transaction() as conn:
+        first = attendance.store(conn, report(), both)
+    got = rows()
+    assert got["present"] == (50, 50, 70) and got["late"] == (10, 10, 70)
+    assert first.stored == len(got)
+    one = [attendance.HrOrg(org="x", branch_code="UGE-02", hr_id=1)]
+    with etl_transaction() as conn:
+        attendance.store(conn, report(), one)
+    got = rows()
+    assert got["present"] == (20, 20, 30) and "new_reason" not in got  # hr_id=6 qatorlari ketdi
+
+
+def test_warning_when_nothing_stored(orgs: None, capsys: pytest.CaptureFixture[str]) -> None:
+    put_setting("hr.orgs", [{"org": "no id", "branch_code": "UGE-02"}])
+    attendance.poll_attendance(get_settings(), DAY, client=_client())
+    out = capsys.readouterr()
+    assert "hr_attendance_unmapped" in out.out + out.err

@@ -96,7 +96,7 @@ class HrApiClient:
         if status in (401, 403):
             raise HrApiError(f"{WHERE} {path}: доступ запрещён (HTTP {status}), "
                              "проверьте API-ключ hr.api_key")
-        if status >= 500 or status == 429:  # 503 directory_disabled — справочник отключён
+        if status >= 500 or status in (404, 429):  # 404: manzil/token doirasi
             raise ConnectorUnavailableError(f"{WHERE} {path}: HTTP {status}{self._code(raw)}")
         if not 200 <= status < 300:
             raise HrApiError(f"{WHERE} {path}: HTTP {status}{self._code(raw)}")

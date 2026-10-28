@@ -3253,6 +3253,13 @@ export interface components {
             generated_at: string | null;
             /** Stale */
             stale: boolean;
+            /**
+             * Suppressed
+             * @default false
+             */
+            suppressed: boolean;
+            /** Suppressed Reason */
+            suppressed_reason?: string | null;
             totals: components["schemas"]["YavkaFiguresOut"];
             /** Statuses */
             statuses: components["schemas"]["YavkaStatusOut"][];
@@ -4533,34 +4540,39 @@ export interface components {
             /** Employees */
             employees: number;
             /** On Work */
-            on_work: number;
+            on_work: number | null;
             /** Late */
-            late: number;
+            late: number | null;
             /** Absent */
-            absent: number;
+            absent: number | null;
             /** Attendance Rate */
             attendance_rate: number | null;
+            /**
+             * Suppressed
+             * @default false
+             */
+            suppressed: boolean;
         };
         /** YavkaFiguresOut */
         YavkaFiguresOut: {
             /** Employees */
             employees: number;
             /** On Work */
-            on_work: number;
+            on_work: number | null;
             /** Late */
-            late: number;
+            late: number | null;
             /** Absent */
-            absent: number;
+            absent: number | null;
             /** Trip */
-            trip: number;
+            trip: number | null;
             /** Sick */
-            sick: number;
+            sick: number | null;
             /** Leave */
-            leave: number;
+            leave: number | null;
             /** Other Reason */
-            other_reason: number;
+            other_reason: number | null;
             /** Rest */
-            rest: number;
+            rest: number | null;
         };
         /** YavkaStatusOut */
         YavkaStatusOut: {

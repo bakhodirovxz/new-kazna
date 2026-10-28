@@ -270,13 +270,11 @@ def test_hr_synthetic_hidden_by_any_real_row_of_branch_month(published_synthetic
     try:
         with etl_transaction() as conn:
             conn.execute(text("DELETE FROM dwh.fact_hr WHERE src_id LIKE 'i3-%'"))
-            conn.execute(text("DELETE FROM dwh.fact_hr WHERE branch_id = 1 AND date_id / 100 = "
-                              "202609 AND src_system = 'synthetic'"))
-            conn.execute(text(ins), {"d": 20260915, "s": "synthetic", "i": "i3-s", "o": 0})
-            conn.execute(text(ins), {"d": 20260920, "s": "hrtest", "i": "i3-r", "o": 1})
+            conn.execute(text(ins), {"d": 20261215, "s": "synthetic", "i": "i3-s", "o": 0})
+            conn.execute(text(ins), {"d": 20261220, "s": "hrtest", "i": "i3-r", "o": 1})
             rows = {r[0] for r in conn.execute(text(
-                "SELECT src_id FROM dwh.hr_effective WHERE src_id LIKE 'i3-%'"))}
-            other_month = conn.execute(text(ins), {"d": 20260815, "s": "synthetic",
+                "SELECT src_id FROM dwh.hr_effective WHERE src_id LIKE 'i3-%'"))}  # sintetik yopiq
+            other_month = conn.execute(text(ins), {"d": 20261115, "s": "synthetic",
                                                    "i": "i3-m", "o": 0})
             rows2 = {r[0] for r in conn.execute(text(
                 "SELECT src_id FROM dwh.hr_effective WHERE src_id LIKE 'i3-%'"))}

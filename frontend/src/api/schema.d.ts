@@ -1091,6 +1091,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/kadry/yavka": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Yavka
+         * @description Davomat (HR API): worker 10 daqiqada yangilaydi - kesh yo'q, har so'rovda o'qiladi.
+         */
+        get: operations["yavka_api_v1_kadry_yavka_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/proizvodstvo/svod": {
         parameters: {
             query?: never;
@@ -3223,6 +3243,22 @@ export interface components {
             /** Branches */
             branches: components["schemas"]["HrBranchOut"][];
         };
+        /** KadryYavkaOut */
+        KadryYavkaOut: {
+            /** Has Source */
+            has_source: boolean;
+            /** Date */
+            date: string | null;
+            /** Generated At */
+            generated_at: string | null;
+            /** Stale */
+            stale: boolean;
+            totals: components["schemas"]["YavkaFiguresOut"];
+            /** Statuses */
+            statuses: components["schemas"]["YavkaStatusOut"][];
+            /** Branches */
+            branches: components["schemas"]["YavkaBranchOut"][];
+        };
         /** KaznaCalendarOut */
         KaznaCalendarOut: {
             period: components["schemas"]["ReportPeriodOut"];
@@ -4487,6 +4523,55 @@ export interface components {
         WithdrawIn: {
             /** Expected Version */
             expected_version: number;
+        };
+        /** YavkaBranchOut */
+        YavkaBranchOut: {
+            /** Branch Id */
+            branch_id: number;
+            /** Name */
+            name: string;
+            /** Employees */
+            employees: number;
+            /** On Work */
+            on_work: number;
+            /** Late */
+            late: number;
+            /** Absent */
+            absent: number;
+            /** Attendance Rate */
+            attendance_rate: number | null;
+        };
+        /** YavkaFiguresOut */
+        YavkaFiguresOut: {
+            /** Employees */
+            employees: number;
+            /** On Work */
+            on_work: number;
+            /** Late */
+            late: number;
+            /** Absent */
+            absent: number;
+            /** Trip */
+            trip: number;
+            /** Sick */
+            sick: number;
+            /** Leave */
+            leave: number;
+            /** Other Reason */
+            other_reason: number;
+            /** Rest */
+            rest: number;
+        };
+        /** YavkaStatusOut */
+        YavkaStatusOut: {
+            /** Code */
+            code: string;
+            /** Label */
+            label: string;
+            /** Kind */
+            kind: string;
+            /** Employees */
+            employees: number;
         };
         /** ZakBranchOut */
         ZakBranchOut: {
@@ -7078,6 +7163,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["KadryDvizhenieOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    yavka_api_v1_kadry_yavka_get: {
+        parameters: {
+            query?: {
+                br?: number | null;
+                per?: string;
+            };
+            header?: {
+                "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                "__Host-ugk_session"?: string | null;
+                "__Host-ugk_csrf"?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KadryYavkaOut"];
                 };
             };
             /** @description Validation Error */

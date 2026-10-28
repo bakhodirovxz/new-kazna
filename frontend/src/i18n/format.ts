@@ -43,6 +43,11 @@ export function formatDate(value: string | number | Date): string {
   return date ? dateFormat.format(date) : '—';
 }
 
+export function formatTime(value: string | number | Date): string {
+  const date = toDate(value);
+  return date ? timeFormat.format(date) : '—';
+}
+
 export function formatDateTime(value: string | number | Date): string {
   const date = toDate(value);
   return date ? `${dateFormat.format(date)} ${timeFormat.format(date)}` : '—';

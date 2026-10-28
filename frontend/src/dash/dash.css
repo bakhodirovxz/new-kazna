@@ -107,3 +107,9 @@
 .yoy--bad { color: var(--neg); }
 .split div.is-dark { color: var(--ink); }
 @media (max-width: 767.98px) { .cmp th, .cmp td { white-space: normal; padding: 0.5rem 0.4rem; } }
+.att { display: grid; grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr)); gap: 0.7rem 1rem; margin: 0.8rem 0 0; }
+.att div { min-width: 0; }
+.att dt { color: var(--muted); font-size: 0.9rem; }
+.att dd { margin: 0; font-size: 1.35rem; font-weight: 700; }
+.att-others { list-style: none; margin: 0.8rem 0 0; padding: 0; display: grid; gap: 0.25rem; font-size: 0.95rem; }
+.att-others li { display: flex; justify-content: space-between; gap: 1rem; border-top: 1px solid var(--line); padding-top: 0.25rem; }

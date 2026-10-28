@@ -140,3 +140,16 @@ def test_stage_rows_merge_with_future_dates(source: str) -> None:
             "SELECT stage_no, date_id, fact_date_id FROM dwh.fact_object_stage "
             "WHERE src_system = :s ORDER BY stage_no"), {"s": source}).all()
     assert [tuple(r) for r in got] == [(1, 20260315, 20260320), (2, 20271215, None)]
+
+
+def test_documented_hr_orgs_example_is_valid() -> None:
+    import json
+
+    from tests.ops.repo import repo_path
+
+    path = repo_path("docs/integration/hr-orgs.example.json")
+    value = validate_setting("hr.orgs", json.loads(path.read_text(encoding="utf-8")))
+    assert {o["hr_id"]: o["branch_code"] for o in value} == {
+        1: "UGE-01", 6: "UGE-02", 7: "UGE-03", 8: "UGE-07", 9: "UGE-09", 10: "UGE-12",
+        11: "UGE-05", 12: "UGE-10", 13: "UGE-14", 14: "UGE-04", 15: "UGE-06", 16: "UGE-13",
+        17: "UGE-16", 18: "UGE-15"}

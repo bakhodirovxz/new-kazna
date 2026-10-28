@@ -122,6 +122,7 @@ EXPECTED_ROUTES = frozenset({
     ("GET", "/api/v1/kadry/chislennost"),
     ("GET", "/api/v1/kadry/fot"),
     ("GET", "/api/v1/kadry/dvizhenie"),
+    ("GET", "/api/v1/kadry/yavka"),
     ("GET", "/api/v1/proizvodstvo/svod"),
     ("GET", "/api/v1/proizvodstvo/stancii"),
     ("GET", "/api/v1/proizvodstvo/realiz"),

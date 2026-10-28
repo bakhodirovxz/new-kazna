@@ -33,6 +33,7 @@ from tests.helpers import put_setting
 JOBS = {"etl_synthetic_full", "etl_onec_full", "etl_onec_incremental", "etl_requests", "partitions",
         "cleanup", "freshness", "heartbeat", "integration_checks", "schedules", "etl_banks",
         "etl_cbu", "telegram_summary", "etl_hr", "ai_journal", "etl_askue", "askue_live",
+        "hr_attendance", "hr_attendance_nightly",
         "etl_onec_sklad_full", "etl_onec_sklad_incremental"}
 
 

@@ -870,6 +870,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/finmodel/model": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Model */
+        get: operations["model_api_v1_finmodel_model_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/zakupki/svod": {
         parameters: {
             query?: never;
@@ -1380,6 +1397,57 @@ export interface paths {
         put?: never;
         /** Reject Batch */
         post: operations["reject_batch_api_v1_data_batches__batch_id__reject_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/data/entities/{entity_id}/template.csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Template Csv */
+        get: operations["template_csv_api_v1_data_entities__entity_id__template_csv_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/data/entities/{entity_id}/template.xlsx": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Template Xlsx */
+        get: operations["template_xlsx_api_v1_data_entities__entity_id__template_xlsx_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/data/entities/{entity_id}/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Import File */
+        post: operations["import_file_api_v1_data_entities__entity_id__import_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2505,6 +2573,141 @@ export interface components {
         FinAssumptionsUpdate: {
             /** Items */
             items: components["schemas"]["FinAssumptionItem"][];
+        };
+        /** FinBaseOut */
+        FinBaseOut: {
+            /**
+             * As Of
+             * Format: date
+             */
+            as_of: string;
+            /** Capacity Mw */
+            capacity_mw: number;
+            /** Opex Base */
+            opex_base: number;
+            /** Opex Months */
+            opex_months: number;
+            /** Opening Cash */
+            opening_cash: number;
+            /** Missing Fx */
+            missing_fx: string[];
+            /** Aip Missing Years */
+            aip_missing_years: number[];
+            /** Assumptions At */
+            assumptions_at: string | null;
+            /** Stale Assumptions */
+            stale_assumptions: boolean;
+            /** Covenant */
+            covenant: number;
+        };
+        /** FinSensitivityOut */
+        FinSensitivityOut: {
+            /** Scenario */
+            scenario: string;
+            /** Title */
+            title: string;
+            /** Delta Cum */
+            delta_cum: number;
+            /** Dscr Min */
+            dscr_min: number | null;
+        };
+        /** FinSummaryOut */
+        FinSummaryOut: {
+            /** Scenario */
+            scenario: string;
+            /** Title */
+            title: string;
+            /** Note */
+            note: string;
+            /** Capacity Last */
+            capacity_last: number;
+            /** Capacity Added */
+            capacity_added: number;
+            /** Revenue First */
+            revenue_first: number;
+            /** Revenue Last */
+            revenue_last: number;
+            /** Ebitda Total */
+            ebitda_total: number;
+            /** Margin Avg */
+            margin_avg: number | null;
+            /** Capex Total */
+            capex_total: number;
+            /** Debt Service Total */
+            debt_service_total: number;
+            /** Dscr Min */
+            dscr_min: number | null;
+            /** Dscr Min Year */
+            dscr_min_year: number | null;
+            /** Cum Flow */
+            cum_flow: number;
+            /** Negative Years */
+            negative_years: number;
+            /**
+             * Verdict
+             * @enum {string}
+             */
+            verdict: "funded" | "needs_financing";
+        };
+        /** FinYearOut */
+        FinYearOut: {
+            /** Year */
+            year: number;
+            /** Capacity Mw */
+            capacity_mw: number;
+            /** Generation */
+            generation: number;
+            /** Supply */
+            supply: number;
+            /** Tariff */
+            tariff: number;
+            /** Revenue */
+            revenue: number;
+            /** Opex */
+            opex: number;
+            /** Tax */
+            tax: number;
+            /** Ebitda */
+            ebitda: number;
+            /** Margin */
+            margin: number | null;
+            /** Capex Plan */
+            capex_plan: number;
+            /** Capex */
+            capex: number;
+            /** Principal */
+            principal: number;
+            /** Interest */
+            interest: number;
+            /** Debt Service */
+            debt_service: number;
+            /** Net Flow */
+            net_flow: number;
+            /** Balance */
+            balance: number;
+            /** Dscr */
+            dscr: number | null;
+            /** Covenant Breach */
+            covenant_breach: boolean;
+            /** Unit Cost */
+            unit_cost: number | null;
+        };
+        /** FinmodelOut */
+        FinmodelOut: {
+            /** Has Model */
+            has_model: boolean;
+            /** Scenario */
+            scenario: string;
+            /** Company Wide */
+            company_wide: boolean;
+            base: components["schemas"]["FinBaseOut"] | null;
+            /** Years */
+            years: components["schemas"]["FinYearOut"][];
+            summary: components["schemas"]["FinSummaryOut"] | null;
+            /** Scenarios */
+            scenarios: components["schemas"]["FinSummaryOut"][];
+            /** Sensitivity */
+            sensitivity: components["schemas"]["FinSensitivityOut"][];
         };
         /** FreshnessOut */
         FreshnessOut: {
@@ -6372,6 +6575,45 @@ export interface operations {
             };
         };
     };
+    model_api_v1_finmodel_model_get: {
+        parameters: {
+            query?: {
+                scen?: string;
+                br?: number | null;
+                per?: string;
+            };
+            header?: {
+                "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                "__Host-ugk_session"?: string | null;
+                "__Host-ugk_csrf"?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FinmodelOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     svod_api_v1_zakupki_svod_get: {
         parameters: {
             query?: {
@@ -7589,6 +7831,123 @@ export interface operations {
         responses: {
             /** @description Successful Response */
             200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BatchOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    template_csv_api_v1_data_entities__entity_id__template_csv_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
+            };
+            path: {
+                entity_id: string;
+            };
+            cookie?: {
+                "__Host-ugk_session"?: string | null;
+                "__Host-ugk_csrf"?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    template_xlsx_api_v1_data_entities__entity_id__template_xlsx_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
+            };
+            path: {
+                entity_id: string;
+            };
+            cookie?: {
+                "__Host-ugk_session"?: string | null;
+                "__Host-ugk_csrf"?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    import_file_api_v1_data_entities__entity_id__import_post: {
+        parameters: {
+            query: {
+                branch_id: number;
+            };
+            header?: {
+                "X-CSRF-Token"?: string | null;
+                "X-UGK-Background"?: string | null;
+            };
+            path: {
+                entity_id: string;
+            };
+            cookie?: {
+                "__Host-ugk_session"?: string | null;
+                "__Host-ugk_csrf"?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/octet-stream": string;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
                 headers: {
                     [name: string]: unknown;
                 };

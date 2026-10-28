@@ -186,11 +186,16 @@ def totals(db: Session, sel: BranchSel, period: ReportPeriod,
            salary_codes: list[str], min_group: int = 0) -> HrFigures:
     where, params = sel.total("h.branch_id")
     snap = _snap_month(db, where, params, period.last_month)
-    heads = db.execute(text(
+    head = db.execute(text(
+        "SELECT coalesce(sum(h.headcount_plan), 0) AS plan, "
+        "coalesce(sum(h.headcount_fact), 0) AS fact FROM pub.agg_hr_month h "
+        f"WHERE {where} AND h.month_id = :snap"), {**params, "snap": snap or 0}).one()
+    r_where, r_params = sel.rows("h.branch_id")  # jami qator (0) filial qamrovini ko'rsatmaydi
+    per_branch = db.execute(text(
         "SELECT sum(h.headcount_plan) AS plan, sum(h.headcount_fact) AS fact "
-        f"FROM pub.agg_hr_month h WHERE {where} AND h.month_id = :snap GROUP BY h.branch_id"),
-        {**params, "snap": snap or 0}).all()
-    plan = staff_plan([(num(r.plan), num(r.fact)) for r in heads])
+        f"FROM pub.agg_hr_month h WHERE {r_where} AND h.month_id = :snap GROUP BY h.branch_id"),
+        {**r_params, "snap": snap or 0}).all()
+    covered = staff_plan([(num(r.plan), num(r.fact)) for r in per_branch]) > 0
     flow = db.execute(text(
         "SELECT coalesce(sum(h.hired), 0) AS hired, coalesce(sum(h.fired), 0) AS fired, "
         "coalesce(sum(h.overtime_hours), 0) AS ot FROM pub.agg_hr_month h "
@@ -199,7 +204,8 @@ def totals(db: Session, sel: BranchSel, period: ReportPeriod,
     c_where, c_params = sel.total("c.branch_id")
     payroll, outflow = _payroll(db, c_where, c_params, list(period.months), salary_codes)
     return HrFigures(
-        snap_month=snap, plan=plan, fact=sum(num(r.fact) for r in heads), payroll=payroll,
+        snap_month=snap, plan=num(head.plan) if covered else 0.0, fact=num(head.fact),
+        payroll=payroll,
         outflow=outflow, hired=int(flow.hired), fired=int(flow.fired), overtime=num(flow.ot),
         months=round(period.month_equivalents, 6), min_group=min_group)
 

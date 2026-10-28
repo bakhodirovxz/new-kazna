@@ -87,11 +87,24 @@ def poll_attendance(settings: Settings, day: date, *,
     return result
 
 
+def _seed_demo() -> None:
+    from app.etl.synthetic import SyntheticConnector
+    from app.etl.synthetic.families.attendance import seed_attendance
+
+    today = today_tashkent()
+    with etl_transaction() as conn:
+        result = seed_attendance(conn, SyntheticConnector(as_of=today).model, today, days=1)
+    log.info("hr_attendance_demo", stored=result.stored)
+
+
 def attendance_job(settings: Settings, days_back: int = 0) -> None:
     """Worker jobi (U5: shartsiz qo'shiladi); xato ko'tarilmaydi - oxirgi ma'lumot qoladi."""
     with get_engine("app").connect() as conn:
         ready = integrations.configured(conn, "hr")
     if not ready:
+        if settings.env == "dev" and days_back == 0:  # demo: HR yo'q - sintetik davomat yangilanadi
+            _seed_demo()
+            return
         log.info("hr_attendance_skipped", reason="not_configured")
         return
     day = today_tashkent() - timedelta(days=days_back)

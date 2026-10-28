@@ -327,6 +327,18 @@ def _cleanup() -> int:
     return 0
 
 
+def _seed_demo_attendance() -> None:
+    """Demo: sintetik yuklashdan keyin oxirgi 14 kunlik davomat (HR API yo'q, 16 filial)."""
+    from app.dwh.dates import today_tashkent
+    from app.etl.synthetic import SyntheticConnector
+    from app.etl.synthetic.families.attendance import seed_attendance
+
+    today = today_tashkent()
+    with etl_transaction() as conn:
+        result = seed_attendance(conn, SyntheticConnector(as_of=today).model, today, days=14)
+    _out(f"davomat (demo): {result.stored} qator")
+
+
 def _etl_run(source: str, mode: str, no_retry: bool, allow_full_replace: bool = False) -> int:
     if source == "file" and mode == "full" and not allow_full_replace:
         _out(f"Xato: {FILE_FULL_REFUSED}")
@@ -349,6 +361,8 @@ def _etl_run(source: str, mode: str, no_retry: bool, allow_full_replace: bool = 
     _out(f"run={result.run_id} status={result.status} build={result.build_id}")
     if result.error:
         _out(f"xato: {result.error}")
+    if source == "synthetic" and result.status == "success":
+        _seed_demo_attendance()
     return 0 if result.status == "success" else 1
 
 

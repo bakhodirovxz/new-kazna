@@ -1,6 +1,0 @@
-{"data": [
-  {"organization": "Чорвоқ ГЭС", "category": "Руководители", "employees_count": 9, "staff_units": 10, "hired": 1, "fired": 0, "overtime_hours": 20, "manager_full_name": "Иванов Иван Иванович", "pinfl": "12345678901234"},
-  {"organization": "Чорвоқ ГЭС", "category": "Оперативный персонал", "employees_count": 81, "staff_units": 90, "hired": 2, "fired": 3, "overtime_hours": 400},
-  {"organization": "Фарҳод ГЭС", "category": "Руководители", "employees_count": 5},
-  {"organization": "Неизвестный филиал", "category": "Руководители", "employees_count": 3}
-]}

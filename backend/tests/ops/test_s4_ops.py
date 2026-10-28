@@ -5,7 +5,7 @@ import yaml
 
 from tests.ops.repo import repo_path
 
-HR = {"hr_username", "hr_password"}  # U10: HR hisobi Docker secret emas — panel (integrations)
+HR = {"hr_username", "hr_password", "hr_api_key"}  # U10: HR kaliti Docker secret emas — panel
 DOCS = {
     "docs/integration/zakupki-format.md": (
         "fact_procurement.csv", "договор заключён", "на оценке", "eshop", "direct",
@@ -17,11 +17,11 @@ DOCS = {
         "fact_hr.csv", "dim_position.csv", "headcount_plan", "overtime_hours",
         "kazna.calendar_kinds", "ФИО"),
     "docs/integration/hr-connector.md": (
-        "hr.base_url", "hr.username", "hr-orgs", "hr-check", "extra_hosts",
-        "hr.breakdown_path", "no_branch_breakdown"),
+        "hr.base_url", "hr.api_key", "hr-orgs", "hr-check", "extra_hosts", "X-Api-Key",
+        "unmapped_org", "hr.attendance_cron", "hr-orgs.example.json"),
     "docs/integration/hr-sorov-s4.md": (
-        "organization", "staff_units", "hired", "fired", "overtime_hours",
-        "персональных данных", "только чтение"),
+        "/directory/structure", "/directory/attendance", "items", "персональных данных",
+        "только чтение"),
     "docs/integration/1c-sorov-s4.md": (
         "/purchasePlan", "org_uid", "purchase_method_name", "/purchaseRequests",
         "responsible_name", "КС-2"),

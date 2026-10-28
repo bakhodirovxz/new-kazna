@@ -1,0 +1,17 @@
+{"generated_at": "2026-10-28T05:00:00Z",
+ "summary": {"branches": 4, "departments": 9, "positions": 7, "employees": 100},
+ "branches": [
+  {"id": 1, "name": "O'zbekgidroenergo AJ", "departments_count": 3, "positions_count": 3, "employees_count": 30,
+   "departments": [{"id": 5, "name": "Boshqaruv", "employees_count": 30, "manager_full_name": "Иванов Иван Иванович"}],
+   "positions": [{"id": 1, "name": "Direktor", "razryad": null, "category": "rahbar", "employees_count": 4},
+                 {"id": 2, "name": "Muhandis", "razryad": 9, "category": "mutaxassis", "employees_count": 20},
+                 {"id": 3, "name": "Kotib", "razryad": 5, "category": null, "employees_count": 6}]},
+  {"id": 6, "name": "O?rta Chirchiq GES", "departments_count": 1, "positions_count": 2, "employees_count": 40,
+   "departments": [], "positions": [{"id": 4, "name": "Usta", "razryad": 7, "category": "ishchi", "employees_count": 25},
+                                    {"id": 7, "name": "Navbatchi", "razryad": 6, "category": "ishchi", "employees_count": 10},
+                                    {"id": 8, "name": "Hisobchi", "razryad": 6, "category": "xizmatchi", "employees_count": 5}]},
+  {"id": 10, "name": "Quyi Bo?zsuv GES", "departments_count": 1, "positions_count": 1, "employees_count": 20,
+   "departments": [], "positions": [{"id": 9, "name": "Usta", "razryad": 7, "category": "ishchi", "employees_count": 20}]},
+  {"id": 25, "name": "UGE-JINLUN", "departments_count": 1, "positions_count": 1, "employees_count": 10,
+   "departments": [], "positions": [{"id": 11, "name": "Menejer", "razryad": 8, "category": "rahbar", "employees_count": 10}]}
+ ]}

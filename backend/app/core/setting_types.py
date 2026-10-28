@@ -155,13 +155,16 @@ class HrOrg(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
     org: Annotated[str, Field(min_length=1, max_length=200)]
     branch_code: Annotated[str, Field(min_length=1, max_length=32)]
+    # HR filial `id` (barqaror); berilsa nomdan oldin shu bo'yicha moslashtiriladi
+    hr_id: Annotated[int, Field(ge=1, le=1_000_000)] | None = None
 
 
-def hr_orgs(value: list[HrOrg]) -> list[dict[str, str]]:
+def hr_orgs(value: list[HrOrg]) -> list[dict[str, str | int]]:
     names = [normalize_org(o.org) for o in value]
-    if not all(names) or len(set(names)) != len(names):
-        raise ValueError("hr.orgs: tashkilot nomi bo'sh yoki takrorlangan")
-    return [o.model_dump() for o in value]
+    ids = [o.hr_id for o in value if o.hr_id is not None]
+    if not all(names) or len(set(names)) != len(names) or len(set(ids)) != len(ids):
+        raise ValueError("hr.orgs: tashkilot nomi/hr_id bo'sh yoki takrorlangan")
+    return [o.model_dump(exclude_none=True) for o in value]
 
 
 _BAD_HOSTS = frozenset({"localhost", "metadata.google.internal", "metadata", "instance-data"})

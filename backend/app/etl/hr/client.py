@@ -1,18 +1,16 @@
-"""HR API mijozi (S4 spec 3.3): server tomonida login, token faqat shu obyekt xotirasida.
+"""HR API mijozi (hr-api.uzgidro.uz): `X-Api-Key` sarlavhasi bilan faqat GET, login yo'q.
 
-Eski dashboard (proxy.php `hr_token`) bilan bir xil oqim: POST /auth/login (form-urlencoded) →
-access_token + expires_in; so'rovlarga `Authorization: Bearer`. Token muddati tugashidan 60 s
-oldin yoki 401 javobida bir marta yangilanadi. Faqat https, TLS tekshiruvi (ixtiyoriy
-korporativ CA), trust_env=False, redirect yo'q, javob hajmi chegarasi. Xato matnlariga javob
-tanasi, token yoki parol yozilmaydi.
+Token faqat shu obyekt xotirasida (admin panel sirlari, `hr.api_key`); repr/xato/log'ga
+chiqmaydi. Faqat https, TLS tekshiruvi (ixtiyoriy korporativ CA), trust_env=False, redirect yo'q,
+javob hajmi chegarasi. Xato matniga javob tanasi kirmaydi — faqat HTTP kod va `code` maydoni
+(oq ro'yxat).
 """
 
 from __future__ import annotations
 
 import json
+import re
 import ssl
-import time
-from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
@@ -22,11 +20,11 @@ import httpx
 from app.core.config import ConfigError
 from app.etl.types import ConnectorUnavailableError
 
-TIMEOUT = httpx.Timeout(connect=5.0, read=60.0, write=10.0, pool=5.0)
+# Oylik so'rovlar bir necha soniya oladi (HR hujjati) — o'qish uchun keng vaqt.
+TIMEOUT = httpx.Timeout(connect=5.0, read=120.0, write=10.0, pool=5.0)
 MAX_BYTES = 8 * 1024 * 1024
-LOGIN_PATH = "/auth/login"
-_DEFAULT_TTL = 3600
 WHERE = "HR API"
+_CODE = re.compile(r"^[a-z_]{1,40}$")
 
 
 def ca_context(path: str) -> ssl.SSLContext | bool:
@@ -37,29 +35,23 @@ def ca_context(path: str) -> ssl.SSLContext | bool:
 
 
 class HrApiError(ValueError):
-    """Qayta urinilmaydigan xato (hisob, format, 4xx)."""
+    """Qayta urinilmaydigan xato (kalit, format, 4xx)."""
 
 
 class HrApiClient:
-    def __init__(self, base_url: str, username: str, password: str, *,
-                 verify: ssl.SSLContext | bool = True, proxy: str = "",
-                 transport: httpx.BaseTransport | None = None, timeout: httpx.Timeout = TIMEOUT,
-                 max_bytes: int = MAX_BYTES, clock: Callable[[], float] = time.monotonic) -> None:
+    def __init__(self, base_url: str, api_key: str, *, verify: ssl.SSLContext | bool = True,
+                 proxy: str = "", transport: httpx.BaseTransport | None = None,
+                 timeout: httpx.Timeout = TIMEOUT, max_bytes: int = MAX_BYTES) -> None:
         parsed = urlsplit(base_url)
         if parsed.scheme != "https" or not parsed.netloc:
-            raise ConfigError("HR_BASE_URL https:// manzil bo'lishi kerak")
-        if not username or not password:
-            raise ConfigError("hr_username/hr_password sirlari bo'sh")
-        self._username = username
-        self._password = password
-        self._token: str | None = None
-        self._expires = 0.0
-        self._clock = clock
+            raise ConfigError("hr.base_url https:// manzil bo'lishi kerak")
+        if not api_key:
+            raise ConfigError("hr.api_key siri bo'sh")
         self.max_bytes = max_bytes
         self.http = httpx.Client(
             base_url=base_url.rstrip("/"), timeout=timeout, verify=verify, trust_env=False,
             follow_redirects=False, proxy=proxy or None, transport=transport,
-            headers={"Accept": "application/json"})
+            headers={"Accept": "application/json", "X-Api-Key": api_key})
 
     def __repr__(self) -> str:
         return f"HrApiClient({self.http.base_url!s})"
@@ -67,11 +59,11 @@ class HrApiClient:
     def close(self) -> None:
         self.http.close()
 
-    def _read(self, method: str, path: str, **kw: Any) -> tuple[int, bytes]:
+    def _read(self, path: str, params: dict[str, str] | None) -> tuple[int, bytes]:
         chunks: list[bytes] = []
         size = 0
         try:
-            with self.http.stream(method, path, **kw) as response:
+            with self.http.stream("GET", path, params=params) as response:
                 status = response.status_code
                 for chunk in response.iter_bytes():
                     size += len(chunk)
@@ -82,8 +74,6 @@ class HrApiClient:
             raise ConnectorUnavailableError(f"{WHERE} {path}: тайм-аут") from exc
         except httpx.TransportError as exc:
             raise ConnectorUnavailableError(f"{WHERE} {path}: {type(exc).__name__}") from exc
-        if status >= 500 or status == 429:
-            raise ConnectorUnavailableError(f"{WHERE} {path}: HTTP {status}")
         return status, b"".join(chunks)
 
     @staticmethod
@@ -93,36 +83,21 @@ class HrApiClient:
         except (UnicodeDecodeError, json.JSONDecodeError) as exc:
             raise HrApiError(f"{WHERE} {path}: ответ не JSON") from exc
 
-    def login(self) -> None:
-        """Faqat kirish (probe: ma'lumot so'ralmaydi)."""
-        status, raw = self._read("POST", LOGIN_PATH,
-                                 data={"username": self._username, "password": self._password})
-        if status != 200:
-            raise HrApiError(f"{WHERE}: вход не выполнен (HTTP {status}), "
-                             "проверьте учётную запись hr_username/hr_password")
-        data = self._json(raw, LOGIN_PATH)
-        token = data.get("access_token") if isinstance(data, Mapping) else None
-        if not isinstance(token, str) or not token:
-            raise HrApiError(f"{WHERE}: ответ входа без access_token")
+    @staticmethod
+    def _code(raw: bytes) -> str:
         try:
-            ttl = int(data.get("expires_in", _DEFAULT_TTL))
-        except (TypeError, ValueError):
-            ttl = _DEFAULT_TTL
-        self._token = token
-        self._expires = self._clock() + max(60, ttl - 60)
+            code = json.loads(raw.decode("utf-8-sig")).get("code")
+        except (UnicodeDecodeError, ValueError, AttributeError):
+            return ""
+        return f", {code}" if isinstance(code, str) and _CODE.fullmatch(code) else ""
 
-    def _authorized(self, path: str) -> tuple[int, bytes]:
-        if self._token is None or self._clock() >= self._expires:
-            self.login()
-        return self._read("GET", path, headers={"Authorization": f"Bearer {self._token}"})
-
-    def get(self, path: str) -> Any:
-        status, raw = self._authorized(path)
-        if status == 401:  # token muddatidan oldin bekor qilingan — bir marta qayta kirish
-            self._token = None
-            status, raw = self._authorized(path)
-        if status == 401:
-            raise HrApiError(f"{WHERE} {path}: доступ запрещён после повторного входа")
+    def get(self, path: str, params: dict[str, str] | None = None) -> Any:
+        status, raw = self._read(path, params)
+        if status in (401, 403):
+            raise HrApiError(f"{WHERE} {path}: доступ запрещён (HTTP {status}), "
+                             "проверьте API-ключ hr.api_key")
+        if status >= 500 or status == 429:  # 503 directory_disabled — справочник отключён
+            raise ConnectorUnavailableError(f"{WHERE} {path}: HTTP {status}{self._code(raw)}")
         if not 200 <= status < 300:
-            raise HrApiError(f"{WHERE} {path}: HTTP {status}")
+            raise HrApiError(f"{WHERE} {path}: HTTP {status}{self._code(raw)}")
         return self._json(raw, path)

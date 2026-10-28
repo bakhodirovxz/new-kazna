@@ -85,22 +85,19 @@ def cbu_connector(settings: Settings, *, date_from: date | None = None,
 
 
 def _hr(settings: Settings) -> HrConnector:
-    """HR API: manzil va login/parol — admin panel (core.settings + shifrlangan sirlar, U6)."""
+    """HR API: manzil va API-kalit — admin panel (core.settings + shifrlangan sirlar, U6)."""
     with get_engine("etl").connect() as conn:
         base_url = str(sysconfig.current(conn, "hr.base_url"))
         if not base_url:
             raise ConfigError("hr.base_url berilmagan — HR API konnektori o'chiq "
                               "(Администрирование → Интеграции)")
-        username = integrations.secret(conn, "hr.username")
-        password = integrations.secret(conn, "hr.password")
-        if not username or not password:
-            raise ConfigError("hr.username/hr.password sirlari bo'sh "
-                              "(Администрирование → Интеграции)")
+        api_key = integrations.secret(conn, "hr.api_key")
+        if not api_key:
+            raise ConfigError("hr.api_key siri bo'sh (Администрирование → Интеграции)")
         orgs = sysconfig.current(conn, "hr.orgs")
-        path = str(sysconfig.current(conn, "hr.breakdown_path"))
-    client = HrApiClient(base_url, username, password, verify=ca_context(settings.hr_ca_file),
+    client = HrApiClient(base_url, api_key, verify=ca_context(settings.hr_ca_file),
                          proxy=settings.egress_proxy)
-    return HrConnector(HrApiSource(client, path), [HrOrg.model_validate(o) for o in orgs])
+    return HrConnector(HrApiSource(client), [HrOrg.model_validate(o) for o in orgs])
 
 
 def _askue(settings: Settings) -> AskueConnector:

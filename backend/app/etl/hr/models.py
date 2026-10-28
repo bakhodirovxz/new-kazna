@@ -1,26 +1,26 @@
-"""HR API javoblari — faqat agregatlar (TZ 9). Har qator faqat oq ro'yxatdagi kalitlardan
-o'qiladi; boshqa kalitlar (ФИО, ПИНФЛ, tabel raqami va h.k.) umuman o'qilmaydi, saqlanmaydi,
-log'ga yozilmaydi. `name` kaliti toifa sifatida QABUL QILINMAYDI — xodimlar ro'yxatidagi ism
-toifa deb adashib saqlanmasin.
+"""HR API javoblari — faqat agregatlar (TZ 9). Javob oq ro'yxat bo'yicha o'qiladi: tuzilmada
+filial `id`/`positions`, davomatda `statuses`/`summary`/`branches`. `items` (F.I.Sh. ro'yxati),
+bo'lim rahbarlari va boshqa kalitlar umuman o'qilmaydi, saqlanmaydi, log'ga yozilmaydi.
+Filial nomi faqat `hr.orgs` zaxira moslashtirishi uchun (buzilgan belgilar bo'lishi mumkin —
+asosiy moslashtirish `id` bo'yicha); saqlanmaydi.
 """
 
 from __future__ import annotations
 
+import re
 from collections.abc import Mapping
 from dataclasses import dataclass
-from decimal import Decimal, InvalidOperation
+from datetime import UTC, date, datetime
 from typing import Any
 
 from app.etl.hr.client import HrApiError
 
-_LIST_KEYS = ("data", "items", "results")
-_ORG = ("organization", "organization_name", "org_name", "org")
-_CATEGORY = ("category", "category_name", "position_category")
-_EMPLOYEES = ("employees_count", "employee_count", "count", "total")
-_STAFF = ("staff_units", "staff_count")
-_HIRED = ("hired", "hired_count")
-_FIRED = ("fired", "fired_count", "dismissed")
-_OVERTIME = ("overtime_hours",)
+# HR toifa kodi → hisobotlardagi toifa nomi (sintetik POS-1/POS-2 bilan bir xil «Руководители»,
+# «Специалисты»); toifasiz lavozim — alohida qator.
+CATEGORIES: dict[str | None, str] = {
+    "rahbar": "Руководители", "mutaxassis": "Специалисты", "xizmatchi": "Служащие",
+    "ishchi": "Рабочие", None: "Без категории"}
+_CODE = re.compile(r"^[a-z0-9_]{1,40}$")
 
 
 class HrFormatError(HrApiError):
@@ -28,79 +28,106 @@ class HrFormatError(HrApiError):
 
 
 @dataclass(frozen=True, slots=True)
-class BreakdownRow:
-    organization: str | None
+class StructureRow:
+    hr_id: int
+    organization: str
     category: str
     employees: int
-    staff: Decimal | None
-    hired: int | None
-    fired: int | None
-    overtime: Decimal | None
 
 
-def _first(item: Mapping[str, Any], keys: tuple[str, ...]) -> Any:
-    for key in keys:
-        if key in item and item[key] is not None:
-            return item[key]
-    return None
+@dataclass(frozen=True, slots=True)
+class Status:
+    code: str
+    label: str
+    kind: str
 
 
-def _number(value: Any, line: int) -> Decimal | None:
-    if value is None:
-        return None
-    if isinstance(value, bool):
-        raise HrFormatError(f"строка {line}: ожидается число")
-    try:
-        number = Decimal(str(value))
-    except InvalidOperation as exc:
-        raise HrFormatError(f"строка {line}: ожидается число") from exc
-    if not number.is_finite() or number < 0:
-        raise HrFormatError(f"строка {line}: отрицательное или недопустимое число")
-    return number
+@dataclass(frozen=True, slots=True)
+class BranchAttendance:
+    hr_id: int
+    employees: int
+    by_status: dict[str, tuple[int, int]]  # kod → (odam-kun, xodimlar)
 
 
-def _int(value: Any, line: int) -> int | None:
-    number = _number(value, line)
-    return None if number is None else int(number)
+@dataclass(frozen=True, slots=True)
+class AttendanceReport:
+    day: date
+    generated_at: datetime
+    statuses: tuple[Status, ...]
+    branches: tuple[BranchAttendance, ...]
 
 
-def parse_main(data: Any) -> int | None:
+def _int(value: Any, what: str) -> int:
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        raise HrFormatError(f"{what}: ожидается неотрицательное целое число")
+    return value
+
+
+def _list(data: Mapping[str, Any], key: str) -> list[Any]:
+    value = data.get(key)
+    if not isinstance(value, list):
+        raise HrFormatError(f"HR API: неожиданная структура ответа ({key})")
+    return value
+
+
+def _map(data: Any) -> Mapping[str, Any]:
     if not isinstance(data, Mapping):
-        return None
-    value = _first(data, ("total_employees_count", "total_count"))
+        raise HrFormatError("HR API: неожиданная структура ответа (ожидается объект)")
+    return data
+
+
+def parse_total(data: Any) -> int | None:
+    summary = _map(data).get("summary")
+    value = summary.get("employees") if isinstance(summary, Mapping) else None
+    return value if isinstance(value, int) and not isinstance(value, bool) and value >= 0 \
+        else None
+
+
+def parse_structure(data: Any) -> list[StructureRow]:
+    """Filial × toifa bo'yicha xodimlar soni (lavozimlar `category` bo'yicha yig'iladi)."""
+    sums: dict[tuple[int, str, str], int] = {}
+    for branch in _list(_map(data), "branches"):
+        branch = _map(branch)
+        hr_id = _int(branch.get("id"), "branches.id")
+        name = branch.get("name")
+        name = name.strip()[:200] if isinstance(name, str) else ""
+        for pos in _list(branch, "positions"):
+            pos = _map(pos)
+            code = pos.get("category")
+            if code not in CATEGORIES:
+                code = None  # yangi/noma'lum toifa — «без категории»
+            key = (hr_id, name, CATEGORIES[code])
+            sums[key] = sums.get(key, 0) + _int(pos.get("employees_count"), "employees_count")
+    return [StructureRow(i, o, c, n) for (i, o, c), n in sums.items() if n > 0]
+
+
+def parse_attendance(data: Any) -> AttendanceReport:
+    root = _map(data)
     try:
-        return _int(value, 0)
-    except HrFormatError:
-        return None
-
-
-def _items(data: Any) -> list[Any]:
-    if isinstance(data, list):
-        return data
-    if isinstance(data, Mapping):
-        for key in _LIST_KEYS:
-            if isinstance(data.get(key), list):
-                return list(data[key])
-        if data and all(isinstance(v, int | float) and not isinstance(v, bool)
-                        for v in data.values()):
-            return [{"category": k, "count": v} for k, v in data.items()]
-    raise HrFormatError("HR API: неожиданная структура ответа (ожидается список агрегатов)")
-
-
-def parse_breakdown(data: Any) -> list[BreakdownRow]:
-    rows: list[BreakdownRow] = []
-    for line, item in enumerate(_items(data), start=1):
-        if not isinstance(item, Mapping):
-            raise HrFormatError(f"строка {line}: ожидается объект")
-        category = _first(item, _CATEGORY)
-        employees = _int(_first(item, _EMPLOYEES), line)
-        if not isinstance(category, str) or not category.strip() or employees is None:
-            raise HrFormatError(f"строка {line}: нет категории или численности")
-        org = _first(item, _ORG)
-        rows.append(BreakdownRow(
-            organization=org.strip()[:200] if isinstance(org, str) and org.strip() else None,
-            category=category.strip()[:100], employees=employees,
-            staff=_number(_first(item, _STAFF), line), hired=_int(_first(item, _HIRED), line),
-            fired=_int(_first(item, _FIRED), line),
-            overtime=_number(_first(item, _OVERTIME), line)))
-    return rows
+        generated = datetime.fromisoformat(str(root["generated_at"]))
+        day = date.fromisoformat(str(_map(root["period"])["date_from"]))
+    except (KeyError, ValueError) as exc:
+        raise HrFormatError("HR API: нет generated_at/period.date_from") from exc
+    if generated.tzinfo is None:
+        generated = generated.replace(tzinfo=UTC)
+    statuses = []
+    for s in _list(root, "statuses"):
+        s = _map(s)
+        code, label, kind = s.get("code"), s.get("label"), s.get("kind")
+        if not (isinstance(code, str) and _CODE.fullmatch(code) and isinstance(label, str)
+                and isinstance(kind, str)):
+            raise HrFormatError("HR API: статус без code/label/kind")
+        statuses.append(Status(code, label.strip()[:120], kind[:24]))
+    branches = []
+    for b in _list(root, "branches"):
+        b = _map(b)
+        by_status: dict[str, tuple[int, int]] = {}
+        for code, cell in _map(b.get("by_status")).items():
+            if not isinstance(code, str) or not _CODE.fullmatch(code):
+                raise HrFormatError("HR API: недопустимый код статуса")
+            cell = _map(cell)
+            by_status[code] = (_int(cell.get("days"), "days"),
+                               _int(cell.get("employees"), "employees"))
+        branches.append(BranchAttendance(_int(b.get("id"), "branches.id"),
+                                         _int(b.get("employees"), "employees"), by_status))
+    return AttendanceReport(day, generated.astimezone(UTC), tuple(statuses), tuple(branches))

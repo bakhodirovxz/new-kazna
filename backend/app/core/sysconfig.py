@@ -342,14 +342,18 @@ _DEFS: tuple[SettingDef, ...] = (
         AfterValidator(onec_url_host)]), "str", title="Адрес HTTP-сервиса 1С", **_SMTP),
     int_def("onec.max_mb", 64, 1, 128, title="Максимальный размер ответа 1С", unit="МБ",
             **_SMTP),
-    # HR API (S4): manzil faqat https; login/parol — integrations sirlari
-    SettingDef("hr.base_url", "", TypeAdapter(Annotated[
+    # HR API (S4): manzil faqat https; API-kalit — integrations siri `hr.api_key`
+    SettingDef("hr.base_url", "https://hr-api.uzgidro.uz", TypeAdapter(Annotated[
         str, Field(strict=True, max_length=300,
                    pattern=r"^(https://[A-Za-z0-9.-]+(:[0-9]{1,5})?(/[A-Za-z0-9._~/-]*)?)?$"),
         AfterValidator(external_base_url)]), "str", title="Адрес кадровой системы (HR API)",
         **_SMTP),
-    str_def("hr.breakdown_path", "/dashboard/employees-by-category", r"^/[A-Za-z0-9/_-]{1,120}$",
-            121, title="Путь выгрузки по категориям", **_SMTP),
+    cron_def("hr.attendance_cron", "*/10 7-20 * * *", category="hr",
+             title="Расписание опроса явки на сегодня"),
+    cron_def("hr.attendance_nightly_cron", "20 1 * * *", category="hr",
+             title="Расписание повторной загрузки явки за вчера"),
+    int_def("hr.attendance_stale_minutes", 30, 5, 1440, category="hr",
+            title="Данные о явке устарели через", unit="мин"),
     # S5: AI-анализ standart holatda O'CHIQ — yoqish infosec roziligidan keyin (sabab + TOTP).
     bool_def("ai.enabled", False, title="AI-анализ включён", **_AI),
     int_def("ai.user_per_hour", 20, 1, 1000, title="Запросов AI-анализа на пользователя в час",

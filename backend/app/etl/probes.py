@@ -18,6 +18,7 @@ from app.dwh.dates import today_tashkent
 from app.etl.askue.live import GesLiveClient, LiveError
 from app.etl.cbu.client import cbu_probe
 from app.etl.hr.client import HrApiClient, HrApiError, ca_context
+from app.etl.hr.source import STRUCTURE_PATH
 from app.etl.notify import smtp_probe
 from app.etl.onec.client import OneCCaError, OneCClient, OneCError, OneCUnavailableError
 from app.etl.onec.probe import onec_probe
@@ -29,28 +30,27 @@ log = get_logger("ugekazna.probes")
 
 
 def hr_probe(transport: httpx.BaseTransport | None = None) -> str:
-    """HR API: faqat login (ma'lumot so'ralmaydi). Faqat xavfsiz kod qaytadi (U8/U9)."""
+    """HR API: arzon so'rov (bitta filial tuzilmasi, shaxsiy ma'lumotsiz). Faqat xavfsiz kod."""
     with get_engine("app").connect() as conn:
         base = str(sysconfig.current(conn, "hr.base_url"))
-        user, password = integrations.secret(conn, "hr.username"), integrations.secret(
-            conn, "hr.password")
-    if not base or not user or not password:
+        key = integrations.secret(conn, "hr.api_key")
+    if not base or not key:
         return "not_configured"
     settings = get_settings()
     try:
-        client = HrApiClient(base, user, password, verify=ca_context(settings.hr_ca_file),
+        client = HrApiClient(base, key, verify=ca_context(settings.hr_ca_file),
                              proxy=settings.egress_proxy, transport=transport)
     except ConfigError:
         return "not_configured"
     try:
-        client.login()
+        client.get(STRUCTURE_PATH, {"branch_id": "1"})
     except ConnectorUnavailableError as exc:
         text_ = str(exc)
         return "timeout" if "тайм-аут" in text_ else (
             "tls_failed" if "SSL" in text_ or "Certificate" in text_ else (
                 "http_error" if "HTTP" in text_ else "connect_failed"))
     except HrApiError as exc:
-        return "auth_failed" if "вход не выполнен" in str(exc) else "format_error"
+        return "auth_failed" if "доступ запрещён" in str(exc) else "format_error"
     finally:
         client.close()
     return "ok"

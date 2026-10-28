@@ -37,7 +37,9 @@ def source() -> Iterator[str]:
 def test_s4_settings_defaults() -> None:
     assert DEFAULT_SETTINGS["zakupki.method_norms"] == NORMS == codes.DEFAULT_METHOD_NORMS
     assert DEFAULT_SETTINGS["hr.orgs"] == []
-    assert DEFAULT_SETTINGS["hr.breakdown_path"] == "/dashboard/employees-by-category"
+    assert "hr.breakdown_path" not in DEFAULT_SETTINGS
+    assert DEFAULT_SETTINGS["hr.base_url"] == "https://hr-api.uzgidro.uz"
+    assert DEFAULT_SETTINGS["hr.attendance_cron"] == "*/10 7-20 * * *"
     for key, cron in (("etl.hr_cron", "30 6 * * *"), ("etl.onec_zakupki_cron", "40 2 * * *")):
         assert DEFAULT_SETTINGS[key] == cron and validate_setting(key, cron) == cron
     assert set(codes.METHOD_TITLES) == {*codes.METHODS, codes.PLAN_METHOD}
@@ -48,6 +50,8 @@ def test_s4_settings_validation() -> None:
     orgs = [{"org": "Чорвоқ ГЭС", "branch_code": "UGE-02"},
             {"org": "Фарҳод ГЭС", "branch_code": "UGE-05"}]
     assert validate_setting("hr.orgs", orgs) == orgs
+    with_id = [{"org": "Чирчик", "branch_code": "UGE-03", "hr_id": 7}]
+    assert validate_setting("hr.orgs", with_id) == with_id
     assert validate_setting("zakupki.method_norms", {**NORMS, "tender": 60})["tender"] == 60
     bad: list[tuple[str, Any]] = [
         ("zakupki.method_norms", {k: v for k, v in NORMS.items() if k != "direct"}),
@@ -57,8 +61,10 @@ def test_s4_settings_validation() -> None:
         ("hr.orgs", [*orgs, {"org": "  чорвоқ   гэс ", "branch_code": "UGE-03"}]),
         ("hr.orgs", [{"org": "", "branch_code": "UGE-02"}]),
         ("hr.orgs", [{"org": "X", "branch_code": "UGE-02", "extra": 1}]),
-        ("hr.breakdown_path", "dashboard/x"),
-        ("hr.breakdown_path", "/dash?x=1"),
+        ("hr.orgs", [*with_id, {"org": "Другой", "branch_code": "UGE-04", "hr_id": 7}]),
+        ("hr.orgs", [{"org": "X", "branch_code": "UGE-02", "hr_id": 0}]),
+        ("hr.orgs", [{"org": "X", "branch_code": "UGE-02", "hr_id": "7"}]),
+        ("hr.attendance_cron", "often"),
         ("etl.hr_cron", "daily"),
     ]
     for key, value in bad:
@@ -75,8 +81,8 @@ def test_s4_config_and_notification_kind() -> None:
 def test_hr_integration_registered() -> None:
     integ = INTEGRATIONS["hr"]
     assert integ.endpoint == ("hr.base_url",)
-    assert integ.fields == ("hr.base_url", "hr.breakdown_path")
-    assert {s.name for s in integ.secrets} == {"hr.username", "hr.password"}
+    assert integ.fields == ("hr.base_url",)
+    assert {s.name: s.title for s in integ.secrets} == {"hr.api_key": "API-ключ HR"}
     for key in integ.fields:
         d = REGISTRY[key]
         assert d.category == "integrations" and d.perm == Perm.ADMIN_INTEGRATIONS and d.guarded

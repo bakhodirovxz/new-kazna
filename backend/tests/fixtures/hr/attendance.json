@@ -1,0 +1,26 @@
+{"period": {"type": "day", "date_from": "2026-10-28", "date_to": "2026-10-28", "days": 1},
+ "generated_at": "2026-10-28T06:12:41.508Z",
+ "statuses": [
+  {"code": "present", "label": "Kelgan", "kind": "attendance", "tabel_code": null},
+  {"code": "late", "label": "Kech qolgan", "kind": "attendance", "tabel_code": null},
+  {"code": "absent", "label": "Kelmagan (sababsiz)", "kind": "absence", "tabel_code": null},
+  {"code": "day_off", "label": "Dam olish kuni", "kind": "rest", "tabel_code": null},
+  {"code": "business_trip", "label": "Xizmat safari", "kind": "reason", "tabel_code": "K"},
+  {"code": "new_reason", "label": "Yangi sabab", "kind": "reason", "tabel_code": "YS"}],
+ "summary": {"employees": 100, "by_status": {
+  "present": {"days": 60, "employees": 60}, "late": {"days": 10, "employees": 10},
+  "absent": {"days": 8, "employees": 8}, "day_off": {"days": 2, "employees": 2},
+  "business_trip": {"days": 5, "employees": 5}, "new_reason": {"days": 3, "employees": 3}}},
+ "branches": [
+  {"id": 1, "name": "O'zbekgidroenergo AJ", "employees": 30, "by_status": {
+    "present": {"days": 20, "employees": 20}, "late": {"days": 4, "employees": 4},
+    "absent": {"days": 2, "employees": 2}, "business_trip": {"days": 2, "employees": 2},
+    "day_off": {"days": 2, "employees": 2}}},
+  {"id": 6, "name": "O?rta Chirchiq GES", "employees": 40, "by_status": {
+    "present": {"days": 30, "employees": 30}, "late": {"days": 6, "employees": 6},
+    "absent": {"days": 3, "employees": 3}, "new_reason": {"days": 1, "employees": 1}}},
+  {"id": 25, "name": "UGE-JINLUN", "employees": 10, "by_status": {
+    "present": {"days": 10, "employees": 10}}}],
+ "total": 100, "page": 1, "size": 1,
+ "items": [{"employee_id": 77, "full_name": "Каримов Азиз Рустамович", "pinfl": "12345678901234",
+            "branch_id": 1, "totals": {"present": 1}}]}

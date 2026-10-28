@@ -35,7 +35,7 @@ describe('ImportDialog', () => {
     const file = csv('Остатки сентябрь.csv');
     await user.upload(within(dialog).getByLabelText(/Файл/), file);
     await user.click(within(dialog).getByRole('button', { name: 'Загрузить' }));
-    expect(await within(dialog).findByText('Создан черновик: 2 строк')).toBeInTheDocument();
+    expect(await within(dialog).findByText('Создан черновик: 2 строки')).toBeInTheDocument();
     const call = srv.calls.find((c) => c.method === 'POST');
     expect(call?.rawBody).toBe(file);
     expect(call?.url.searchParams.get('branch_id')).toBe('3');
@@ -61,6 +61,34 @@ describe('ImportDialog', () => {
     expect(within(table).getByText('Недопустимое значение')).toBeInTheDocument();
     expect(within(table).getByText('Неверные заголовки столбцов — скачайте шаблон')).toBeInTheDocument();
     expect(within(table).getByText('3')).toBeInTheDocument();
+  });
+
+  it.each([[1, '1 строка'], [5, '5 строк'], [21, '21 строка'], [22, '22 строки'], [11, '11 строк']])(
+    'uses Russian plural for %i rows',
+    async (rows, text) => {
+      server({ 'POST /data/entities/kazna.balance/import': json({ ...BATCH, rows }, 201) });
+      const { user } = renderWithProviders(<ImportDialog entity={ENTITY} branch={3} onClose={() => undefined} />);
+      const dialog = await screen.findByRole('dialog');
+      await user.upload(within(dialog).getByLabelText(/Файл/), csv());
+      await user.click(within(dialog).getByRole('button', { name: 'Загрузить' }));
+      expect(await within(dialog).findByText(`Создан черновик: ${text}`)).toBeInTheDocument();
+    },
+  );
+
+  it('lists the colliding rows of a 409 duplicate_record', async () => {
+    server({
+      'POST /data/entities/kazna.balance/import': apiError(409, 'duplicate_record', 'x', {
+        rows: [{ row: 4, field: 'balance', code: 'duplicate_record' }, { row: 9, field: 'balance', code: 'duplicate_record' }],
+      }),
+    });
+    const { user } = renderWithProviders(<ImportDialog entity={ENTITY} branch={3} onClose={() => undefined} />);
+    const dialog = await screen.findByRole('dialog');
+    await user.upload(within(dialog).getByLabelText(/Файл/), csv());
+    await user.click(within(dialog).getByRole('button', { name: 'Загрузить' }));
+    const table = await within(dialog).findByRole('table');
+    expect(within(table).getByText('4')).toBeInTheDocument();
+    expect(within(table).getByText('9')).toBeInTheDocument();
+    expect(within(table).getAllByText('Такая запись уже существует')).toHaveLength(2);
   });
 
   it('refuses >1 MiB client-side', async () => {

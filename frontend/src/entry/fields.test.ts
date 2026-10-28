@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { t } from '../i18n';
 import { fromInput, serverErrorText, toInput, unitLabel } from './fields';
 import type { EntryField } from './api';
 
@@ -14,6 +15,7 @@ describe('fromInput', () => {
 
   it('rejects ambiguous thousands and extra scale', () => {
     expect(fromInput(f({}), '1,234')).toEqual({ error: 'entry.err.scale', n: 2 });
+    expect(t('entry.err.scale', { n: 2 })).toBe('Знаков после запятой — не более 2'); // без склонения «знаков/знака»
     expect(fromInput(f({}), '1e5')).toEqual({ error: 'entry.err.number' });
     expect(fromInput(f({}), 'abc')).toEqual({ error: 'entry.err.number' });
   });

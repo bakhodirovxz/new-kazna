@@ -66,7 +66,7 @@ describe('EntityPage', () => {
     await user.type(within(dialog).getByLabelText(/Дата/), '2026-09-30');
     await user.type(within(dialog).getByLabelText(/Остаток/), '1,234');
     await user.click(within(dialog).getByRole('button', { name: 'Отправить на согласование' }));
-    expect(await within(dialog).findByText('Не более 2 знаков после запятой')).toBeInTheDocument();
+    expect(await within(dialog).findByText('Знаков после запятой — не более 2')).toBeInTheDocument();
     expect(within(dialog).getByLabelText(/Остаток/)).toHaveAttribute('aria-invalid', 'true');
     expect(srv.calls.some((c) => c.method === 'POST')).toBe(false);
   });

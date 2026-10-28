@@ -2,6 +2,7 @@ import { useState, type ChangeEvent } from 'react';
 import { isApiError } from '../api/client';
 import { saveBlob } from '../dash/download';
 import { t } from '../i18n';
+import { plural } from '../i18n/format';
 import { useBranches } from '../meta/api';
 import { Button } from '../ui/Button';
 import { FormError } from '../ui/Field';
@@ -19,7 +20,7 @@ interface RowError {
 }
 
 function rowErrors(error: unknown): RowError[] {
-  if (!isApiError(error, 422, 'import_invalid')) return [];
+  if (!isApiError(error, 422, 'import_invalid') && !isApiError(error, 409, 'duplicate_record')) return [];
   const rows = error.params.rows;
   return Array.isArray(rows) ? (rows as RowError[]).slice(0, 200) : [];
 }
@@ -113,7 +114,7 @@ export function ImportDialog({ entity, branch, onClose }: Props) {
       }
     >
       {created ? (
-        <p role="status">{t('entry.import.created', { n: created.rows })}</p>
+        <p role="status">{t('entry.import.created', { n: created.rows, rows: plural(created.rows, [t('entry.rows.one'), t('entry.rows.few'), t('entry.rows.many')]) })}</p>
       ) : (
         <div className="entry-form">
           <div className="entry-toolbar">
@@ -133,7 +134,7 @@ export function ImportDialog({ entity, branch, onClose }: Props) {
           </label>
           {fileError ? <p className="form-error" role="alert">{fileError}</p> : null}
           {errors.length > 0 ? (
-            <Table caption={t('entry.import.errors')} columns={columns} rows={errors} rowKey={(r) => `${r.row}:${r.field}:${r.code}`} />
+            <Table caption={isApiError(upload.error, 409) ? t('entry.import.collisions') : t('entry.import.errors')} columns={columns} rows={errors} rowKey={(r) => `${r.row}:${r.field}:${r.code}`} />
           ) : upload.error ? (
             isApiError(upload.error) ? (
               <p className="form-error" role="alert">{serverErrorText(upload.error.code)}</p>

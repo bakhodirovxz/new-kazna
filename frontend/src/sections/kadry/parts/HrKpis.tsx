@@ -18,7 +18,7 @@ export function HrKpis({ kpis }: { kpis: HrKpisOut }) {
   const staff = kpis.has_data;
   return (
     <KpiGrid>
-      <KpiTile icon="people" label={t('kad.kpi.plan')} value={staff ? num(kpis.plan) : t('dash.noValue')} unit={t('unit.peopleShort')} delta={staff ? t('kad.kpi.planNote') : t('kad.kpi.noStaff')} hint={formula('headcount')} />
+      <KpiTile icon="people" label={t('kad.kpi.plan')} value={staff && kpis.plan > 0 ? num(kpis.plan) : t('dash.noValue')} unit={t('unit.peopleShort')} delta={staff && kpis.plan > 0 ? t('kad.kpi.planNote') : t('kad.kpi.noStaff')} hint={formula('headcount')} />
       <KpiTile icon="people" label={t('kad.kpi.fact')} value={staff ? num(kpis.fact) : t('dash.noValue')} unit={t('unit.peopleShort')} delta={staff ? t('kad.kpi.factNote', { pct: formatPct(kpis.fill, 1) }) : t('kad.kpi.noStaff')} hint={formula('headcount')} />
       <KpiTile
         icon="alert"

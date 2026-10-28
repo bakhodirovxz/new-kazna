@@ -37,12 +37,15 @@ export interface HrBranchesTableProps {
 }
 
 /** Prototip `hrTable`: штат, факт, вакансии, укомплектованность, ФОТ, средняя зарплата; «Итого». */
+/** Shtat 0 = manba bermagan (HR API'da shtat yo'q), «0 kishi» emas. */
+const planText = (plan: number): string => (plan > 0 ? formatNumber(plan) : t('dash.noValue'));
+
 export function HrBranchesTable({ rows, kpis, ctx, filters, onBranch, className }: HrBranchesTableProps) {
   const title = t('kad.br.title');
   const headers = [t('kad.br.branch'), t('kad.br.plan'), t('kad.br.fact'), t('kad.br.vac'), t('kad.br.fill'), t('kad.br.payroll'), t('kad.br.avg')];
   const columns: Column<HrBranchOut>[] = [
     { key: 'name', header: headers[0] ?? '', cell: (b) => b.name, sortValue: (b) => b.name, wrap: true },
-    { key: 'plan', header: headers[1] ?? '', cell: (b) => formatNumber(b.plan), sortValue: (b) => b.plan, align: 'right' },
+    { key: 'plan', header: headers[1] ?? '', cell: (b) => planText(b.plan), sortValue: (b) => b.plan, align: 'right' },
     { key: 'fact', header: headers[2] ?? '', cell: (b) => <b>{formatNumber(b.fact)}</b>, sortValue: (b) => b.fact, align: 'right' },
     { key: 'vac', header: headers[3] ?? '', cell: (b) => <span className={b.fill !== null && b.fill < LOW_FILL ? 'neg' : undefined}>{b.vacancies === null ? t('dash.noValue') : formatNumber(b.vacancies)}</span>, sortValue: (b) => b.vacancies, align: 'right' },
     { key: 'fill', header: headers[4] ?? '', cell: (b) => <Fill value={b.fill} />, sortValue: (b) => b.fill, align: 'right' },
@@ -54,7 +57,7 @@ export function HrBranchesTable({ rows, kpis, ctx, filters, onBranch, className 
       className={className}
       title={title}
       sub={t('kad.br.sub')}
-      exportSlot={<CardExport title={title} ctx={ctx} csv={() => ({ headers, rows: rows.map((b) => [b.name, b.plan, b.fact, b.vacancies, b.fill === null ? null : Math.round(b.fill * 1000) / 10, b.payroll, b.avg_salary]) })} />}
+      exportSlot={<CardExport title={title} ctx={ctx} csv={() => ({ headers, rows: rows.map((b) => [b.name, b.plan > 0 ? b.plan : null, b.fact, b.vacancies, b.fill === null ? null : Math.round(b.fill * 1000) / 10, b.payroll, b.avg_salary]) })} />}
     >
       <Table
         caption={title}
@@ -66,7 +69,7 @@ export function HrBranchesTable({ rows, kpis, ctx, filters, onBranch, className 
         footer={
           <tr>
             <td>{t('kad.br.total')}</td>
-            <td>{formatNumber(kpis.plan)}</td>
+            <td>{planText(kpis.plan)}</td>
             <td>{formatNumber(kpis.fact)}</td>
             <td>{kpis.vacancies === null ? t('dash.noValue') : formatNumber(kpis.vacancies)}</td>
             <td>{formatPct(kpis.fill, 0)}</td>

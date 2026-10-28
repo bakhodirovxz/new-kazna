@@ -9,13 +9,16 @@ export type Route =
   | { kind: 'noaccess' }
   | { kind: 'notfound' }
   | { kind: 'admin'; page: string | null }
-  | { kind: 'section'; section: string; page: string | null; br: number | null; per: string | null };
+  | { kind: 'section'; section: string; page: string | null; br: number | null; per: string | null; scen?: string | null };
 
 export type SectionRoute = Extract<Route, { kind: 'section' }>;
 
 const ID_RE = /^[a-z][a-z0-9_-]{0,31}$/;
 const PER_RE = /^(?:ytd|q[1-4]|m(?:0[1-9]|1[0-2]))$/;
 const BR_RE = /^[1-9]\d{0,4}$/;
+/** S5: Финмодель ssenariysi (TZ 5: «переключатель сценариев вверху каждой страницы»). */
+export const SCENARIO_IDS = ['base', 'water', 'tariff', 'fx'] as const;
+const SCEN_RE = /^(?:base|water|tariff|fx)$/;
 const NOT_FOUND: Route = { kind: 'notfound' };
 
 export function parseHash(raw: string): Route {
@@ -50,12 +53,14 @@ export function parseHash(raw: string): Route {
   // TZ'dagi `per=5` shakli `m05` ga keltiriladi (R1/A3.1).
   const perRaw = params.get('per');
   const per = perRaw !== null && /^(?:0?[1-9]|1[0-2])$/.test(perRaw) ? `m${perRaw.padStart(2, '0')}` : perRaw;
+  const scen = params.get('scen');
   return {
     kind: 'section',
     section: first,
     page: second ?? null,
     br: br !== null && BR_RE.test(br) ? Number(br) : null,
     per: per !== null && PER_RE.test(per) ? per : null,
+    ...(scen !== null && SCEN_RE.test(scen) ? { scen } : {}),
   };
 }
 
@@ -82,6 +87,7 @@ export function buildHash(route: Route): string {
       const params = new URLSearchParams();
       if (route.br !== null) params.set('br', String(route.br));
       if (route.per !== null) params.set('per', route.per);
+      if (route.scen) params.set('scen', route.scen);
       const query = params.toString();
       return `#${route.section}${route.page ? `/${route.page}` : ''}${query ? `?${query}` : ''}`;
     }

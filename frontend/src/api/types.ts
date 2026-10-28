@@ -166,3 +166,74 @@ export type KredityReestrOut = Schemas['KredityReestrOut'];
 export type KredityGrafikOut = Schemas['KredityGrafikOut'];
 export type AiStatusOut = Schemas['AiStatusOut'];
 export type AiRequestOut = Schemas['AiRequestOut'];
+
+// S5 «Финмодель»: GET /finmodel/model. Qo'lda yozilgan (OpenAPI backend 5-vazifasi bilan birga qayta generatsiya qilinadi).
+export interface FinYearOut {
+  year: number;
+  capacity_mw: number;
+  generation: number;
+  supply: number;
+  tariff: number;
+  revenue: number;
+  opex: number;
+  tax: number;
+  ebitda: number;
+  margin: number | null;
+  capex_plan: number;
+  capex: number;
+  principal: number;
+  interest: number;
+  debt_service: number;
+  net_flow: number;
+  balance: number;
+  dscr: number | null;
+  covenant_breach: boolean;
+  unit_cost: number | null;
+}
+export type FinVerdict = 'funded' | 'needs_financing';
+export interface FinSummaryOut {
+  scenario: string;
+  title: string;
+  note: string;
+  capacity_last: number;
+  capacity_added: number;
+  revenue_first: number;
+  revenue_last: number;
+  ebitda_total: number;
+  margin_avg: number;
+  capex_total: number;
+  debt_service_total: number;
+  dscr_min: number | null;
+  dscr_min_year: number | null;
+  cum_flow: number;
+  negative_years: number;
+  verdict: FinVerdict;
+}
+export interface FinSensitivityOut {
+  scenario: string;
+  title: string;
+  delta_cum: number;
+  dscr_min: number | null;
+}
+export interface FinBaseOut {
+  as_of: string;
+  capacity_mw: number;
+  opex_base: number;
+  opex_months: number;
+  opening_cash: number;
+  missing_fx: string[];
+  aip_missing_years: number[];
+  assumptions_at: string | null;
+  stale_assumptions: boolean;
+  covenant: number;
+}
+export interface FinmodelOut {
+  has_model: boolean;
+  scenario: string;
+  company_wide: boolean;
+  base: FinBaseOut | null;
+  years: FinYearOut[];
+  summary: FinSummaryOut | null;
+  scenarios: FinSummaryOut[];
+  sensitivity: FinSensitivityOut[];
+}

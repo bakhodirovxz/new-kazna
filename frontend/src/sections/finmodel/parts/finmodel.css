@@ -1,0 +1,8 @@
+/* S5 «Финмодель»: ssenariy paneli, izohlar, kirish bazasi ro'yxati. */
+.fin-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 0.9rem; margin-bottom: 0.9rem; }
+.fin-note { margin: 0 0 0.8rem; }
+.fin-base { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.45rem; }
+.fin-base li { display: flex; justify-content: space-between; gap: 1rem; border-bottom: 1px solid var(--line); padding-bottom: 0.35rem; }
+.fin-base span { color: var(--muted); }
+.fin-warn { margin: 0.8rem 0 0; padding-left: 1.1rem; color: var(--warn); font-size: 0.92rem; }
+.fin-warn li + li { margin-top: 0.3rem; }

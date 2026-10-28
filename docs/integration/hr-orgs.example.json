@@ -1,0 +1,16 @@
+[
+  {"org": "O'zbekgidroenergo AJ", "branch_code": "UGE-01", "hr_id": 1},
+  {"org": "O'rta Chirchiq GES", "branch_code": "UGE-02", "hr_id": 6},
+  {"org": "Chirchiq GES", "branch_code": "UGE-03", "hr_id": 7},
+  {"org": "Qodiriya GES", "branch_code": "UGE-07", "hr_id": 8},
+  {"org": "Toshkent GES", "branch_code": "UGE-09", "hr_id": 9},
+  {"org": "Quyi Bo'zsuv GES", "branch_code": "UGE-12", "hr_id": 10},
+  {"org": "Farhod GES", "branch_code": "UGE-05", "hr_id": 11},
+  {"org": "Samarqand GES", "branch_code": "UGE-10", "hr_id": 12},
+  {"org": "Shahrixon GES", "branch_code": "UGE-14", "hr_id": 13},
+  {"org": "Andijon GES", "branch_code": "UGE-04", "hr_id": 14},
+  {"org": "Tuyamo'yin GES", "branch_code": "UGE-06", "hr_id": 15},
+  {"org": "To'polang GES", "branch_code": "UGE-13", "hr_id": 16},
+  {"org": "Ohangaron GES", "branch_code": "UGE-16", "hr_id": 17},
+  {"org": "Hisorak GES", "branch_code": "UGE-15", "hr_id": 18}
+]

@@ -87,7 +87,7 @@ def test_settings_defaults_and_validation() -> None:
         "retention.fact_years", "retention.audit_months", "partitions.months_ahead",
         "kazna.calendar_kinds", "onec.orgs", "onec.income_enabled", "onec.page_limit",
         "etl.onec_full_cron", "etl.onec_incremental_cron",
-        "zakupki.method_norms", "hr.orgs", "hr.breakdown_path", "etl.hr_cron",
+        "zakupki.method_norms", "hr.orgs", "hr.attendance_cron", "etl.hr_cron",
         "etl.onec_zakupki_cron", "hr.base_url",
         "askue.stations", "askue.inbox_days", "askue.live_cron", "askue.live_keep_days",
         "askue.live_stale_minutes", "etl.askue_cron", "onec.sklad_months",

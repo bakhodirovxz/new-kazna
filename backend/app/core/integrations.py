@@ -72,10 +72,9 @@ _ALL: tuple[IntegrationDef, ...] = (
     IntegrationDef("cbu", "ЦБ РУз: курсы валют", fields=("cbu.enabled",), endpoint=(),
                    secrets=()),
     IntegrationDef(
-        "hr", "Кадровая система (HR API)", fields=("hr.base_url", "hr.breakdown_path"),
+        "hr", "Кадровая система (HR API)", fields=("hr.base_url",),
         endpoint=("hr.base_url",),
-        secrets=(SecretDef("hr.username", "Пользователь HR", max_length=128),
-                 SecretDef("hr.password", "Пароль HR"))),
+        secrets=(SecretDef("hr.api_key", "API-ключ HR", pattern=r"[!-~]+", max_length=512),)),
     IntegrationDef(
         "ai", "AI-анализ (провайдер)",
         fields=("ai.model", "ai.effort", "ai.max_tokens"), endpoint=(),

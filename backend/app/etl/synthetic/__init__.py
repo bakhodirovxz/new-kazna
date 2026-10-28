@@ -8,7 +8,9 @@ from decimal import Decimal
 
 from app.core.config import get_settings
 from app.dwh.dates import TASHKENT, month_id, today_tashkent
+from app.etl.hr.models import AttendanceReport
 from app.etl.synthetic.families import FAMILIES
+from app.etl.synthetic.families.attendance import attendance_report
 from app.etl.synthetic.model import HISTORY_START, SynthModel
 from app.etl.types import (
     ControlTotals,
@@ -41,6 +43,10 @@ class SyntheticConnector:
                 # Bir maqsadni bir nechta oila beradi (payments + calendar → fact_payment_plan).
                 counts[target] = counts.get(target, 0) + n
         return ExtractStats(sum(counts.values()), counts)
+
+    def attendance(self, day: date, generated_at: datetime) -> AttendanceReport:
+        """Demo davomat (HR API shakli) - Runner'siz, `seed_attendance` orqali yoziladi."""
+        return attendance_report(self.model, day, generated_at)
 
     def control_totals(self, window: Window) -> ControlTotals | None:
         totals: dict[int, Decimal] = defaultdict(Decimal)

@@ -9,17 +9,24 @@ from typing import Protocol
 
 from app.core.config import ConfigError
 from app.etl.hr.client import HrApiClient
-from app.etl.hr.models import BreakdownRow, parse_breakdown, parse_main
+from app.etl.hr.models import (
+    AttendanceReport,
+    StructureRow,
+    parse_attendance,
+    parse_structure,
+    parse_total,
+)
 from app.etl.types import ConnectorUnavailableError, HealthResult
 
-MAIN_PATH = "/dashboard/main"
+STRUCTURE_PATH = "/directory/structure"
+ATTENDANCE_PATH = "/directory/attendance"
 MEHNAT_MESSAGE = "mehnat.uz не подключён: интеграция предусмотрена этапом 3 ТЗ (раздел 8)"
 
 
 @dataclass(frozen=True, slots=True)
 class HrSnapshot:
     as_of: date
-    rows: tuple[BreakdownRow, ...]
+    rows: tuple[StructureRow, ...]
     total: int | None
 
 
@@ -34,21 +41,24 @@ class HrSource(Protocol):
 class HrApiSource:
     name = "hr_api"
 
-    def __init__(self, client: HrApiClient, breakdown_path: str) -> None:
+    def __init__(self, client: HrApiClient) -> None:
         self.client = client
-        self.breakdown_path = breakdown_path
 
     def healthcheck(self) -> HealthResult:
         try:
-            self.client.get(MAIN_PATH)
+            self.client.get(STRUCTURE_PATH, {"include_empty": "false"})
         except ConnectorUnavailableError as exc:
             return HealthResult(False, str(exc))
         return HealthResult(True, "HR API доступен")
 
     def snapshot(self, today: date) -> HrSnapshot:
-        total = parse_main(self.client.get(MAIN_PATH))
-        rows = parse_breakdown(self.client.get(self.breakdown_path))
-        return HrSnapshot(today, tuple(rows), total)
+        data = self.client.get(STRUCTURE_PATH, {"include_empty": "false"})
+        return HrSnapshot(today, tuple(parse_structure(data)), parse_total(data))
+
+    def attendance(self, day: date) -> AttendanceReport:
+        # size=1: ro'yxat (F.I.Sh.) kerak emas; `items` parse_attendance'da o'qilmaydi
+        return parse_attendance(self.client.get(ATTENDANCE_PATH, {
+            "size": "1", "include_days": "false", "date": day.isoformat()}))
 
 
 class MehnatNotConfigured(ConfigError):  # noqa: N818

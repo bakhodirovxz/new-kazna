@@ -1,11 +1,11 @@
-"""HrConnector — SourceConnector (S4 spec 3.3): HrSource snapshot'i → fact_hr (filial × toifa ×
-joriy oy) va dim_position (toifa).
+"""HrConnector — SourceConnector (S4 spec 3.3): HrSource snapshot'i (`/directory/structure`) →
+fact_hr (filial × toifa × joriy oy) va dim_position (toifa).
 
-Tashkilot → filial `hr.orgs` (normallashtirilgan nom). Tashkilot kesimi umuman yo'q —
-`no_branch_breakdown` ogohlantirishi, fact_hr yozilmaydi (spec 11.6). Moslashtirilmagan
-tashkilot — `unmapped_org` (xato, qatorlari o'tkaziladi). Yuklangan jami `/dashboard/main`
-jamidan 1% dan ko'p farq qilsa — `total_mismatch` ogohlantirishi. Upsert: oy ichida kalit bir
-xil (sana — bugun, oxirgi snapshot qoladi). Shaxsiy ma'lumot modelga kirmaydi (models.py).
+HR filiali → bizning filial: `hr.orgs` (avval `hr_id`, keyin normallashtirilgan nom).
+Moslashtirilmagan HR tashkilotlari (sho'ba korxonalar) o'tkazib yuboriladi — bitta
+`unmapped_org` ogohlantirishi (soni va id'lari). Reja (штат), qabul/bo'shatish va ish vaqtidan
+tashqari soatlar bu manbada yo'q — nol (ФОТ pul oqimidan).
+Shaxsiy ma'lumot modelga kirmaydi (models.py).
 """
 
 from __future__ import annotations
@@ -33,7 +33,6 @@ from app.etl.types import (
 SOURCE = "hr"
 DOC_TYPE = "hr_snapshot"
 ERROR_TARGET = "hr_api"
-TOTAL_TOLERANCE = 0.01
 
 
 def position_code(category: str) -> str:
@@ -63,57 +62,35 @@ class HrConnector:
         if not isinstance(sink, ReportingSink):
             raise TypeError("HrConnector xatolarni yozish uchun ReportingSink talab qiladi")
         snap = self.hr.snapshot(self.today())
-        if not any(r.organization for r in snap.rows):
-            sink.error(target=ERROR_TARGET, code="no_branch_breakdown", severity="warning",
-                       message="HR API не даёт разреза по организациям — численность филиалов "
-                               "не загружена (docs/integration/hr-sorov-s4.md)")
-            return ExtractStats(0, {})
-        by_org = {normalize_name(o.org): o.branch_code for o in self.orgs}
-        sums: dict[tuple[str, str], dict[str, Decimal]] = defaultdict(
-            lambda: defaultdict(Decimal))
+        by_id = {o.hr_id: o.branch_code for o in self.orgs if o.hr_id is not None}
+        by_name = {normalize_name(o.org): o.branch_code for o in self.orgs if o.hr_id is None}
+        sums: dict[tuple[str, str], int] = defaultdict(int)
         categories: dict[str, str] = {}
-        unmapped: set[str] = set()
+        unmapped: set[int] = set()
         loaded = 0
         for row in snap.rows:
-            if row.organization is None:
-                unmapped.add("")
-                continue
-            branch = by_org.get(normalize_name(row.organization))
+            branch = by_id.get(row.hr_id) or by_name.get(normalize_name(row.organization))
             if branch is None:
-                unmapped.add(row.organization)
+                unmapped.add(row.hr_id)
                 continue
             pos = position_code(row.category)
             categories.setdefault(pos, row.category)
-            acc = sums[(branch, pos)]
-            acc["plan"] += row.staff or Decimal(0)
-            acc["fact"] += Decimal(row.employees)
-            acc["hired"] += Decimal(row.hired or 0)
-            acc["fired"] += Decimal(row.fired or 0)
-            acc["overtime"] += row.overtime or Decimal(0)
+            sums[(branch, pos)] += row.employees
             loaded += row.employees
-        for org in sorted(unmapped):
-            if org:
-                sink.error(target=ERROR_TARGET, code="unmapped_org",
-                           message=f"организация «{org[:80]}» не сопоставлена с филиалом "
-                                   "(hr.orgs)")
-            else:
-                sink.error(target=ERROR_TARGET, code="no_org",
-                           message="строки без организации пропущены")
+        if unmapped:
+            ids = ", ".join(str(i) for i in sorted(unmapped)[:30])
+            sink.error(target=ERROR_TARGET, code="unmapped_org", severity="warning",
+                       message=f"{len(unmapped)} орг. HR пропущено (нет в hr.orgs): id {ids}")
         for pos, category in categories.items():
             sink.add("dim_position", {"code": pos, "category": category, "department": "—"})
         ym = month_id(snap.as_of)
-        for (branch, pos), acc in sorted(sums.items()):
-            sink.add("fact_hr", self._fact(branch, pos, ym, snap.as_of, acc))
-        if snap.total and abs(loaded - snap.total) > snap.total * TOTAL_TOLERANCE:
-            sink.error(target=ERROR_TARGET, code="total_mismatch", severity="warning",
-                       message=f"сумма по филиалам {loaded} не совпадает с общей численностью "
-                               f"{snap.total}")
+        for (branch, pos), n in sorted(sums.items()):
+            sink.add("fact_hr", self._fact(branch, pos, ym, snap.as_of, n))
         return ExtractStats(len(sums), {})
 
     @staticmethod
-    def _fact(branch: str, pos: str, ym: int, day: date,
-              acc: dict[str, Decimal]) -> dict[str, Any]:
+    def _fact(branch: str, pos: str, ym: int, day: date, fact: int) -> dict[str, Any]:
         return {"doc_type": DOC_TYPE, "src_id": f"{branch}:{pos}:{ym}", "date_id": date_id(day),
-                "branch_code": branch, "pos_code": pos, "headcount_plan": acc["plan"],
-                "headcount_fact": acc["fact"], "payroll": Decimal(0), "hired": int(acc["hired"]),
-                "fired": int(acc["fired"]), "overtime_hours": acc["overtime"]}
+                "branch_code": branch, "pos_code": pos, "headcount_plan": Decimal(0),
+                "headcount_fact": Decimal(fact), "payroll": Decimal(0), "hired": 0,
+                "fired": 0, "overtime_hours": Decimal(0)}

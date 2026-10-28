@@ -260,3 +260,26 @@ def test_manual_balance_excluded_only_in_its_month(manual_sc: ManualScenario) ->
     assert {"branch_id": manual_sc.branch_id, "month_id": 202608, "accounts": 1,
             "reason": "manual_balance"} in detail["manual_excluded"]
     assert not [v for v in detail["violations"] if v["branch_id"] == manual_sc.branch_id]
+
+
+def test_hr_synthetic_hidden_by_any_real_row_of_branch_month(published_synthetic: int) -> None:
+    """Haqiqiy HR (HR-P-*) va sintetik (POS-*) pos_id farq qilsa ham ikkilanmasin."""
+    ins = ("INSERT INTO dwh.fact_hr (date_id, branch_id, pos_id, headcount_fact, load_id, "
+           "src_system, doc_type, src_id) SELECT :d, 1, pos_id, 7, 0, :s, 't', :i "
+           "FROM dwh.dim_position ORDER BY pos_id LIMIT 1 OFFSET :o")
+    try:
+        with etl_transaction() as conn:
+            conn.execute(text("DELETE FROM dwh.fact_hr WHERE src_id LIKE 'i3-%'"))
+            conn.execute(text(ins), {"d": 20261215, "s": "synthetic", "i": "i3-s", "o": 0})
+            conn.execute(text(ins), {"d": 20261220, "s": "hrtest", "i": "i3-r", "o": 1})
+            rows = {r[0] for r in conn.execute(text(
+                "SELECT src_id FROM dwh.hr_effective WHERE src_id LIKE 'i3-%'"))}  # sintetik yopiq
+            other_month = conn.execute(text(ins), {"d": 20261115, "s": "synthetic",
+                                                   "i": "i3-m", "o": 0})
+            rows2 = {r[0] for r in conn.execute(text(
+                "SELECT src_id FROM dwh.hr_effective WHERE src_id LIKE 'i3-%'"))}
+            assert other_month is not None
+        assert rows == {"i3-r"} and rows2 == {"i3-r", "i3-m"}
+    finally:
+        with etl_transaction() as conn:
+            conn.execute(text("DELETE FROM dwh.fact_hr WHERE src_id LIKE 'i3-%'"))

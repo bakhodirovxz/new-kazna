@@ -21,7 +21,8 @@ class Freshness:
 
 def freshness(conn: Connection, now: datetime) -> Freshness:
     last = conn.execute(
-        text("SELECT max(finished_at) FROM core.etl_run WHERE status = 'success'")
+        text("SELECT max(finished_at) FROM core.etl_run "
+             "WHERE status = 'success' AND source <> 'rebuild'")  # rebuild yangi ma'lumot emas
     ).scalar_one_or_none()
     active = conn.execute(
         text("SELECT active_build_id FROM core.data_version WHERE id = 1")

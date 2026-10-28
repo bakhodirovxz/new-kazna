@@ -15,11 +15,13 @@ from typing import Any
 from sqlalchemy import text
 from sqlalchemy.engine import Connection
 
+from app.core.logging import get_logger
 from app.dwh.aggregates import Aggregate, register
 from app.dwh.dates import date_id, month_id
 from app.finmodel.inputs import gather_inputs, load_assumptions
 from app.finmodel.model import YearRow, run_model
 
+log = get_logger("ugekazna.finmodel")
 _INSERT = """
 INSERT INTO mart.agg_finmodel_year (
   build_id, branch_id, month_id, scenario, year, capacity_mw, generation, supply, tariff,
@@ -57,6 +59,16 @@ def _row(row: YearRow) -> dict[str, Any]:
 
 
 def compute_finmodel(conn: Connection, bound: Mapping[str, Any]) -> int:
+    """Model xatosi butun build'ni yiqitmasin: savepoint, xatoda 0 qator (`has_model=false`)."""
+    try:
+        with conn.begin_nested():
+            return _compute(conn, bound)
+    except Exception as exc:  # istalgan model xatosi boshqa agregatlarni to'smasin
+        log.error("finmodel_skipped", error=repr(exc)[:300])
+        return 0
+
+
+def _compute(conn: Connection, bound: Mapping[str, Any]) -> int:
     as_of = bound["as_of"]
     inputs, meta = gather_inputs(conn, as_of)
     assumptions = load_assumptions(conn)
@@ -74,4 +86,4 @@ def compute_finmodel(conn: Connection, bound: Mapping[str, Any]) -> int:
     return len(rows)
 
 
-FINMODEL_YEAR = register(Aggregate("agg_finmodel_year", (), compute_finmodel))
+FINMODEL_YEAR = register(Aggregate("agg_finmodel_year", (), compute_finmodel, carry=False))

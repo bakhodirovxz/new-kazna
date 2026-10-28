@@ -249,7 +249,7 @@ _DEFS: tuple[SettingDef, ...] = (
              title="Расписание инкрементальной загрузки склада 1С"),
     # S5: финмодель — ковенант va xarajat bazasidan chiqariladigan statyalar (masalan, 1C'da
     # «operating» deb kelgan kapital xarajat statyalari)
-    float_def("finmodel.dscr_covenant", 1.2, 0.0001, 5.0, category="finmodel",
+    float_def("finmodel.dscr_covenant", 1.2, 0.5, 5.0, category="finmodel",
               title="Ковенант DSCR (минимум)"),
     SettingDef("finmodel.opex_exclude_items", [],
                TypeAdapter(Annotated[

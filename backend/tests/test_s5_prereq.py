@@ -62,6 +62,9 @@ def test_new_seed_rows_in_database() -> None:
     (2027, "tariff_start", Decimal(700), "year"),
     (2026, "tariff_start", Decimal(0), "value"),
     (2026, "kium", Decimal("1.5"), "value"),
+    (2026, "kium", Decimal("0.04"), "value"),
+    (2030, "generation_factor", Decimal("0.05"), "value"),
+    (2026, "tariff_start", Decimal(9), "value"),
     (2030, "capacity_add_mw", Decimal(-1), "value"),
     (2026, "magic", Decimal(1), "key"),
     (2026, "tariff_start", Decimal(705), None),
@@ -93,7 +96,7 @@ def test_finmodel_settings() -> None:
     assert validate_setting("finmodel.dscr_covenant", 1.35) == 1.35
     assert validate_setting("finmodel.opex_exclude_items", ["1C-O-abc"]) == ["1C-O-abc"]
     bad: list[tuple[str, Any]] = [
-        ("finmodel.dscr_covenant", 0), ("finmodel.dscr_covenant", "1.2"),
+        ("finmodel.dscr_covenant", 0.4), ("finmodel.dscr_covenant", "1.2"),
         ("finmodel.dscr_covenant", 6), ("finmodel.opex_exclude_items", [""]),
         ("finmodel.opex_exclude_items", ["A", "A"]),
         ("finmodel.opex_exclude_items", [f"X{i}" for i in range(201)]),

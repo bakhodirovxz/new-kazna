@@ -109,13 +109,13 @@ FIN_KEYS = FIN_YEAR_KEYS + FIN_SCALAR_KEYS
 # Har kalit uchun ruxsat etilgan oraliq (admin API tekshiradi; umumiy ±10 o'rniga).
 FIN_KEY_BOUNDS: dict[str, tuple[Decimal, Decimal]] = {
     "tariff_growth": (Decimal("-0.5"), Decimal("1")),
-    "generation_factor": (Decimal("0"), Decimal("2")),
+    "generation_factor": (Decimal("0.1"), Decimal("2")),
     "fx_rate_factor": (Decimal("0.1"), Decimal("5")),
     "opex_index": (Decimal("-0.5"), Decimal("1")),
     "tax_rate": (Decimal("0"), Decimal("0.9")),
-    "kium": (Decimal("0.01"), Decimal("1")),
+    "kium": (Decimal("0.05"), Decimal("1")),
     "capacity_add_mw": (Decimal("0"), Decimal("5000")),
-    "tariff_start": (Decimal("1"), Decimal("100000")),
+    "tariff_start": (Decimal("10"), Decimal("100000")),
     "own_needs_share": (Decimal("0"), Decimal("0.5")),
     "capex_fx_share": (Decimal("0"), Decimal("1")),
 }

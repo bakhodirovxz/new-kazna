@@ -1,4 +1,5 @@
 from collections.abc import Iterator
+from datetime import UTC, datetime
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
 
@@ -6,7 +7,8 @@ import pytest
 from sqlalchemy import text
 
 from app.core.db import apply_rls, new_session
-from app.dwh import builds
+from app.dwh import builds, finmodel_aggregates
+from app.dwh.freshness import freshness
 from app.etl.connectors import KNOWN_SOURCES, make_connector
 from app.etl.db import etl_transaction
 from app.etl.notify import LogNotifier
@@ -15,7 +17,7 @@ from app.etl.runner import Runner
 from app.etl.types import Mode
 from app.finmodel.inputs import gather_inputs, load_assumptions
 from app.finmodel.model import run_model
-from tests.etl_helpers import FULL_WINDOW, TEST_AS_OF, new_source, purge_source
+from tests.etl_helpers import FULL_WINDOW, TEST_AS_OF, new_source, open_run, purge_source
 from tests.s1_helpers import rebuild
 from tests.s5_helpers import FinScenario, fin_value, finmodel_scenario, put_fin
 
@@ -132,7 +134,48 @@ def test_rebuild_source_publishes_new_model(published_synthetic: Any) -> None:
                            ).scalar_one()
         count = s.execute(text("SELECT count(*) FROM pub.agg_finmodel_year")).scalar_one()
     with etl_transaction() as conn:
-        run = conn.execute(text("SELECT source, rows_in FROM core.etl_run WHERE id = :r"),
-                           {"r": result.run_id}).one()
+        run = conn.execute(text("SELECT source, rows_in, finished_at FROM core.etl_run "
+                                "WHERE id = :r"), {"r": result.run_id}).one()
     assert active == result.build_id and count == 28
     assert (run.source, run.rows_in) == ("rebuild", 0)
+    with etl_transaction() as conn:
+        assert freshness(conn, datetime.now(UTC)).last_success_at != run.finished_at
+
+
+def _count_after_rebuild(source: str) -> tuple[int, int]:
+    run_id = open_run(source)
+    build_id = rebuild(run_id)
+    with etl_transaction() as conn:
+        fm = conn.execute(text("SELECT count(*) FROM mart.agg_finmodel_year WHERE build_id = :b"),
+                          {"b": build_id}).scalar_one()
+        other = conn.execute(text("SELECT count(*) FROM mart.agg_cash_month WHERE build_id = :b"),
+                             {"b": build_id}).scalar_one()
+    return int(fm), int(other)
+
+
+def test_extreme_allowed_assumptions_do_not_break_build(sc: FinScenario) -> None:
+    saved = [(k, fin_value("base", 2026, k)) for k in ("tariff_start", "kium")]
+    saved.append(("generation_factor", fin_value("base", 2030, "generation_factor")))
+    put_fin("base", 2026, "tariff_start", Decimal(10))
+    put_fin("base", 2026, "kium", Decimal("0.05"))
+    put_fin("base", 2030, "generation_factor", Decimal("0.1"))
+    try:
+        fm, other = _count_after_rebuild(sc.source)
+    finally:
+        for key, value in saved:
+            put_fin("base", 2030 if key == "generation_factor" else 2026, key, value)
+    assert fm == 28 and other > 0
+
+
+def test_finmodel_failure_keeps_other_aggregates(sc: FinScenario,
+                                                 monkeypatch: pytest.MonkeyPatch) -> None:
+    def boom(*_: Any) -> int:
+        raise ValueError("finmodel: допущение yo'q")
+
+    monkeypatch.setattr(finmodel_aggregates, "_compute", boom)
+    fm, other = _count_after_rebuild(sc.source)
+    assert fm == 0 and other > 0  # model yo'q (has_model=false), qolgan agregatlar nashr bo'ladi
+
+
+def test_finmodel_rows_not_carried_forward() -> None:
+    assert finmodel_aggregates.FINMODEL_YEAR.carry is False

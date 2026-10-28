@@ -5,7 +5,8 @@ Faqat build `as_of` sanasigacha ma'lum bo'lgan faktlar (S5 spec 3.3):
 - xarajat bazasi — oxirgi 12 YOPILGAN oy operatsion rasxodi (`dwh.cashflow_effective`, S2
   ustuvorligi bilan), soliq/kredit statyalari (`kazna.calendar_kinds`) va
   `finmodel.opex_exclude_items` siz; yillikka keltirilmaydi (qator soni `opex_months`);
-- boshlang'ich qoldiq — har hisobning `as_of` gacha oxirgi `fact_balance` qiymati yig'indisi;
+- boshlang'ich qoldiq — birinchi model yili boshidagi (oldingi yil oxiridagi) hisoblar qoldig'i:
+  yil ichidagi oqimlar ikki marta sanalmaydi (S5 ruling M-8);
 - АИП rejasi — `fact_investment.plan` yillar bo'yicha (forward qatorlar);
 - kredit grafigi — yillar bo'yicha; valyuta — `as_of` gacha oxirgi ЦБ kursi, kursi yo'q valyuta
   hisobga olinmaydi va `missing_fx` ga yoziladi (S2 qarori).
@@ -60,7 +61,7 @@ _CASH = """
 SELECT coalesce(sum(z.balance), 0) FROM (
   SELECT DISTINCT ON (fb.branch_id, fb.bank_id) fb.balance
   FROM dwh.balance_effective fb
-  WHERE fb.date_id <= :as_of_id
+  WHERE fb.date_id <= :cash_id
   ORDER BY fb.branch_id, fb.bank_id, fb.date_id DESC) z
 """
 
@@ -120,7 +121,8 @@ def gather_inputs(conn: Connection, as_of: date) -> tuple[FinInputs, InputsMeta]
     start, end = opex_window(as_of)
     opex = conn.execute(text(_OPEX), {"excluded": opex_excluded_items(conn),
                                       "from_id": date_id(start), "to_id": date_id(end)}).one()
-    cash = Decimal(conn.execute(text(_CASH), {"as_of_id": as_of_id}).scalar_one())
+    cash = Decimal(conn.execute(
+        text(_CASH), {"cash_id": date_id(date(FIN_FIRST_YEAR - 1, 12, 31))}).scalar_one())
     aip = {int(r.year): Decimal(r.plan) for r in conn.execute(text(_AIP), years)}
     parts: dict[int, list[Decimal]] = {}
     missing: set[str] = set()

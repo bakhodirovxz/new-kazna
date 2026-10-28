@@ -79,10 +79,13 @@ def finmodel_rows(tag: str) -> dict[str, list[dict[str, Any]]]:
             cash_row("c8", 20260404, code, 999, item_code=op, direction="in"),
         ],
         "fact_balance": [
-            {"doc_type": "statement", "src_id": "b1", "date_id": 20260831, "branch_code": code,
+            {"doc_type": "statement", "src_id": "b1", "date_id": 20251120, "branch_code": code,
              "bank_code": bank, "balance": 650},
-            {"doc_type": "statement", "src_id": "b2", "date_id": 20260920, "branch_code": code,
+            {"doc_type": "statement", "src_id": "b2", "date_id": 20251215, "branch_code": code,
              "bank_code": bank, "balance": 800},
+            # yil ichidagi qoldiq (M-8) — boshlang'ich qoldiqqa kirmaydi
+            {"doc_type": "statement", "src_id": "b3", "date_id": 20260301, "branch_code": code,
+             "bank_code": bank, "balance": 99999},
         ],
         "fact_investment": [
             inv("i0", 20250101, 0, 300, doc="aip_opening"), inv("i1", 20260301, 100),

@@ -5,7 +5,7 @@ from __future__ import annotations
 import itertools
 import json
 import uuid
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from datetime import UTC, date, datetime
 from decimal import Decimal
 from typing import Any
@@ -56,11 +56,23 @@ def plan_item(
             "date": month, "amount": str(amount)}
 
 
-def seed_dwh_bank(code: str, name: str = "Тест-банк") -> None:
+def seed_dwh_bank(
+    code: str, name: str = "Тест-банк", branches: Iterable[int] = range(1, 17)
+) -> None:
+    """1C hisobi + uni filiallarga bog'lovchi `synthetic` qoldiq qatori (hisob <-> filial
+    aloqasi qoldiq faktlari orqali; `synthetic` qo'lda kiritilganni hech qachon yashirmaydi)."""
     with get_engine("migrator").begin() as conn:
+        conn.execute(text("SELECT set_config('app.scope_all', 'on', true)"))
         conn.execute(text(
             "INSERT INTO dwh.dim_bank (code, bank_name, currency) VALUES (:c, :n, 'UZS') "
             "ON CONFLICT (code) DO NOTHING"), {"c": code, "n": name})
+        conn.execute(text(
+            "INSERT INTO dwh.fact_balance (date_id, branch_id, bank_id, balance, load_id, "
+            "src_system, doc_type, src_id) "
+            "SELECT 20250101, br, (SELECT bank_id FROM dwh.dim_bank WHERE code = :c), 0, 0, "
+            "'synthetic', 'statement', 'link:' || :c || ':' || br "
+            "FROM unnest(CAST(:b AS int[])) br "
+            "ON CONFLICT DO NOTHING"), {"c": code, "b": list(branches)})
 
 
 def migrator_sql(sql: str, **params: Any) -> list[tuple[Any, ...]]:

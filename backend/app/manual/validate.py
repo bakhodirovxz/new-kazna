@@ -190,8 +190,20 @@ def _branch_code(db: Session, branch_id: int) -> str | None:
                       {"b": branch_id}).scalar_one_or_none()
 
 
-def _existing_refs(db: Session, entity: ManualEntity, f: FieldDef, codes: set[str]) -> set[str]:
-    """dwh o'lchovi YOKI shu o'lchovni yaratuvchi tasdiqlangan (o'chirilmagan) manual bosh."""
+# Hisob <-> filial: filialning qoldiq faktlari (1C/sintetik/qo'lda) YOKI shu filialning tasdiqlangan
+# qo'lda «Банковский счёт» yozuvi. dim_bank'da filial ustuni yo'q. Faktlar RLS ostida.
+_BRANCH_DWH = (" AND EXISTS (SELECT 1 FROM dwh.fact_balance fb WHERE fb.bank_id = dwh.{ref}.bank_id"
+               " AND (CAST(:br AS integer) IS NULL OR fb.branch_id = :br))")
+
+
+def branch_scoped_sql(f: FieldDef) -> str:
+    return _BRANCH_DWH.format(ref=f.ref) if f.branch_scoped else ""
+
+
+def _existing_refs(db: Session, entity: ManualEntity, f: FieldDef, codes: set[str],
+                   branch_id: int | None = None) -> set[str]:
+    """dwh o'lchovi YOKI shu o'lchovni yaratuvchi tasdiqlangan (o'chirilmagan) manual bosh.
+    `branch_scoped` maydon (hisob) uchun ikkalasi ham `branch_id` bilan cheklanadi."""
     if not codes or f.ref is None:
         return set()
     from app.manual.entities import ENTITIES  # sikldan qochish
@@ -199,14 +211,17 @@ def _existing_refs(db: Session, entity: ManualEntity, f: FieldDef, codes: set[st
     where = f" AND {f.ref_where}" if f.ref_where else ""
     # f.ref/ref_where faqat reyestr kodidan (foydalanuvchi kiritmaydi); qiymatlar -- parametr.
     found = set(db.execute(
-        text(f"SELECT code FROM dwh.{f.ref} WHERE code = ANY(:c){where}"),  # noqa: S608
-        {"c": sorted(codes)}).scalars())
+        text(f"SELECT code FROM dwh.{f.ref} WHERE code = ANY(:c){where}"  # noqa: S608
+             f"{branch_scoped_sql(f)}"),
+        {"c": sorted(codes), **({"br": branch_id} if f.branch_scoped else {})}).scalars())
     owners = [e.id for e in ENTITIES.values() if e.kind == "dim" and e.target == f.ref]
     if owners and not f.ref_where:
         found |= set(db.execute(text(
             "SELECT code FROM core.manual_head WHERE entity = ANY(:e) AND code = ANY(:c) "
-            "AND approved_version IS NOT NULL AND NOT approved_deleted"),
-            {"e": owners, "c": sorted(codes)}).scalars())
+            "AND approved_version IS NOT NULL AND NOT approved_deleted "
+            "AND (NOT :scoped OR branch_id = :br)"),
+            {"e": owners, "c": sorted(codes), "scoped": f.branch_scoped,
+             "br": branch_id}).scalars())
     return found
 
 
@@ -256,7 +271,7 @@ def check_items(
         if f.kind != "ref" or f.name == "branch_code":
             continue
         wanted = {str(v[f.name]) for v in values.values() if v.get(f.name)}
-        known = _existing_refs(db, entity, f, wanted)
+        known = _existing_refs(db, entity, f, wanted, branch_id)
         errors += [{"row": i, "field": f.name, "code": "reference_not_found"}
                    for i, v in values.items() if v.get(f.name) and str(v[f.name]) not in known]
 

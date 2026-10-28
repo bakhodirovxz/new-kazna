@@ -35,6 +35,7 @@ from app.manual.schemas import (
     SubmitIn,
     WithdrawIn,
 )
+from app.manual.validate import branch_scoped_sql
 from app.sections.deps import SQ
 
 router = APIRouter(
@@ -141,8 +142,9 @@ def field_options(
     # nosemgrep: avoid-sqlalchemy-text -- jadval/ustun/shart koddan, qiymat parametr
     for code, title in db.execute(text(
             f"SELECT code, {_LABELS[f.ref]} FROM dwh.{f.ref} "  # noqa: S608
-            f"WHERE (code ILIKE :q OR {_LABELS[f.ref]} ILIKE :q){where} ORDER BY code LIMIT :n"),
-            {"q": _like(q), "n": OPTION_LIMIT}).all():
+            f"WHERE (code ILIKE :q OR {_LABELS[f.ref]} ILIKE :q){where}"
+            f"{branch_scoped_sql(f)} ORDER BY code LIMIT :n"),
+            {"q": _like(q), "n": OPTION_LIMIT, **({"br": br} if f.branch_scoped else {})}).all():
         found[code] = title
     owners = [e.id for e in ENTITIES.values() if e.kind == "dim" and e.target == f.ref]
     if owners and not f.ref_where:

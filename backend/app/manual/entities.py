@@ -49,6 +49,7 @@ class FieldDef:
     purpose: Purpose | None = None
     pattern: str | None = None
     unit: str = ""
+    branch_scoped: bool = False  # ref faqat tanlangan filialga tegishli yozuvlardan (hisob)
 
 
 @dataclass(frozen=True, slots=True)
@@ -101,7 +102,7 @@ _ALL: tuple[ManualEntity, ...] = (
         "kazna.balance", Section.KAZNA, "Остатки на счетах", "fact_balance", "manual_balance",
         (
             _BRANCH,
-            FieldDef("bank_code", "ref", "Счёт", ref="dim_bank"),
+            FieldDef("bank_code", "ref", "Счёт", ref="dim_bank", branch_scoped=True),
             FieldDef("date", "date", "Дата"),
             FieldDef("balance", "money", "Остаток", lo=-MONEY_LIMIT, hi=MONEY_LIMIT,
                      unit="млн сум"),

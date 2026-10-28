@@ -429,11 +429,11 @@ def _bulk_new(db: Session, ctx: AuthContext, entity: ManualEntity, batch_id: int
     if not fresh:
         return set()
     keys = [business_key(entity, p.values) for _, p in fresh]
-    heads = dict(db.execute(text(
+    heads = {str(k): int(v) for k, v in db.execute(text(
         "INSERT INTO core.manual_head (entity, branch_id, business_key) "
         "SELECT :e, :b, k FROM unnest(CAST(:k AS text[])) AS k "
         "ON CONFLICT (entity, business_key) DO NOTHING RETURNING business_key, entry_id"),
-        {"e": entity.id, "b": branch_id, "k": keys}).all())
+        {"e": entity.id, "b": branch_id, "k": keys}).all()}
     got = [(i, p, heads[k]) for (i, p), k in zip(fresh, keys, strict=True) if k in heads]
     if not got:
         return set()

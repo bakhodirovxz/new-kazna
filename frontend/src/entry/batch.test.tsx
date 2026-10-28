@@ -58,6 +58,21 @@ describe('batches', () => {
     expect(srv.calls.find((c) => c.path === '/data/batches/5/approve')?.body).toEqual({ expected_version: 2, comment: null });
   });
 
+  it('shows «Ошибка публикации» with the failed check on list and page', async () => {
+    const failed = { ...BATCH, status: 'failed', publish_error: 'Проверки качества не пройдены: balance_identity (запуск №7)' };
+    server({
+      'GET /data/batches': json({ items: [failed], total: 1, page: 1 }),
+      'GET /data/batches/5': json({ ...DETAIL, ...failed, publication: { status: 'failed', build_id: null } }),
+    });
+    const { user } = renderWithProviders(<BatchList box="mine" />);
+    expect(await screen.findAllByText('Ошибка публикации')).not.toHaveLength(0);
+    expect(screen.getByText(/balance_identity/)).toBeInTheDocument();
+    await open(user);
+    expect(screen.getAllByText('Ошибка публикации').length).toBeGreaterThan(0);
+    expect(screen.getByText(/balance_identity/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Утвердить' })).not.toBeInTheDocument();
+  });
+
   it('status filter starts with «Все»', async () => {
     server();
     renderWithProviders(<BatchList box="mine" />);

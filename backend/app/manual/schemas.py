@@ -66,6 +66,7 @@ class BatchOut(BaseModel):
     decision_comment: str | None = None
     version: int
     etl_request_id: int | None = None
+    publish_error: str | None = None
 
 
 class ChangeOut(BaseModel):

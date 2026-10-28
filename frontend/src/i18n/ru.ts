@@ -1270,6 +1270,8 @@ export const ru = {
   'entry.status.approved': 'Утверждено',
   'entry.status.rejected': 'Отклонено',
   'entry.status.withdrawn': 'Отозвано',
+  'entry.status.failed': 'Ошибка публикации',
+  'entry.batch.publishError': 'Причина: {error}. Данные не опубликованы; введите их заново новым пакетом.',
   'entry.record.active': 'Действует',
   'entry.record.pending': 'На согласовании',
   'entry.record.deleted': 'Удалено',

@@ -27,7 +27,7 @@ import './entry.css';
 type Change = EntryBatchDetail['items'][number];
 
 const STATUS_TONE: Record<string, BadgeTone> = {
-  draft: 'neutral', submitted: 'warn', approved: 'ok', rejected: 'neg', withdrawn: 'neutral',
+  draft: 'neutral', submitted: 'warn', approved: 'ok', rejected: 'neg', withdrawn: 'neutral', failed: 'neg',
 };
 
 function shown(entity: EntryEntity | undefined, name: string, value: unknown): string {
@@ -139,6 +139,7 @@ export function BatchPage({ id, onBack }: { id: number; onBack(): void }) {
       </p>
       {data.reason ? <p>{t('entry.batch.reason', { reason: data.reason })}</p> : null}
       {data.decision_comment ? <p>{data.decision_comment}</p> : null}
+      {data.publish_error ? <p className="form-error" role="alert">{t('entry.batch.publishError', { error: data.publish_error })}</p> : null}
       {data.items.length === 0 ? (
         <EmptyState title={t('entry.empty')} />
       ) : (

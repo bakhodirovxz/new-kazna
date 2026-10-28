@@ -1989,6 +1989,8 @@ export interface components {
             version: number;
             /** Etl Request Id */
             etl_request_id?: number | null;
+            /** Publish Error */
+            publish_error?: string | null;
             /** Items */
             items: components["schemas"]["ChangeOut"][];
             publication?: components["schemas"]["PublicationOut"] | null;
@@ -2049,6 +2051,8 @@ export interface components {
             version: number;
             /** Etl Request Id */
             etl_request_id?: number | null;
+            /** Publish Error */
+            publish_error?: string | null;
         };
         /** BatchUpdateIn */
         BatchUpdateIn: {
@@ -7291,7 +7295,7 @@ export interface operations {
         parameters: {
             query?: {
                 box?: "mine" | "inbox";
-                status?: ("draft" | "submitted" | "approved" | "rejected" | "withdrawn") | null;
+                status?: ("draft" | "submitted" | "approved" | "rejected" | "withdrawn" | "failed") | null;
                 page?: number;
             };
             header?: {

@@ -137,6 +137,8 @@ def reject_batch(db: Session, ctx: AuthContext, meta: ClientMeta, batch_id: int,
 
 def publication_status(db: Session, batch: BatchOut | Any) -> PublicationOut:
     """Tasdiqlangan paketning nashr holati: core.etl_requests -> core.etl_run."""
+    if batch.status == "failed":
+        return PublicationOut(status="failed")
     if batch.status != "approved" or batch.etl_request_id is None:
         return PublicationOut(status="none")
     req = db.execute(text("SELECT status, run_id FROM core.etl_requests WHERE id = :i"),

@@ -226,8 +226,9 @@ def reject_batch(batch_id: int, body: DecisionIn, ctx: Ctx, db: DB, meta: Meta) 
 @router.get("/batches")
 def list_batches(
     ctx: Ctx, db: DB, box: Literal["mine", "inbox"] = "mine",
-    status: Annotated[Literal["draft", "submitted", "approved", "rejected", "withdrawn"] | None,
-                      Query()] = None,
+    status: Annotated[
+        Literal["draft", "submitted", "approved", "rejected", "withdrawn", "failed"] | None,
+        Query()] = None,
     page: Annotated[int, Query(ge=1, le=100000)] = 1,
 ) -> Page[BatchOut]:
     return store.list_batches(db, ctx, box=box, status=status, page=page)

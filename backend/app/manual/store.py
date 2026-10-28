@@ -429,12 +429,20 @@ def _bulk_new(db: Session, ctx: AuthContext, entity: ManualEntity, batch_id: int
     if not fresh:
         return set()
     keys = [business_key(entity, p.values) for _, p in fresh]
+    # tartiblangan, takrorsiz kalitlar: qulf tartibi aniq (deadlock yo'q); takror kalit sekin
+    # yo'lga tushadi va u yerda duplicate_record bo'ladi (500 emas)
+    ordered = sorted(set(keys))
     heads = {str(k): int(v) for k, v in db.execute(text(
         "INSERT INTO core.manual_head (entity, branch_id, business_key) "
         "SELECT :e, :b, k FROM unnest(CAST(:k AS text[])) AS k "
         "ON CONFLICT (entity, business_key) DO NOTHING RETURNING business_key, entry_id"),
-        {"e": entity.id, "b": branch_id, "k": keys}).all()}
-    got = [(i, p, heads[k]) for (i, p), k in zip(fresh, keys, strict=True) if k in heads]
+        {"e": entity.id, "b": branch_id, "k": ordered}).all()}
+    taken: set[str] = set()
+    got = []
+    for (i, p), k in zip(fresh, keys, strict=True):
+        if k in heads and k not in taken:
+            taken.add(k)
+            got.append((i, p, heads[k]))
     if not got:
         return set()
     ids = db.execute(text("SELECT nextval('core.manual_entry_id_seq') FROM generate_series(1, :n)"),

@@ -73,17 +73,22 @@ class FormatErrors(ValidationFailed):
         super().__init__("import_invalid", rows=rows[:MAX_ERRORS],
                          fields=sorted({r["field"] for r in rows}))
         self.good = good
+        self.all_rows = rows  # to'liq ro'yxat: 200 ga kesish birlashtirishdan KEYIN
 
 
 def with_reference_errors(db: Session, entity: ManualEntity, branch_id: int,
                           exc: FormatErrors) -> ValidationFailed:
     """Format xatolariga xatosiz qatorlarning mazmun/spravochnik xatolarini qo'shadi."""
     items, lines = exc.good
-    rows = [*exc.params["rows"]]
+    found: list[dict[str, Any]] = []
     if items:
-        _, found = check_items(db, entity, branch_id, items)
-        rows += [{**e, "row": lines[e["row"] - 1]} for e in found]
-    rows.sort(key=lambda e: (e["row"], e["field"]))
+        _, errs = check_items(db, entity, branch_id, items)
+        found = [{**e, "row": lines[e["row"] - 1]} for e in errs]
+    return merge_errors(exc, found)
+
+
+def merge_errors(exc: FormatErrors, found: list[dict[str, Any]]) -> ValidationFailed:
+    rows = sorted([*exc.all_rows, *found], key=lambda e: (e["row"], e["field"]))
     return _invalid(rows)
 
 
@@ -212,9 +217,17 @@ def _build(entity: ManualEntity, header: list[Any], rows: Rows) -> Parsed:
     return items, lines
 
 
+def _decode(body: bytes) -> str:
+    """UTF-8; ruscha Excel «CSV» ni cp1251 da saqlaydi -- shunda qat'iy cp1251 (I-2)."""
+    try:
+        return body.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        return body.decode("cp1251")  # UnicodeDecodeError -> _parse_csv unsupported_file
+
+
 def _parse_csv(entity: ManualEntity, body: bytes) -> Parsed:
     try:
-        reader = csv.reader(io.StringIO(body.decode("utf-8-sig")), delimiter=";")
+        reader = csv.reader(io.StringIO(_decode(body)), delimiter=";")
         lines: Rows = []
         prev = 0
         for raw in reader:  # yozuv boshlanish qatori (bo'sh va ko'p qatorli kataklar bilan)

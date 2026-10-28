@@ -69,7 +69,7 @@ def seed_dwh_bank(
         conn.execute(text(
             "INSERT INTO dwh.fact_balance (date_id, branch_id, bank_id, balance, load_id, "
             "src_system, doc_type, src_id) "
-            "SELECT 20250101, br, (SELECT bank_id FROM dwh.dim_bank WHERE code = :c), 0, 0, "
+            "SELECT 20260115, br, (SELECT bank_id FROM dwh.dim_bank WHERE code = :c), 0, 0, "
             "'synthetic', 'statement', 'link:' || :c || ':' || br "
             "FROM unnest(CAST(:b AS int[])) br "
             "ON CONFLICT DO NOTHING"), {"c": code, "b": list(branches)})

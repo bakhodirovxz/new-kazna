@@ -316,7 +316,10 @@ async def import_file(
                 file_meta={"name": name, "sha256": digest})
         except (ValidationFailed, ConflictError) as exc:
             if isinstance(exc, imports.FormatErrors):  # format + spravochnik xatolari bir yo'la
-                exc = imports.with_reference_errors(db, entity, branch_id, exc)
+                try:
+                    exc = imports.with_reference_errors(db, entity, branch_id, exc)
+                except Exception:  # tekshiruv yiqilsa ham rad etish auditga tushadi (M-2)
+                    db.rollback()
             new = _remap(exc, lines) if lines and exc.params.get("rows") else exc
             rejected(new)
             raise new from None

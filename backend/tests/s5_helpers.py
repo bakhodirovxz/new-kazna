@@ -8,7 +8,8 @@ from typing import Any
 
 from sqlalchemy import text
 
-from app.core.db import get_engine
+from app.auth.models import Role, RolePermission
+from app.core.db import get_engine, new_session
 from tests.etl_helpers import branch_row, cash_row, merge_all, new_tag, open_run, stage
 from tests.s1_helpers import rebuild
 
@@ -124,3 +125,15 @@ def put_fin(scenario: str, year: int, key: str, value: Decimal) -> None:
         conn.execute(text(
             "INSERT INTO core.fin_assumptions (scenario, year, key, version, value) "
             "VALUES (:s, :y, :k, :v, :val)"), {**params, "v": version + 1, "val": value})
+
+
+def scoped_role(code: str, perms: tuple[str, ...]) -> str:
+    """Filial doirasi cheklangan (scope_all = false) sinov roli."""
+    with new_session() as s:
+        role = Role(code=code, name=f"Тест {code}", scope_all=False, is_system=False)
+        s.add(role)
+        s.flush()
+        for perm in perms:
+            s.add(RolePermission(role_id=role.id, permission_code=perm))
+        s.commit()
+    return code

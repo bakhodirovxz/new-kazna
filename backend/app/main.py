@@ -36,6 +36,7 @@ from app.manual.router import router as manual_router
 from app.meta.router import router as meta_router
 from app.sections.exports import log_router as exports_log_router
 from app.sections.exports import xlsx_router as exports_xlsx_router
+from app.sections.finmodel import router as finmodel_router
 from app.sections.investicii import router as investicii_router
 from app.sections.kadry import router as kadry_router
 from app.sections.kazna import router as kazna_router
@@ -83,6 +84,7 @@ def create_app() -> FastAPI:
     app.include_router(obzor_router, prefix=API_PREFIX)
     app.include_router(kazna_router, prefix=API_PREFIX)
     app.include_router(kredity_router, prefix=API_PREFIX)
+    app.include_router(finmodel_router, prefix=API_PREFIX)
     app.include_router(zakupki_router, prefix=API_PREFIX)
     app.include_router(investicii_router, prefix=API_PREFIX)
     app.include_router(kadry_router, prefix=API_PREFIX)

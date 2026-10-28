@@ -11,7 +11,7 @@ ni o'qiydi (FORCE RLS filial doirasini baribir cheklaydi; summa/sana/manba ko'ri
 from alembic import op
 
 revision = "0024m"
-down_revision = "0023a"
+down_revision = "0024"
 branch_labels = None
 depends_on = None
 

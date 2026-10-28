@@ -11,6 +11,7 @@ UI faqat shu agregatlarni (pub view orqali) o'qiydi — faktlarga so'rov yuborma
 from __future__ import annotations
 
 import json
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import date
 from typing import Any
@@ -22,11 +23,18 @@ from app.core import sysconfig
 from app.dwh.dates import date_id, month_id, month_start
 from app.dwh.targets import SCHEDULE_DOC_TYPE
 
+Compute = Callable[[Connection, Mapping[str, Any]], int]
+
 
 @dataclass(frozen=True, slots=True)
 class Aggregate:
     table: str  # mart sxemasidagi jadval
     statements: tuple[str, ...]
+    # S5: Python bosqichi (masalan, финмодель) — SQL'lardan keyin, o'sha tranzaksiyada chaqiriladi,
+    # yozilgan qatorlar sonini qaytaradi.
+    compute: Compute | None = None
+    # False — har build'da to'liq qayta hisoblanadi (ko'chirilsa eski qatorlar dublikat bo'ladi).
+    carry: bool = True
 
 
 @dataclass(frozen=True, slots=True)
@@ -80,11 +88,13 @@ def build_all(conn: Connection, build_id: int, params: BuildParams) -> dict[str,
     out: dict[str, int] = {}
     for aggregate in AGGREGATES:
         # nosemgrep: avoid-sqlalchemy-text
-        carried = conn.execute(text(_CARRY_FORWARD.format(table=aggregate.table)),
-                               bound).rowcount
-        out[aggregate.table] = carried + sum(
-            conn.execute(text(sql), bound).rowcount for sql in aggregate.statements
-        )
+        carried = (conn.execute(text(_CARRY_FORWARD.format(table=aggregate.table)),
+                                bound).rowcount if aggregate.carry else 0)
+        rows = carried + sum(conn.execute(text(sql), bound).rowcount
+                             for sql in aggregate.statements)
+        if aggregate.compute is not None:
+            rows += aggregate.compute(conn, bound)
+        out[aggregate.table] = rows
     return out
 
 
@@ -197,6 +207,7 @@ PAYMENTS_MONTH = register(Aggregate("agg_payments_month", (_PAYMENTS,)))
 
 # S1 agregatlari (spec 5): shu modul yuklanganda ro'yxatga qo'shiladi (register allaqachon tayyor).
 from app.dwh import (  # noqa: E402, F401
+    finmodel_aggregates,
     hr_aggregates,
     investment_aggregates,
     loan_aggregates,

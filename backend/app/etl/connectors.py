@@ -28,13 +28,14 @@ from app.etl.manual_connector import ManualConnector
 from app.etl.onec.client import OneCClient, OneCConfig
 from app.etl.onec.connector import OneCConnector, OrgMap
 from app.etl.onec.sklad import OneCSkladConnector, sklad_config
+from app.etl.rebuild import RebuildConnector
 from app.etl.synthetic import SyntheticConnector
 from app.etl.types import SourceConnector
 from app.etl.zakupki.connector import ProcurementConnector
 from app.etl.zakupki.portal import XaridPortal
 
 KNOWN_SOURCES = ("synthetic", "file", "onec", "banks", "cbu", "directbank", "xarid", "hr",
-                 "mehnat", "askue", "onec_sklad", "manual")
+                 "mehnat", "askue", "onec_sklad", "manual", "rebuild")
 
 
 def _xarid(settings: Settings) -> ProcurementConnector:
@@ -134,6 +135,8 @@ def make_connector(source: str, settings: Settings | None = None) -> SourceConne
         if settings.env == "prod":
             raise ConfigError("SyntheticConnector prod muhitida taqiqlangan")
         return SyntheticConnector(seed=settings.synthetic_seed)
+    if source == "rebuild":
+        return RebuildConnector()  # S5: ekstraktsiyasiz qayta hisob (dev va prod'da)
     if source == "onec_sklad":
         return _onec_sklad()
     if source == "askue":

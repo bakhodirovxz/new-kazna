@@ -136,6 +136,14 @@ def test_fin_assumptions_update(client: TestClient) -> None:
         bad_year = client.put("/api/v1/admin/fin-assumptions",
                               json={"items": [{**item, "year": 2040, "value": 1}]})
         assert bad_year.status_code == 422
+        scalar_year = client.put("/api/v1/admin/fin-assumptions", json={"items": [
+            {"scenario": "base", "year": 2027, "key": "tariff_start", "value": 700}]})
+        assert scalar_year.status_code == 422
+        big = client.put("/api/v1/admin/fin-assumptions", json={"items": [
+            {"scenario": "base", "year": 2026, "key": "tariff_start", "value": 750}]})
+        assert big.status_code == 200, big.text
+        client.put("/api/v1/admin/fin-assumptions", json={"items": [
+            {"scenario": "base", "year": 2026, "key": "tariff_start", "value": 705}]})
     finally:
         client.put("/api/v1/admin/fin-assumptions", json={"items": [{**item, "value": 0.04}]})
 

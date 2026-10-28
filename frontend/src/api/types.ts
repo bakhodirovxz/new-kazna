@@ -166,3 +166,11 @@ export type KredityReestrOut = Schemas['KredityReestrOut'];
 export type KredityGrafikOut = Schemas['KredityGrafikOut'];
 export type AiStatusOut = Schemas['AiStatusOut'];
 export type AiRequestOut = Schemas['AiRequestOut'];
+
+// S5 «Финмодель»: GET /finmodel/model.
+export type FinYearOut = Schemas['FinYearOut'];
+export type FinVerdict = FinSummaryOut['verdict'];
+export type FinSummaryOut = Schemas['FinSummaryOut'];
+export type FinSensitivityOut = Schemas['FinSensitivityOut'];
+export type FinBaseOut = Schemas['FinBaseOut'];
+export type FinmodelOut = Schemas['FinmodelOut'];

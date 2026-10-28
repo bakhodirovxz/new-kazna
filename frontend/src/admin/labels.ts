@@ -82,7 +82,7 @@ export function stepLabel(name: string): string {
 }
 
 export function sourceLabel(source: string): string {
-  return text({ synthetic: 'etl.source.synthetic', file: 'etl.source.file' }, source);
+  return text({ synthetic: 'etl.source.synthetic', file: 'etl.source.file', rebuild: 'etl.source.rebuild' }, source);
 }
 
 export function modeLabel(mode: string): string {

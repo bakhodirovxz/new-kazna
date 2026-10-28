@@ -80,8 +80,9 @@ export function useFilters(route: SectionRoute, me: MeOut): FiltersApi {
       setBranch: (next) => go({ br: next, per: urlPer }),
       setPeriod: (code) => go({ br, per: code === defaultPeriod ? null : code }),
       resetAll: () => go({ br: null, per: null }),
-      hrefFor: (section, page) => buildHash({ kind: 'section', section, page, br, per: urlPer }),
+      hrefFor: (section, page) =>
+        buildHash({ kind: 'section', section, page, br, per: urlPer, ...(section === route.section && route.scen ? { scen: route.scen } : {}) }),
     }),
-    [br, per, urlPer, branches, periods, defaultPeriod, lockedBranch, ready, branchesQuery.error, periodsQuery.error, retry, go],
+    [br, per, urlPer, branches, periods, defaultPeriod, lockedBranch, ready, branchesQuery.error, periodsQuery.error, retry, go, route.section, route.scen],
   );
 }

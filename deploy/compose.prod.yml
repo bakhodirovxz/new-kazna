@@ -159,6 +159,8 @@ services:
       SMTP_STARTTLS: ${SMTP_STARTTLS:-true}
       SMTP_SSL: ${SMTP_SSL:-false}
       ONEC_ALLOW_HTTP: ${ONEC_ALLOW_HTTP:-false}
+      # HR API kaliti (panelda kalit bo'lmasa); faqat worker — HR so'rovlari shu yerda.
+      HR_API_KEY: ${HR_API_KEY:-}
     # tls_cert — faqat ochiq sertifikat (ops-check --tls-cert muddatni tekshiradi), kalit berilmaydi.
     secrets: [db_app_password, db_etl_password, redis_password, master_kek, blind_index_key,
               session_pepper, smtp_password, tls_cert, onec_ca_bundle]

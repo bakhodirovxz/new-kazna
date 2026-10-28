@@ -83,3 +83,10 @@ def test_limited_scope(sc: HrScenario) -> None:
         t = hr.totals(s, BranchSel(None, all_scope=False), resolve_period("m08", TEST_AS_OF),
                       [sc.salary_code])
     assert (t.plan, t.fact, t.payroll) == (100.0, 90.0, 180.0)
+
+
+def test_staff_plan_unknown_when_any_branch_lacks_it() -> None:
+    assert hr.staff_plan([(100.0, 90.0), (10.0, 9.0)]) == 110.0
+    assert hr.staff_plan([(100.0, 90.0), (0.0, 323.0)]) == 0.0  # HR API: штата нет
+    assert hr.staff_plan([(100.0, 90.0), (0.0, 0.0)]) == 100.0
+    assert hr.staff_plan([]) == 0.0

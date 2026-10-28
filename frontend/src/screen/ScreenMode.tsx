@@ -27,7 +27,7 @@ export function ScreenMode({ menu, route }: { menu: MenuOut; route: Route }) {
   if (sections.length === 0) return null;
   return (
     <>
-      <button type="button" className="tool" title={t('screen.buttonTitle')} onClick={startScreen}>
+      <button type="button" className="tool tool--desk" title={t('screen.buttonTitle')} onClick={startScreen}>
         <Icon name="monitor" />
         <span className="tool__label">{t('screen.button')}</span>
       </button>

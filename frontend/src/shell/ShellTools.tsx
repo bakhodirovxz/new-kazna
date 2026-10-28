@@ -114,7 +114,7 @@ export function ShellTools({ me, menu, route }: ShellToolsProps) {
           {linkLabel}
         </span>
       </button>
-      <button type="button" className="tool" title={t('tools.printTitle')} onClick={() => window.print()}>
+      <button type="button" className="tool tool--desk" title={t('tools.printTitle')} onClick={() => window.print()}>
         <Icon name="print" />
         <span className="tool__label">{t('tools.print')}</span>
       </button>

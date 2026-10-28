@@ -196,7 +196,11 @@
   .sections::-webkit-scrollbar { display: none; }
   .sec { height: 2.75rem; padding: 0 0.8rem; font-size: 0.98rem; }
   .sec .icon { display: none; }
-  .tools { gap: 0.3rem; }
+  /* 390px: foydalanuvchi menyusi ekrandan chiqib ketardi — telefonda keraksiz Печать/Экран yashirin,
+     ogohlantirish belgisi o'rniga faqat matn; sig'masa asboblar keyingi qatorga o'tadi */
+  .tools { gap: 0.3rem; flex: 1 1 auto; min-width: 0; flex-wrap: wrap; justify-content: flex-end; }
+  .tool--desk { display: none; }
+  .fresh--stale > .icon { display: none; }
   .main { padding: 1rem; }
   .head h1 { font-size: 1.6rem; }
   .filters .field { width: 100%; min-width: 0; }

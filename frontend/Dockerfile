@@ -37,7 +37,8 @@ RUN --mount=type=bind,source=certs,target=/certs \
 ENV SSL_CERT_FILE=/tmp/ca.pem GOFLAGS=-trimpath
 RUN v="$(/tmp/caddy-stock version)" \
  && xcaddy build "${v%% *}" \
-      --replace golang.org/x/net=golang.org/x/net@v0.60.0 --output /caddy \
+      --replace golang.org/x/net=golang.org/x/net@v0.60.0 \
+      --replace github.com/go-jose/go-jose/v4=github.com/go-jose/go-jose/v4@v4.1.6 --output /caddy \
  && /caddy version \
  && cat /caddy > /caddy-nocap && chmod 0755 /caddy-nocap
 

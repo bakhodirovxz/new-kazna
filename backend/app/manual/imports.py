@@ -16,11 +16,14 @@ from decimal import Decimal, InvalidOperation
 from typing import Any
 from urllib.parse import unquote
 
+from sqlalchemy.orm import Session
+
 from app.core import keystore
 from app.core.errors import AppError, ValidationFailed
 from app.etl.errors import FileFormatError
 from app.etl.file_connector import _number
 from app.manual.entities import FieldDef, ManualEntity
+from app.manual.validate import check_items
 
 CSV_TYPE = "text/csv"
 XLSX_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
@@ -62,15 +65,49 @@ def _invalid(rows: list[dict[str, Any]]) -> ValidationFailed:
                             fields=sorted({r["field"] for r in rows}))
 
 
+class FormatErrors(ValidationFailed):
+    """Katak formati xatolari + xatosiz qatorlar (spravochnik tekshiruvi ular ustida ham
+    o'tkaziladi, shunda foydalanuvchi hamma xatoni bir yo'la ko'radi)."""
+
+    def __init__(self, rows: list[dict[str, Any]], good: Parsed) -> None:
+        super().__init__("import_invalid", rows=rows[:MAX_ERRORS],
+                         fields=sorted({r["field"] for r in rows}))
+        self.good = good
+        self.all_rows = rows  # to'liq ro'yxat: 200 ga kesish birlashtirishdan KEYIN
+
+
+def with_reference_errors(db: Session, entity: ManualEntity, branch_id: int,
+                          exc: FormatErrors) -> ValidationFailed:
+    """Format xatolariga xatosiz qatorlarning mazmun/spravochnik xatolarini qo'shadi."""
+    items, lines = exc.good
+    found: list[dict[str, Any]] = []
+    if items:
+        _, errs = check_items(db, entity, branch_id, items)
+        found = [{**e, "row": lines[e["row"] - 1]} for e in errs]
+    return merge_errors(exc, found)
+
+
+def merge_errors(exc: FormatErrors, found: list[dict[str, Any]]) -> ValidationFailed:
+    rows = sorted([*exc.all_rows, *found], key=lambda e: (e["row"], e["field"]))
+    return _invalid(rows)
+
+
 def _safe(value: str) -> str:
     """Formula-injection: `=+-@` yoki TAB/CR bilan boshlangan matn `'` bilan."""
     return "'" + value if value[:1] in ("=", "+", "-", "@", "\t", "\r") else value
 
 
+def header_label(f: FieldDef) -> str:
+    """Shablon sarlavhasi (ruscha). Parser eski texnik kodni (`branch_code`) ham qabul qiladi."""
+    if f.kind == "ref":
+        return f"{f.title} (код)"
+    return f"{f.title}, {f.unit}" if f.unit else f.title
+
+
 def template_csv(entity: ManualEntity) -> bytes:
     out = io.StringIO()
     csv.writer(out, delimiter=";", lineterminator="\r\n").writerow(
-        [_safe(f.name) for f in entity.fields])
+        [_safe(header_label(f)) for f in entity.fields])
     return b"\xef\xbb\xbf" + out.getvalue().encode()
 
 
@@ -82,15 +119,15 @@ def template_xlsx(entity: ManualEntity) -> bytes:
     data = wb.active
     assert data is not None
     data.title = "Данные"
-    data.append([_safe(f.name) for f in entity.fields])
+    data.append([_safe(header_label(f)) for f in entity.fields])
     for i, f in enumerate(entity.fields, start=1):
         if f.kind in _TEXT_KINDS:  # Excel hisob raqamini songa aylantirmasin (review I2)
             data.column_dimensions[get_column_letter(i)].number_format = "@"
     info = wb.create_sheet("Описание")
-    info.append(["Колонка", "Название", "Тип", "Обязательное", "Формат"])
+    info.append(["Колонка", "Код поля", "Название", "Тип", "Обязательное", "Формат"])
     for f in entity.fields:
         fmt = "; ".join(c for c, _ in f.options) if f.options else f.unit
-        info.append([_safe(f.name), _safe(f.title), _KIND_RU[f.kind],
+        info.append([_safe(header_label(f)), _safe(f.name), _safe(f.title), _KIND_RU[f.kind],
                      "да" if f.required else "нет", _safe(fmt)])
     buf = io.BytesIO()
     wb.save(buf)
@@ -146,7 +183,8 @@ def _cell(f: FieldDef, value: Any, row: int, errors: list[dict[str, Any]]) -> st
 
 
 def _build(entity: ManualEntity, header: list[Any], rows: Rows) -> Parsed:
-    order = [str(h or "").strip() for h in header]
+    known = {k.casefold(): f.name for f in entity.fields for k in (f.name, header_label(f))}
+    order = [known.get(str(h or "").strip().casefold(), "") for h in header]
     if sorted(order) != sorted(f.name for f in entity.fields):
         raise _invalid([{"row": 1, "field": "", "code": "bad_header"}])
     by_name = {f.name: f for f in entity.fields}
@@ -157,25 +195,44 @@ def _build(entity: ManualEntity, header: list[Any], rows: Rows) -> Parsed:
     items: list[dict[str, str]] = []
     lines: list[int] = []
     errors: list[dict[str, Any]] = []
+    items_ok: list[dict[str, str]] = []
+    lines_ok: list[int] = []
     for line, raw in rows:
         if len(raw) != len(order):
             errors.append({"row": line, "field": "", "code": "invalid_value"})
             continue
         item: dict[str, str] = {}
+        before = len(errors)
         for name, value in zip(order, raw, strict=True):
             v = _cell(by_name[name], value, line, errors)
             if v is not None:
                 item[name] = v
         items.append(item)
         lines.append(line)
+        if len(errors) == before:
+            items_ok.append(item)
+            lines_ok.append(line)
     if errors:
-        raise _invalid(errors)
+        raise FormatErrors(errors, (items_ok, lines_ok))
     return items, lines
+
+
+def _decode(entity: ManualEntity, body: bytes) -> str:
+    """UTF-8. Ruscha Excel «CSV» ni cp1251 da saqlaydi: faqat sarlavha qatori ruscha yorliqlarga
+    mos kelsa qat'iy cp1251 (aks holda buzuq UTF-8 fayl jimgina o'qilmasin)."""
+    try:
+        return body.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        text_ = body.decode("cp1251")  # UnicodeDecodeError -> _parse_csv unsupported_file
+        head = {c.strip().casefold() for c in text_.partition("\n")[0].split(";")}
+        if head & {header_label(f).casefold() for f in entity.fields}:
+            return text_
+        raise
 
 
 def _parse_csv(entity: ManualEntity, body: bytes) -> Parsed:
     try:
-        reader = csv.reader(io.StringIO(body.decode("utf-8-sig")), delimiter=";")
+        reader = csv.reader(io.StringIO(_decode(entity, body)), delimiter=";")
         lines: Rows = []
         prev = 0
         for raw in reader:  # yozuv boshlanish qatori (bo'sh va ko'p qatorli kataklar bilan)

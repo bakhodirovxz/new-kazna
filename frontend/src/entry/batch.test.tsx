@@ -58,6 +58,40 @@ describe('batches', () => {
     expect(srv.calls.find((c) => c.path === '/data/batches/5/approve')?.body).toEqual({ expected_version: 2, comment: null });
   });
 
+  it('shows «Ошибка публикации» with check, violations and help (status stays «Утверждено»)', async () => {
+    const failed = {
+      ...BATCH, status: 'approved', etl_request_id: 4,
+      publication: {
+        status: 'failed', kind: 'quality', run_id: 7, error: 'Проверки качества не пройдены: balance_identity',
+        checks: [{ code: 'balance_identity', items: [{ branch_id: 3, month_id: 202608 }] }],
+      },
+    };
+    server({
+      'GET /data/batches': json({ items: [failed], total: 1, page: 1 }),
+      'GET /data/batches/5': json({ ...DETAIL, ...failed }),
+    });
+    const { user } = renderWithProviders(<BatchList box="mine" />);
+    const table = await screen.findByRole('table');
+    expect(within(table).getByText('Ошибка публикации')).toBeInTheDocument();
+    expect(within(table).getByText('Утверждено')).toBeInTheDocument();
+    await open(user);
+    expect(screen.getByText(/Не пройдена проверка «баланс остатков/)).toBeInTheDocument();
+    expect(screen.getByText(/2026-08/)).toBeInTheDocument();
+    expect(screen.getByText(/Исправьте значения новым пакетом или удалите ошибочную запись/)).toBeInTheDocument();
+  });
+
+  it('shows a build failure with the run number', async () => {
+    const failed = { ...BATCH, status: 'approved', etl_request_id: 4,
+      publication: { status: 'failed', kind: 'build', run_id: 9, error: 'RuntimeError', checks: [] } };
+    server({
+      'GET /data/batches': json({ items: [failed], total: 1, page: 1 }),
+      'GET /data/batches/5': json({ ...DETAIL, ...failed }),
+    });
+    const { user } = renderWithProviders(<BatchList box="mine" />);
+    await open(user);
+    expect(await screen.findByText('Ошибка сборки №9: RuntimeError')).toBeInTheDocument();
+  });
+
   it('status filter starts with «Все»', async () => {
     server();
     renderWithProviders(<BatchList box="mine" />);

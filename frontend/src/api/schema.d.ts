@@ -2057,9 +2057,9 @@ export interface components {
             version: number;
             /** Etl Request Id */
             etl_request_id?: number | null;
+            publication?: components["schemas"]["PublicationOut"] | null;
             /** Items */
             items: components["schemas"]["ChangeOut"][];
-            publication?: components["schemas"]["PublicationOut"] | null;
         };
         /** BatchIn */
         BatchIn: {
@@ -2117,6 +2117,7 @@ export interface components {
             version: number;
             /** Etl Request Id */
             etl_request_id?: number | null;
+            publication?: components["schemas"]["PublicationOut"] | null;
         };
         /** BatchUpdateIn */
         BatchUpdateIn: {
@@ -3924,7 +3925,19 @@ export interface components {
             /** Map */
             map: components["schemas"]["MapStationOut"][];
         };
-        /** PublicationOut */
+        /** PublicationCheck */
+        PublicationCheck: {
+            /** Code */
+            code: string;
+            /** Items */
+            items?: {
+                [key: string]: number;
+            }[];
+        };
+        /**
+         * PublicationOut
+         * @description Nashr holati -- o'qilganda hisoblanadi (paket `status` i o'zgarmaydi).
+         */
         PublicationOut: {
             /**
              * Status
@@ -3933,6 +3946,14 @@ export interface components {
             status: "none" | "queued" | "running" | "published" | "failed";
             /** Build Id */
             build_id?: number | null;
+            /** Run Id */
+            run_id?: number | null;
+            /** Kind */
+            kind?: ("quality" | "build") | null;
+            /** Error */
+            error?: string | null;
+            /** Checks */
+            checks?: components["schemas"]["PublicationCheck"][];
         };
         /**
          * Purpose
@@ -7533,7 +7554,7 @@ export interface operations {
         parameters: {
             query?: {
                 box?: "mine" | "inbox";
-                status?: ("draft" | "submitted" | "approved" | "rejected" | "withdrawn") | null;
+                status?: ("draft" | "submitted" | "approved" | "rejected" | "withdrawn" | "failed") | null;
                 page?: number;
             };
             header?: {

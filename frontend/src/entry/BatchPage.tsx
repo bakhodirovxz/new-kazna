@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { isApiError } from '../api/client';
 import { useMe } from '../auth/api';
 import { t } from '../i18n';
+import { ru } from '../i18n/ru';
+import { useBranches } from '../meta/api';
 import { Badge, type BadgeTone } from '../ui/Badge';
 import { Button } from '../ui/Button';
 import { EmptyState } from '../ui/EmptyState';
@@ -75,6 +77,35 @@ function publicationText(p: EntryBatchDetail['publication']): string | null {
   return t(`entry.pub.${p.status}` as 'entry.pub.queued');
 }
 
+function periodText(item: Record<string, number>): string {
+  const month = item.month_id !== undefined ? String(item.month_id) : String(item.date_id ?? '');
+  return month.length >= 6 ? `${month.slice(0, 4)}-${month.slice(4, 6)}${month.length === 8 ? `-${month.slice(6)}` : ''}` : month;
+}
+
+/** «Ошибка публикации»: проверка/сборка, нарушения своего филиала и что делать (мейкер–чекер). */
+function PublicationFailure({ p, branch }: { p: NonNullable<EntryBatchDetail['publication']>; branch: number }) {
+  const branches = useBranches();
+  const name = branches.data?.find((b) => b.id === branch)?.short_name ?? String(branch);
+  const lines: string[] = [];
+  if (p.kind === 'quality') {
+    for (const c of p.checks ?? []) {
+      const key = `entry.check.${c.code}`;
+      const label = Object.hasOwn(ru, key) ? t(key as 'entry.check.control_totals') : c.code;
+      lines.push(t('entry.pub.failedQuality', { check: label, run: p.run_id ?? 0 }));
+      for (const item of c.items ?? []) lines.push(t('entry.pub.item', { branch: name, period: periodText(item) }));
+    }
+  } else {
+    lines.push(p.run_id ? t('entry.pub.failedBuild', { run: p.run_id, error: p.error ?? '' }) : t('entry.pub.failedBuildNoRun', { error: p.error ?? '' }));
+  }
+  return (
+    <div role="alert" className="form-error">
+      <p>{t('entry.pub.failed')}</p>
+      <ul>{lines.map((l, i) => <li key={`${i}:${l}`}>{l}</li>)}</ul>
+      <p>{t('entry.pub.help')}</p>
+    </div>
+  );
+}
+
 export function BatchPage({ id, onBack }: { id: number; onBack(): void }) {
   const toast = useToast();
   const me = useMe();
@@ -139,6 +170,7 @@ export function BatchPage({ id, onBack }: { id: number; onBack(): void }) {
       </p>
       {data.reason ? <p>{t('entry.batch.reason', { reason: data.reason })}</p> : null}
       {data.decision_comment ? <p>{data.decision_comment}</p> : null}
+      {data.publication?.status === 'failed' ? <PublicationFailure p={data.publication} branch={data.branch_id} /> : null}
       {data.items.length === 0 ? (
         <EmptyState title={t('entry.empty')} />
       ) : (

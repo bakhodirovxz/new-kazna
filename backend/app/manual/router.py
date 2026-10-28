@@ -15,6 +15,7 @@ from app.auth.permissions import ALL_DATA_PERMS, SECTION_TITLES, Perm, data_perm
 from app.core import ratelimit
 from app.core.db import DB
 from app.core.errors import AppError, ConflictError, ForbiddenError, NotFoundError, ValidationFailed
+from app.core.logging import get_logger
 from app.core.request_meta import Meta
 from app.manual import approval, imports, store
 from app.manual.entities import ENTITIES, FieldDef, ManualEntity
@@ -35,8 +36,10 @@ from app.manual.schemas import (
     SubmitIn,
     WithdrawIn,
 )
+from app.manual.validate import branch_scoped_sql
 from app.sections.deps import SQ
 
+log = get_logger(__name__)
 router = APIRouter(
     prefix="/data",
     tags=["data"],
@@ -141,8 +144,9 @@ def field_options(
     # nosemgrep: avoid-sqlalchemy-text -- jadval/ustun/shart koddan, qiymat parametr
     for code, title in db.execute(text(
             f"SELECT code, {_LABELS[f.ref]} FROM dwh.{f.ref} "  # noqa: S608
-            f"WHERE (code ILIKE :q OR {_LABELS[f.ref]} ILIKE :q){where} ORDER BY code LIMIT :n"),
-            {"q": _like(q), "n": OPTION_LIMIT}).all():
+            f"WHERE (code ILIKE :q OR {_LABELS[f.ref]} ILIKE :q){where}"
+            f"{branch_scoped_sql(f)} ORDER BY code LIMIT :n"),
+            {"q": _like(q), "n": OPTION_LIMIT, **({"br": br} if f.branch_scoped else {})}).all():
         found[code] = title
     owners = [e.id for e in ENTITIES.values() if e.kind == "dim" and e.target == f.ref]
     if owners and not f.ref_where:
@@ -224,8 +228,9 @@ def reject_batch(batch_id: int, body: DecisionIn, ctx: Ctx, db: DB, meta: Meta) 
 @router.get("/batches")
 def list_batches(
     ctx: Ctx, db: DB, box: Literal["mine", "inbox"] = "mine",
-    status: Annotated[Literal["draft", "submitted", "approved", "rejected", "withdrawn"] | None,
-                      Query()] = None,
+    status: Annotated[
+        Literal["draft", "submitted", "approved", "rejected", "withdrawn", "failed"] | None,
+        Query()] = None,
     page: Annotated[int, Query(ge=1, le=100000)] = 1,
 ) -> Page[BatchOut]:
     return store.list_batches(db, ctx, box=box, status=status, page=page)
@@ -234,7 +239,6 @@ def list_batches(
 @router.get("/batches/{batch_id}")
 def get_batch(batch_id: int, ctx: Ctx, db: DB) -> BatchDetailOut:
     out = store.get_batch(db, ctx, batch_id)
-    out.publication = approval.publication_status(db, out)
     return out
 
 
@@ -312,6 +316,12 @@ async def import_file(
                 items=[ItemIn(values=r) for r in items],
                 file_meta={"name": name, "sha256": digest})
         except (ValidationFailed, ConflictError) as exc:
+            if isinstance(exc, imports.FormatErrors):  # format + spravochnik xatolari bir yo'la
+                try:
+                    exc = imports.with_reference_errors(db, entity, branch_id, exc)
+                except Exception as err:  # tekshiruv yiqilsa ham rad etish auditga tushadi
+                    log.error("import_reference_check_failed", error=type(err).__name__)
+                    db.rollback()
             new = _remap(exc, lines) if lines and exc.params.get("rows") else exc
             rejected(new)
             raise new from None

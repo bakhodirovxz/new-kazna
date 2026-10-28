@@ -35,6 +35,7 @@ from app.core.errors import (
     ValidationFailed,
 )
 from app.core.request_meta import ClientMeta
+from app.manual import publication
 from app.manual.entities import ENTITIES, FieldDef, ManualEntity, business_key
 from app.manual.schemas import (
     MAX_IMPORT_ROWS,
@@ -120,7 +121,7 @@ def load_batch(db: Session, batch_id: int, *, lock: bool = False) -> Row:
 
 
 def batch_out(row: Row) -> BatchOut:
-    return BatchOut(**{k: row[k] for k in BatchOut.model_fields})
+    return BatchOut(**{k: row[k] for k in BatchOut.model_fields if k != "publication"})
 
 
 def _stamp(db: Session, batch_id: int) -> BatchOut:
@@ -174,20 +175,24 @@ def batch_entries(db: Session, batch_id: int) -> list[Row]:
         "WHERE e.batch_id = :b ORDER BY e.entry_id"), {"b": batch_id}).mappings())
 
 
-def _prior(db: Session, entry_id: int, version: int) -> Row | None:
-    """Paketdan OLDINGI tasdiqlangan holat: bu versiyadan kichik eng so'nggi tasdiqlangan versiya
-    (tasdiqlangach `approved_version` paketning o'ziga ko'chadi -- diff o'ziga solishtirilmasin)."""
-    return db.execute(text(
-        "SELECT p.payload, p.masks, p.deleted FROM core.manual_entry p "
-        "JOIN core.manual_batch b ON b.batch_id = p.batch_id "
-        "WHERE p.entry_id = :e AND p.version < :v AND b.status = 'approved' "
-        "ORDER BY p.version DESC LIMIT 1"), {"e": entry_id, "v": version}).mappings().first()
+def _priors(db: Session, batch_id: int) -> dict[int, Row]:
+    """Paketdan OLDINGI tasdiqlangan holat (har yozuv uchun): bu versiyadan kichik eng so'nggi
+    tasdiqlangan versiya (tasdiqlangach `approved_version` paketning o'ziga ko'chadi -- diff
+    o'ziga solishtirilmasin). Bitta so'rov: N+1 yo'q."""
+    rows = db.execute(text(
+        "SELECT DISTINCT ON (c.entry_id) c.entry_id, p.payload, p.masks, p.deleted "
+        "FROM core.manual_entry c JOIN core.manual_entry p "
+        "ON p.entry_id = c.entry_id AND p.version < c.version "
+        "JOIN core.manual_batch b ON b.batch_id = p.batch_id AND b.status = 'approved' "
+        "WHERE c.batch_id = :b ORDER BY c.entry_id, p.version DESC"), {"b": batch_id}).mappings()
+    return {r["entry_id"]: r for r in rows}
 
 
 def changes(db: Session, entity: ManualEntity, batch_id: int) -> list[ChangeOut]:
     out = []
+    priors = _priors(db, batch_id)
     for r in batch_entries(db, batch_id):
-        prev = _prior(db, r["entry_id"], r["version"])
+        prev = priors.get(r["entry_id"])
         if prev is not None and prev["deleted"]:
             prev = None  # o'chirilgan yozuvni tiklash -- «новая», o'zgarish emas
         op: Literal["add", "change", "delete"] = (
@@ -240,12 +245,16 @@ def _decrypt_secret(f: FieldDef, prev: Row) -> str | None:
     return keystore.decrypt_str(f.purpose, bytes(blob), f"core.manual_entry.{col}:{prev['id']}")
 
 
-def _insert_version(
-    db: Session, ctx: AuthContext, entity: ManualEntity, *, head_id: int, version: int,
-    batch_id: int, branch_id: int, values: Row, deleted: bool,
-    prev: Row | None = None,
-) -> None:
-    row_id = db.execute(text("SELECT nextval('core.manual_entry_id_seq')")).scalar_one()
+_INSERT_ENTRY = text(
+    "INSERT INTO core.manual_entry (id, entry_id, version, batch_id, branch_id, payload, "
+    "bank_enc, pii_enc, masks, deleted, created_by) VALUES (:id, :e, :v, :b, :br, "
+    "CAST(:p AS jsonb), :be, :pe, CAST(:m AS jsonb), :d, :u)")
+
+
+def _version_params(
+    ctx: AuthContext, entity: ManualEntity, *, row_id: int, head_id: int, version: int,
+    batch_id: int, branch_id: int, values: Row, deleted: bool, prev: Row | None = None,
+) -> dict[str, Any]:
     enc: dict[str, bytes | None] = {"bank_enc": None, "pii_enc": None}
     masks: dict[str, str] = {}
     if deleted and prev is not None:  # tombstone: oldingi qiymatning nusxasi
@@ -263,14 +272,21 @@ def _insert_version(
             enc[col] = keystore.encrypt_str(f.purpose, str(plain),
                                             f"core.manual_entry.{col}:{row_id}")
             masks[f.name] = _mask(str(plain))
-    db.execute(text(
-        "INSERT INTO core.manual_entry (id, entry_id, version, batch_id, branch_id, payload, "
-        "bank_enc, pii_enc, masks, deleted, created_by) VALUES (:id, :e, :v, :b, :br, "
-        "CAST(:p AS jsonb), :be, :pe, CAST(:m AS jsonb), :d, :u)"),
-        {"id": row_id, "e": head_id, "v": version, "b": batch_id, "br": branch_id,
-         "p": json.dumps(payload, ensure_ascii=False), "be": enc["bank_enc"],
-         "pe": enc["pii_enc"], "m": json.dumps(masks, ensure_ascii=False), "d": deleted,
-         "u": ctx.user_id})
+    return {"id": row_id, "e": head_id, "v": version, "b": batch_id, "br": branch_id,
+            "p": json.dumps(payload, ensure_ascii=False), "be": enc["bank_enc"],
+            "pe": enc["pii_enc"], "m": json.dumps(masks, ensure_ascii=False), "d": deleted,
+            "u": ctx.user_id}
+
+
+def _insert_version(
+    db: Session, ctx: AuthContext, entity: ManualEntity, *, head_id: int, version: int,
+    batch_id: int, branch_id: int, values: Row, deleted: bool,
+    prev: Row | None = None,
+) -> None:
+    row_id = db.execute(text("SELECT nextval('core.manual_entry_id_seq')")).scalar_one()
+    db.execute(_INSERT_ENTRY, _version_params(
+        ctx, entity, row_id=row_id, head_id=head_id, version=version, batch_id=batch_id,
+        branch_id=branch_id, values=values, deleted=deleted, prev=prev))
     db.execute(text(
         "UPDATE core.manual_head SET version = :v, pending_batch_id = :b, updated_at = now() "
         "WHERE entry_id = :e"), {"v": version, "b": batch_id, "e": head_id})
@@ -407,12 +423,52 @@ def _apply_one(db: Session, ctx: AuthContext, entity: ManualEntity, batch_id: in
                     branch_id=branch_id, values=p.values, deleted=False)
 
 
+def _bulk_new(db: Session, ctx: AuthContext, entity: ManualEntity, batch_id: int,
+              branch_id: int, fresh: Sequence[tuple[int, _Planned]]) -> set[int]:
+    """Yangi FAKT qatorlari (import: minglab) uchun: boshlar bitta INSERT, versiyalar bitta
+    executemany. Kaliti band qatorlar qaytarilmaydi -- ularni `_apply_one` hal qiladi."""
+    if not fresh:
+        return set()
+    keys = [business_key(entity, p.values) for _, p in fresh]
+    # tartiblangan, takrorsiz kalitlar: qulf tartibi aniq (deadlock yo'q); takror kalit sekin
+    # yo'lga tushadi va u yerda duplicate_record bo'ladi (500 emas)
+    ordered = sorted(set(keys))
+    heads = {str(k): int(v) for k, v in db.execute(text(
+        "INSERT INTO core.manual_head (entity, branch_id, business_key) "
+        "SELECT :e, :b, k FROM unnest(CAST(:k AS text[])) AS k "
+        "ON CONFLICT (entity, business_key) DO NOTHING RETURNING business_key, entry_id"),
+        {"e": entity.id, "b": branch_id, "k": ordered}).all()}
+    taken: set[str] = set()
+    got = []
+    for (i, p), k in zip(fresh, keys, strict=True):
+        if k in heads and k not in taken:
+            taken.add(k)
+            got.append((i, p, heads[k]))
+    if not got:
+        return set()
+    ids = db.execute(text("SELECT nextval('core.manual_entry_id_seq') FROM generate_series(1, :n)"),
+                     {"n": len(got)}).scalars().all()
+    db.execute(_INSERT_ENTRY, [
+        _version_params(ctx, entity, row_id=row_id, head_id=head_id, version=1,
+                        batch_id=batch_id, branch_id=branch_id, values=p.values, deleted=False)
+        for row_id, (_, p, head_id) in zip(ids, got, strict=True)])
+    db.execute(text(
+        "UPDATE core.manual_head SET version = 1, pending_batch_id = :b, updated_at = now() "
+        "WHERE entry_id = ANY(:ids)"), {"b": batch_id, "ids": [h for _, _, h in got]})
+    return {i for i, _, _ in got}
+
+
 def _apply(db: Session, ctx: AuthContext, entity: ManualEntity, batch_id: int, branch_id: int,
            planned: Sequence[_Planned]) -> None:
     """To'qnashuvlar (takroriy kalit) yig'iladi: qaysi qatorlar ekani aytiladi (review I6)."""
+    numbered = list(enumerate(planned, start=1))
+    if entity.kind == "fact":  # o'lchovlar kodi/savepoint talab qiladi -- qatorma-qator
+        done = _bulk_new(db, ctx, entity, batch_id, branch_id,
+                         [(i, p) for i, p in numbered if p.head is None])
+        numbered = [(i, p) for i, p in numbered if i not in done]
     collisions: list[dict[str, Any]] = []
     first: ConflictError | None = None
-    for idx, p in enumerate(planned, start=1):
+    for idx, p in numbered:
         try:
             _apply_one(db, ctx, entity, batch_id, branch_id, p)
         except ConflictError as exc:
@@ -560,7 +616,9 @@ def get_batch(db: Session, ctx: AuthContext, batch_id: int) -> BatchDetailOut:
     if not (ctx.has(data_perm(entity.section, "write"))
             or ctx.has(data_perm(entity.section, "approve"))):
         raise ForbiddenError()
-    return BatchDetailOut(**batch_out(batch).model_dump(), items=changes(db, entity, batch_id))
+    out = BatchDetailOut(**batch_out(batch).model_dump(), items=changes(db, entity, batch_id))
+    out.publication = publication.detail(db, publication.state(db), out)
+    return out
 
 
 def list_batches(db: Session, ctx: AuthContext, *, box: Literal["mine", "inbox"],
@@ -575,7 +633,12 @@ def list_batches(db: Session, ctx: AuthContext, *, box: Literal["mine", "inbox"]
         where += " AND created_by = :u"
     else:  # tasdiqlovchi o'z paketini ko'rmaydi (u baribir tasdiqlay olmaydi)
         where += " AND status = 'submitted' AND created_by <> :u"
-    if status:
+    state = publication.state(db)
+    if status == "failed":  # hosila filtr: paket holati 'approved', nashr yiqilgan
+        clause, extra = publication.failed_filter(state)
+        where += f" AND status = 'approved' AND {clause}"
+        params |= extra
+    elif status:
         where += " AND status = :s"
         params["s"] = status
     total = db.execute(text(f"SELECT count(*) FROM core.manual_batch WHERE {where}"),  # noqa: S608
@@ -584,4 +647,7 @@ def list_batches(db: Session, ctx: AuthContext, *, box: Literal["mine", "inbox"]
         f"SELECT * FROM core.manual_batch WHERE {where} "  # noqa: S608
         "ORDER BY batch_id DESC LIMIT :n OFFSET :o"),
         {**params, "n": PAGE_SIZE, "o": (max(page, 1) - 1) * PAGE_SIZE}).mappings()
-    return Page[BatchOut](items=[batch_out(r) for r in rows], total=total, page=max(page, 1))
+    items = [batch_out(r) for r in rows]
+    for b in items:
+        b.publication = publication.brief(state, b.status, b.etl_request_id)
+    return Page[BatchOut](items=items, total=total, page=max(page, 1))

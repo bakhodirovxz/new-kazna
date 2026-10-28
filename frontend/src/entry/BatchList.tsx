@@ -32,7 +32,14 @@ export function BatchList({ box }: { box: 'inbox' | 'mine' }) {
     { key: 'entity', header: t('entry.batch.col.entity'), cell: (b) => entityTitle(b.entity) },
     { key: 'branch', header: t('entry.branch'), cell: (b) => branchName(b.branch_id) },
     { key: 'rows', header: t('entry.batch.col.rows'), cell: (b) => b.rows, align: 'right' },
-    { key: 'status', header: t('entry.status'), cell: (b) => <Badge tone={TONE[b.status] ?? 'neutral'}>{t(`entry.status.${b.status}` as 'entry.status.draft')}</Badge> },
+    { key: 'status', header: t('entry.status'), cell: (b) => (
+      <>
+        <Badge tone={TONE[b.status] ?? 'neutral'}>{t(`entry.status.${b.status}` as 'entry.status.draft')}</Badge>
+        {b.publication?.status === 'failed' ? (
+          <> <Badge tone="neg">{t('entry.pub.failed')}</Badge></>
+        ) : null}
+      </>
+    ) },
     { key: 'when', header: t('entry.batch.col.when'), cell: (b) => (b.submitted_at ? formatDateTime(b.submitted_at) : '—') },
     { key: 'open', header: t('entry.actions'), cell: (b) => (
       <button type="button" className="btn btn--ghost" onClick={() => setSelected(b.batch_id)}>
@@ -47,6 +54,7 @@ export function BatchList({ box }: { box: 'inbox' | 'mine' }) {
           <span>{t('entry.status')}: </span>
           <select value={status} onChange={(e) => setStatus(e.target.value)} className="select">
             <option value="">{t('entry.filter.all')}</option>
+            <option value="failed">{t('entry.pub.failed')}</option>
             {['draft', 'submitted', 'approved', 'rejected', 'withdrawn'].map((s) => (
               <option key={s} value={s}>{t(`entry.status.${s}` as 'entry.status.draft')}</option>
             ))}

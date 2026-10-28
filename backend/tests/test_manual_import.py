@@ -29,7 +29,8 @@ BALANCE = ENTITIES["kazna.balance"]
 CSV = "text/csv"
 XLSX = imports.XLSX_TYPE
 URL = "/api/v1/data/entities/kazna.balance/import?branch_id=1"
-HEAD = "branch_code;bank_code;date;balance"
+HEAD = "branch_code;bank_code;date;balance"  # eski texnik kodlar ham qabul qilinadi
+RU_HEAD = ["Филиал (код)", "Счёт (код)", "Дата", "Остаток, млн сум"]
 
 
 @pytest.fixture
@@ -149,7 +150,7 @@ def test_xlsx_roundtrip_template(client_for, make_user: MakeUser) -> None:  # ty
     assert tpl.status_code == 200 and "attachment" in tpl.headers["content-disposition"]
     wb = load_workbook(io.BytesIO(tpl.content))
     assert wb.sheetnames == ["Данные", "Описание"]
-    assert [c.value for c in wb["Данные"][1]] == ["branch_code", "bank_code", "date", "balance"]
+    assert [c.value for c in wb["Данные"][1]] == RU_HEAD
     ws = wb["Данные"]
     ws.append([branch_code(1), BANK, "2026-09-30", 1500.5])
     ws.append([branch_code(1), BANK, datetime(2026, 8, 29), 3])  # noqa: DTZ001 -- openpyxl tz'siz sana yozadi
@@ -264,9 +265,11 @@ def test_template_formula_injection_safe() -> None:
         assert imports._safe(ch + "a") == "'" + ch + "a"
     assert imports._safe("balance") == "balance"
     raw = imports.template_csv(BALANCE)
-    assert raw.startswith(b"\xef\xbb\xbf") and raw.decode("utf-8-sig").splitlines() == [HEAD]
+    assert raw.startswith(b"\xef\xbb\xbf")
+    assert raw.decode("utf-8-sig").splitlines() == [";".join(RU_HEAD)]
     ws = load_workbook(io.BytesIO(imports.template_xlsx(BALANCE)))["Описание"]
-    assert [c.value for c in ws[1]][:2] == ["Колонка", "Название"]
+    assert [c.value for c in ws[1]][:3] == ["Колонка", "Код поля", "Название"]
+    assert [row[1].value for row in ws.iter_rows(min_row=2)] == [f.name for f in BALANCE.fields]
     assert not any(str(c.value).startswith(("=", "+", "@")) for row in ws.iter_rows() for c in row)
 
 
@@ -519,3 +522,81 @@ def test_legit_5000_row_xlsx_fits_the_caps(tmp_path) -> None:  # type: ignore[no
     out = json.loads(res.stdout.strip().splitlines()[-1])
     print("legit_5000", path.stat().st_size, out)  # noqa: T201
     assert out["out"] == "ok" and out["secs"] < 5 and out["mib"] < 150
+
+
+# --- follow-ups: русские заголовки, один проход ошибок -----------------------------------------
+
+
+def test_russian_headers_accepted_alone_and_mixed(client_for, make_user: MakeUser) -> None:  # type: ignore[no-untyped-def]
+    maker = client_for(make_user("spec_kazna"))
+    assert _post(maker, _csv(_row(), head=";".join(RU_HEAD))).status_code == 201
+    mixed = "Филиал (код);bank_code;дата;BALANCE"  # регистр и смесь не важны
+    assert _post(maker, _csv(_row("2026-08-29"), head=mixed)).status_code == 201
+    dup = "Филиал (код);branch_code;date;balance"  # одно поле дважды -- ошибка шапки
+    r = _post(maker, _csv(_row("2026-07-29"), head=dup))
+    assert r.status_code == 422 and _codes(r) == [(1, "", "bad_header")]
+
+
+def test_format_and_reference_errors_in_one_pass(client_for, make_user: MakeUser) -> None:  # type: ignore[no-untyped-def]
+    maker = client_for(make_user("spec_kazna"))
+    bad_ref = f"{branch_code(1)};BA-nonexistent;2026-08-29;1"
+    bad_fmt = _row("2026-07-28", "abc")
+    r = _post(maker, _csv(_row(), bad_fmt, bad_ref))
+    assert r.status_code == 422 and r.json()["error"]["code"] == "import_invalid"
+    assert _codes(r) == [(3, "balance", "invalid_value"), (4, "bank_code", "reference_not_found")]
+    assert _batches() == 0
+
+
+# --- review follow-ups (I-2, M-1..M-3) ---------------------------------------------------------
+
+
+def test_cp1251_csv_from_russian_excel(client_for, make_user: MakeUser) -> None:  # type: ignore[no-untyped-def]
+    maker = client_for(make_user("spec_kazna"))
+    body = ("\r\n".join([";".join(RU_HEAD), _row()]) + "\r\n").encode("cp1251")
+    r = _post(maker, body)
+    assert r.status_code == 201, r.text
+    garbage = b"\xff\xfe\x98"  # не UTF-8 и не cp1251 (байт 0x98 в cp1251 не определён)
+    assert _post(maker, garbage).status_code == 422
+
+
+def test_merged_errors_are_capped_once_and_sorted() -> None:
+    fmt = [{"row": r, "field": "balance", "code": "invalid_value"} for r in range(2, 252)]
+    exc = imports.FormatErrors(fmt, ([], []))
+    assert len(exc.all_rows) == 250 and len(exc.params["rows"]) == imports.MAX_ERRORS
+    merged = imports.merge_errors(exc, [{"row": 3, "field": "bank_code",
+                                         "code": "reference_not_found"}])
+    rows = merged.params["rows"]
+    assert len(rows) == imports.MAX_ERRORS
+    assert [(e["row"], e["field"]) for e in rows[:3]] == [
+        (2, "balance"), (3, "balance"), (3, "bank_code")]
+    assert merged.params["fields"] == ["balance", "bank_code"]
+
+
+def test_rejection_is_audited_even_if_reference_check_crashes(  # type: ignore[no-untyped-def]
+    client_for, make_user: MakeUser, monkeypatch
+) -> None:
+    def boom(*a, **k):  # type: ignore[no-untyped-def]
+        raise RuntimeError("db down")
+
+    monkeypatch.setattr(imports, "with_reference_errors", boom)
+    maker = client_for(make_user("spec_kazna"))
+    before = len(audit_rows("data.import.rejected"))
+    r = _post(maker, _csv(_row(), _row("2026-08-29", "abc")))
+    assert r.status_code == 422 and _codes(r) == [(3, "balance", "invalid_value")]
+    assert len(audit_rows("data.import.rejected")) == before + 1
+
+
+def test_header_aliases_never_collide_across_entities() -> None:
+    for entity in ENTITIES.values():
+        seen: dict[str, str] = {}
+        for f in entity.fields:
+            for key in {f.name, imports.header_label(f)}:
+                owner = seen.setdefault(key.casefold(), f.name)
+                assert owner == f.name, (entity.id, key)
+
+
+def test_cp1251_fallback_only_for_russian_headers(client_for, make_user: MakeUser) -> None:  # type: ignore[no-untyped-def]
+    maker = client_for(make_user("spec_kazna"))
+    body = ("\r\n".join([HEAD, _row().replace("2026", "2026 Ёж")])).encode("cp1251")
+    r = _post(maker, body)  # kodli sarlavha + cp1251 -- jimgina o'qilmaydi
+    assert r.status_code == 422 and r.json()["error"]["code"] == "unsupported_file"
